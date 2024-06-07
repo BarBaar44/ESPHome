@@ -1,13 +1,13 @@
 #Set some global vars to prevent initial division by zeros
-#globals:
-#  - id: fanspeed
-#    type: float
-#    restore_value: no
-#    initial_value: '1'
-#  - id: delta_temp
-#    type: float
-#    restore_value: no
-#    initial_value: '1'
+globals:
+  - id: fanspeed
+    type: float
+    restore_value: no
+    initial_value: '1'
+  - id: delta_temp
+    type: float
+    restore_value: no
+    initial_value: '1'
 
 # Enable logging
 logger:
