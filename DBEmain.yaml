@@ -1,4 +1,4 @@
-#Set some global vars to prevent inital devision by zero's
+#Set some global vars to prevent initial division by zeros
 globals:
   - id: fanspeed
     type: float
