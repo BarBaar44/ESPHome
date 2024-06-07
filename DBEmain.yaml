@@ -136,10 +136,3 @@ output:
 button:
   - platform: restart
     name: '${device_name} restart'
-    
-mqtt:
- port: 1883
- broker: 192.168.0.221
- username: "mqtt"
- password: !secret mqttpass
- client_id: '${device_name}'
