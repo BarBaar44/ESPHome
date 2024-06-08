@@ -1,0 +1,6 @@
+mqtt:
+ port: 1883
+ broker: 192.168.0.221
+ username: "mqtt"
+ password: '${MQTT_passwd}'
+ client_id: '${device_name}'
