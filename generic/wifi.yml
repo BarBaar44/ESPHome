@@ -1,11 +1,11 @@
 wifi:
   ssid: "BarBaar_IoT"
-  password: '${WIFI_passwd}'
+  password: '${wifi_passwd}'
   fast_connect: on
   power_save_mode: light
   ap:
     ssid: '${device_name} Fallback Hotspot'
-    password: '!paniek!'
+    password: '${fallback_passwd}'
   
 captive_portal:
 
