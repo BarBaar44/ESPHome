@@ -11,3 +11,8 @@ captive_portal:
 
 ota:
 
+time:
+  - platform: homeassistant
+    id: time_homeassistant
+    on_time_sync:
+      - component.update: sensor_uptime_timestamp
