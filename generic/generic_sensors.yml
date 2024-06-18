@@ -1,6 +1,17 @@
 sensor:
+  - platform: template
+    id: sensor_uptime_timestamp
+    name: "${friendly_name} Uptime"
+    device_class: "timestamp"
+    accuracy_decimals: 0
+    update_interval: never
+    lambda: |-
+      static float timestamp = (
+        id(time_homeassistant).utcnow().timestamp - id(sensor_uptime).state
+      );
+      return timestamp;
   - platform: uptime
-    name: Uptime Sensor
+    id: sensor_uptime
   - platform: wifi_signal # Reports the WiFi signal strength/RSSI in dB
     name: "WiFi Signal dB"
     id: wifi_signal_db
