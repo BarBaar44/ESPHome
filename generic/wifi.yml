@@ -17,3 +17,6 @@ time:
     id: time_homeassistant
     on_time_sync:
       - component.update: sensor_uptime_timestamp
+
+web_server:
+  port: 80
