@@ -81,7 +81,7 @@ sensor:
                   level: !lambda "return id(fanspeed);"
               - logger.log: "Below 0.7"
 
-  - platform: dallas
+  - platform: dallas_temp
 # Sensor for Dallas 2
     address: '${dallas_2_ID}'
     name: '${device_name} Dallas 2'
