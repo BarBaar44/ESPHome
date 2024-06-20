@@ -120,7 +120,3 @@ output:
     pin: 22
     id: ledc_speed
     frequency: 25000
-
-button:
-  - platform: restart
-    name: '${device_name} restart'
