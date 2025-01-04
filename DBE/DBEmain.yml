@@ -114,10 +114,8 @@ fan:
     output: pwm_output
     name: "${device_name} Fan"
     on_turn_on:
-     - switch.turn_on:
-         id: powerswitch
+     - switch.turn_on: powerswitch
      - logger.log: "Fan Turned On!"
     on_turn_off:
-     - switch.turn_off"
-         id: powerswitch
+     - switch.turn_off: powerswitch
      - logger.log: "Fan Turned Off!"
