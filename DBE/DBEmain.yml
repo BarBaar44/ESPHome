@@ -97,7 +97,7 @@ switch:
   - platform: gpio
     pin: D0
     id: "mosfet"
-    name: "mosfet switch"
+    name: "${device_name} Power Switch"
 
 output:
   - platform: esp8266_pwm
@@ -105,8 +105,9 @@ output:
       number: D6
     frequency: 1000 Hz
     id: pwm_output
+    internal: true
 
 fan:
   - platform: speed
     output: pwm_output
-    name: "Living Room Fan"
+    name: "${device_name} Fan"
