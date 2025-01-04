@@ -37,27 +37,6 @@ sensor:
     address: '${dallas_1_ID}'
     name: '${device_name} Dallas 1'
     id: temp_1
-    one_wire_id: dallas_1
-    update_interval: 30s
-    accuracy_decimals: 1
-    unit_of_measurement: "°C"
-    device_class: "temperature"
-    state_class: "measurement"
-    filters:
-      - filter_out: nan
-
-
-one_wire:
-  - platform: gpio
-    pin: D1
-    id: dallas_1
-  
-sensor:
-# Sensor for Dallas 1
-  - platform: dallas_temp
-    address: '${dallas_1_ID}'
-    name: '${device_name} Dallas 1'
-    id: temp_1
     update_interval: 30s
     accuracy_decimals: 1
     unit_of_measurement: "°C"
@@ -100,7 +79,7 @@ sensor:
 
   - platform: pulse_counter
     pin:
-      number: D4
+      number: D5
       mode: 
         input: true
         pullup: true 
