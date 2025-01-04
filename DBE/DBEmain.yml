@@ -65,7 +65,7 @@ sensor:
               - logger.log: "Stop fans"       
             else:
               - output.set_level:
-                  id: ledc_speed
+                  id: pwm_output
                   level: !lambda "return id(fanspeed);"
               - logger.log: "Below 0.7"
 
