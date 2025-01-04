@@ -62,6 +62,8 @@ sensor:
               - output.set_level:
                   id: pwm_output
                   level: 0
+              - switch.turn_off:
+                  id: powerswitch
               - logger.log: "Stop fans"       
             else:
               - output.set_level:
@@ -96,7 +98,7 @@ sensor:
 switch:
   - platform: gpio
     pin: D0
-    id: "mosfet"
+    id: "powerswitch"
     name: "${device_name} Power Switch"
 
 output:
@@ -105,6 +107,7 @@ output:
       number: D6
     frequency: 1000 Hz
     id: pwm_output
+    max_power: 0.7
 
 fan:
   - platform: speed
