@@ -99,7 +99,7 @@ switch:
   - platform: gpio
     pin: D0
     id: "powerswitch"
-    name: "${device_name} Power Switch"
+    internal: true
 
 output:
   - platform: esp8266_pwm
