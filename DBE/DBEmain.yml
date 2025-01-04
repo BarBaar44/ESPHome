@@ -28,11 +28,8 @@ logger:
 
 one_wire:
   - platform: gpio
-    pin: 18
+    pin: D1
     id: dallas_1
-  - platform: gpio
-    pin: 19
-    id: dallas_2
   
 sensor:
 # Sensor for Dallas 1
@@ -41,6 +38,26 @@ sensor:
     name: '${device_name} Dallas 1'
     id: temp_1
     one_wire_id: dallas_1
+    update_interval: 30s
+    accuracy_decimals: 1
+    unit_of_measurement: "°C"
+    device_class: "temperature"
+    state_class: "measurement"
+    filters:
+      - filter_out: nan
+
+
+one_wire:
+  - platform: gpio
+    pin: D1
+    id: dallas_1
+  
+sensor:
+# Sensor for Dallas 1
+  - platform: dallas_temp
+    address: '${dallas_1_ID}'
+    name: '${device_name} Dallas 1'
+    id: temp_1
     update_interval: 30s
     accuracy_decimals: 1
     unit_of_measurement: "°C"
@@ -81,12 +98,22 @@ sensor:
                   level: !lambda "return id(fanspeed);"
               - logger.log: "Below 0.7"
 
+  - platform: pulse_counter
+    pin:
+      number: D5
+      mode: 
+        input: true
+        pullup: true 
+    name: '${device_name} Fan Speed'
+    unit_of_measurement: 'RPM'
+    filters:
+      - multiply: 0.5
+
   - platform: dallas_temp
 # Sensor for Dallas 2
     address: '${dallas_2_ID}'
     name: '${device_name} Dallas 2'
     id: temp_2
-    one_wire_id: dallas_2
     update_interval: 30s
     accuracy_decimals: 1
     unit_of_measurement: "°C"
@@ -94,29 +121,21 @@ sensor:
     state_class: "measurement"
     filters:
       - filter_out: nan
-  
-  - platform: pulse_counter
-    pin: 21
-    name: '${device_name} Fan Speed'
-    unit_of_measurement: 'RPM'
-    filters:
-      - multiply: 0.5
-      
-  - platform: homeassistant
-    name: "Max fanspeed sensor"
-    entity_id: input_number.fanspeedmax
-    id: fanspeedmax
-    
-  - platform: template
-    name: '${device_name} Speed Setting'
-    id: speedsettingtemplate
-    unit_of_measurement: "%"
-    lambda: 'return id(fanspeed);'
-    filters:
-      - multiply: 1000
+
+switch:
+  - platform: gpio
+    pin: D0
+    id: "mosfet"
+    name: "mosfet switch"
 
 output:
-  - platform: ledc
-    pin: 22
-    id: ledc_speed
-    frequency: 25000
+  - platform: esp8266_pwm
+    pin:
+      number: D6
+    frequency: 1000 Hz
+    id: pwm_output
+
+fan:
+  - platform: speed
+    output: pwm_output
+    name: "Living Room Fan"
