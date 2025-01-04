@@ -100,7 +100,7 @@ sensor:
 
   - platform: pulse_counter
     pin:
-      number: D5
+      number: D4
       mode: 
         input: true
         pullup: true 
