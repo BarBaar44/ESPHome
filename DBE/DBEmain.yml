@@ -105,7 +105,6 @@ output:
       number: D6
     frequency: 1000 Hz
     id: pwm_output
-    internal: true
 
 fan:
   - platform: speed
