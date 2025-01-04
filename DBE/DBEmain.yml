@@ -52,23 +52,15 @@ sensor:
               id(fanspeed) = abs(id(fanspeed));
             }
         - logger.log:
-            format: "fanspeed is %.1f, Fanspeedmax is %.1f"
-            args: [ 'id(fanspeed)', 'id(fanspeedmax).state' ]
-        - if:
-            condition:
-              lambda: 'return id(fanspeed) > id(fanspeedmax).state;'
-            then:
-              - output.set_level:
-                  id: ledc_speed
-                  level: 0.7
-              - logger.log: "Above 0.7"
+            format: "fanspeed is %.1f"
+            args: [ 'id(fanspeed)' ]
 
         - if:
             condition:
               lambda: 'return id(fanspeed) < 0.1;'
             then:
               - output.set_level:
-                  id: ledc_speed
+                  id: pwm_output
                   level: 0
               - logger.log: "Stop fans"       
             else:
