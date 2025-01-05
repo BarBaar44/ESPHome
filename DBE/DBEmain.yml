@@ -59,16 +59,12 @@ sensor:
             condition:
               lambda: 'return id(fanspeed) < 0.1;'
             then:
-              - output.set_level:
-                  id: pwm_output
-                  level: 0
-              - switch.turn_off:
-                  id: powerswitch
+              - fan.turn_off: fancontrol
               - logger.log: "Stop fans"       
             else:
-              - output.set_level:
-                  id: pwm_output
-                  level: !lambda "return id(fanspeed);"
+              - fan.turn_on:
+                  id: fancontrol
+                  speed: !lambda "return id(fanspeed);"
               - logger.log: "Below 0.7"
 
   - platform: pulse_counter
@@ -112,6 +108,7 @@ output:
 fan:
   - platform: speed
     output: pwm_output
+    id: fancontrol
     name: "${device_name} Fan"
     on_turn_on:
      - switch.turn_on: powerswitch
