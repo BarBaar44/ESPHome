@@ -10,7 +10,7 @@ wifi:
 captive_portal:
 
 ota:
-  platform: esphome
+  - platform: esphome
 
 time:
   - platform: homeassistant
