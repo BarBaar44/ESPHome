@@ -11,20 +11,7 @@ globals:
 
 # Enable logging
 logger:
-  level: INFO
-  on_message:
-    - level: ERROR
-      then:
-        - mqtt.publish:
-            topic: '${device_name}/error'
-            payload: !lambda |-
-              return "Triggered on_message with level " + to_string(level) + ", tag " + tag + " and message " + message;
-    - level: WARN
-      then:
-        - mqtt.publish:
-            topic: '${device_name}/warn'
-            payload: !lambda |-
-              return "Triggered on_message with level " + to_string(level) + ", tag " + tag + " and message " + message;
+  level: DEBUG
 
 one_wire:
   - platform: gpio
