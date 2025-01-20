@@ -43,7 +43,7 @@ sensor:
 
         - if:
             condition:
-              lambda: 'return id(heating_setting) < 5;'
+              lambda: 'return id(heating_setting).state < 5;'
             then:
               - fan.turn_off: fancontrol
               - logger.log: "Stop fans"       
