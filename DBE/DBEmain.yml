@@ -36,16 +36,12 @@ sensor:
         - lambda: |-
             id(fanspeed) = abs(id(temp_2).state - id(temp_1).state);
             id(fanspeed) = 100 * (1 - id(fanspeed)/10);
-             
-        - logger.log:
-            format: "TempDiff is %.1f"
-            args: [ 'id(fanspeed)' ]
 
         - if:
             condition:
               or:
                 - lambda: 'return id(heating_setting).state < 5;'
-                - lambda: 'abs(id(temp_2).state - id(temp_1).state) < 1;'
+                - lambda: 'return abs(id(temp_2).state - id(temp_1).state) < 1;'
             then:
               - fan.turn_off: fancontrol
               - logger.log: "Stop fans"       
