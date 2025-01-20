@@ -52,7 +52,7 @@ sensor:
               - fan.turn_on:
                   id: fancontrol
                   speed: !lambda "return id(fanspeed)/10;"
-              - ormat: "Fanspeed is %.1f"
+              - format: "Fanspeed is %.1f"
                 args: [ 'id(fanspeed)' ]
 
   - platform: pulse_counter
