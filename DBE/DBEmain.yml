@@ -39,7 +39,7 @@ sensor:
               id(fanspeed) = abs(id(fanspeed));
             }
         - logger.log:
-            format: "fanspeed is %.1f"
+            format: "TempDiff is %.1f"
             args: [ 'id(fanspeed)' ]
 
         - if:
@@ -51,8 +51,9 @@ sensor:
             else:
               - fan.turn_on:
                   id: fancontrol
-                  speed: !lambda "return id(fanspeed);"
-              - logger.log: "Below 0.7"
+                  speed: !lambda "return id(fanspeed)/10;"
+              - ormat: "Fanspeed is %.1f"
+                args: [ 'id(fanspeed)' ]
 
   - platform: pulse_counter
     pin:
