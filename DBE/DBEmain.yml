@@ -52,8 +52,9 @@ sensor:
               - fan.turn_on:
                   id: fancontrol
                   speed: !lambda "return id(fanspeed)/10;"
-              - format: "Fanspeed is %.1f"
-                args: [ 'id(fanspeed)' ]
+              - logger.log:
+                  format: "Fanspeed is %.1f"
+                  args: [ 'id(fanspeed)' ]
 
   - platform: pulse_counter
     pin:
