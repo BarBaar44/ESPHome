@@ -63,12 +63,6 @@ sensor:
     filters:
       - multiply: 0.5
 
-  - platform: homeassistant
-    name: '${device_name} Heating Setting'
-    id: heating_setting
-    entity_id: '{HA_Tado_name}'
-    internal: true
-
   - platform: dallas_temp
 # Sensor for Dallas 2
     address: '${dallas_2_ID}'
