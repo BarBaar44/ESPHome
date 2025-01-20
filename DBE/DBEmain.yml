@@ -34,7 +34,7 @@ sensor:
     on_value:
       then:
         - lambda: |-
-            id(fanspeed) = 10 - ((id(temp_2).state - id(temp_1).state) * 0.09);
+            id(fanspeed) = (10 - ((id(temp_2).state - id(temp_1).state) * 0.09))/10;
             if (id(fanspeed) < 0) {
               id(fanspeed) = abs(id(fanspeed));
             }
@@ -51,7 +51,7 @@ sensor:
             else:
               - fan.turn_on:
                   id: fancontrol
-                  speed: !lambda "return id(fanspeed)/10;"
+                  speed: !lambda "return id(fanspeed);"
               - logger.log:
                   format: "Fanspeed is %.1f"
                   args: [ 'id(fanspeed)' ]
