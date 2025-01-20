@@ -35,7 +35,7 @@ sensor:
       then:
         - lambda: |-
             id(fanspeed) = abs(id(temp_2).state - id(temp_1).state);
-            id(fanspeed) = 1 - id(fanspeed)/10;
+            id(fanspeed) = 10 * (1 - id(fanspeed)/10);
              
         - logger.log:
             format: "TempDiff is %.1f"
