@@ -91,7 +91,7 @@ output:
       number: D6
     frequency: 1000 Hz
     id: pwm_output
-    max_power: 0.7
+    #max_power: 0.7
 
 fan:
   - platform: speed
