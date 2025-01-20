@@ -43,7 +43,7 @@ sensor:
 
         - if:
             condition:
-              lambda: 'return id(fanspeed) < 0.1;'
+              id(heating_setting) < 5;
             then:
               - fan.turn_off: fancontrol
               - logger.log: "Stop fans"       
@@ -65,6 +65,11 @@ sensor:
     unit_of_measurement: 'RPM'
     filters:
       - multiply: 0.5
+
+  - platform: homeassistant
+    name: "Heating Setting"
+    id: heating_setting
+    entity_id: sensor.study_room_heating_2
 
   - platform: dallas_temp
 # Sensor for Dallas 2
