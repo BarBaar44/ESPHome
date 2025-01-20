@@ -47,7 +47,7 @@ sensor:
               - logger.log: "Stop fans"
         - if:
             condition:
-              - lamba: 'return id(heating_setting).state > 0;'
+              lamba: 'return id(heating_setting).state > 0;'
             then:
               - fan.turn_on:
                   id: fancontrol
