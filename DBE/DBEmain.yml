@@ -86,7 +86,7 @@ output:
       number: D6
     frequency: 1000 Hz
     id: pwm_output
-    max_power: 80
+    max_power: 80%
 
 fan:
   - platform: speed
