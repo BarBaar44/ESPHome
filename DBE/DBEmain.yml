@@ -43,7 +43,9 @@ sensor:
 
         - if:
             condition:
-              lambda: 'return id(heating_setting).state < 5;'
+              or:
+                lambda: 'return id(heating_setting).state < 5;'
+                lambda: 'abs(id(temp_2).state - id(temp_1).state) < 2;'
             then:
               - fan.turn_off: fancontrol
               - logger.log: "Stop fans"       
@@ -88,7 +90,7 @@ output:
       number: D6
     frequency: 1000 Hz
     id: pwm_output
-    #max_power: 0.7
+    max_power: 80
 
 fan:
   - platform: speed
