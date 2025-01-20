@@ -41,7 +41,7 @@ sensor:
             condition:
               or:
                 - lambda: 'return id(heating_setting).state == 0;'
-                - lambda: 'return id(deltatemp) < 1;'
+                - lambda: 'return id(deltatemp) < 0.5;'
             then:
               - fan.turn_off: fancontrol
               - logger.log: "Stop fans"       
