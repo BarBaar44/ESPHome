@@ -39,7 +39,7 @@ sensor:
 
         - if:
             condition:
-              or:
+              and:
                 - lambda: 'return id(heating_setting).state < 5;'
                 - lambda: 'return abs(id(temp_2).state - id(temp_1).state) < 1;'
             then:
@@ -51,7 +51,7 @@ sensor:
             then:
               - fan.turn_on:
                   id: fancontrol
-                  speed: 20 
+                  speed: 40 
             else:
               - fan.turn_on:
                   id: fancontrol
