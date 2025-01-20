@@ -58,18 +58,16 @@ sensor:
   - platform: pulse_counter
     pin:
       number: D5
-#      mode: 
-#        input: true
-#        pullup: true 
     name: '${device_name} Fan Speed'
     unit_of_measurement: 'RPM'
     filters:
       - multiply: 0.5
 
   - platform: homeassistant
-    name: "Heating Setting"
+    name: '${device_name} Heating Setting'
     id: heating_setting
-    entity_id: sensor.study_room_heating_2
+    entity_id: sensor.'{HA_Tado_name}'
+    internal: true
 
   - platform: dallas_temp
 # Sensor for Dallas 2
