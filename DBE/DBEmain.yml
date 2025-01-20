@@ -4,7 +4,7 @@ globals:
     type: float
     restore_value: no
     initial_value: '1'
-  - id: delta_temp
+  - id: deltatemp
     type: float
     restore_value: no
     initial_value: '1'
