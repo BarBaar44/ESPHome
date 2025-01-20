@@ -35,7 +35,7 @@ sensor:
       then:
         - lambda: |-
             id(deltatemp) = abs(id(temp_2).state - id(temp_1).state);
-            id(fanspeed) = 100 * (1 - id(deltatemp)/10);
+            id(fanspeed) = 100 * (1 - id(deltatemp)/20);
 
         - if:
             condition:
