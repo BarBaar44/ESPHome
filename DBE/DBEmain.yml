@@ -41,7 +41,7 @@ sensor:
             float t2 = id(temp_2).state;
             float diff = t1 - t2;
             float speed = max(0.0, min(10.0, 10.0 - (20.0 - diff)));
-            float fanspeed = id(speed) / 10.0;  // Scale to 0.0-1.0
+            float fanspeed = speed / 10.0;  // Scale to 0.0-1.0
 
         - if:
             condition:
@@ -52,10 +52,10 @@ sensor:
             else:
               - fan.turn_on:
                   id: fancontrol
-                  speed: !lambda "return id(fanspeed);"
+                  speed: !lambda "return fanspeed;"
               - logger.log:
                   format: "Fanspeed is %.1f"
-                  args: [ 'id(fanspeed)' ]
+                  args: [ '!lambda "return fanspeed;" ]
 
   - platform: pulse_counter
     pin:
