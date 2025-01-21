@@ -33,9 +33,6 @@ sensor:
     state_class: "measurement"
     filters:
       - filter_out: nan
-    on_value:
-        then:
-          - script.execute: control_fan  # Call the control_fan script when T1 changes
 
   - platform: pulse_counter
     pin:
