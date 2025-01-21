@@ -86,7 +86,7 @@ fan:
      - logger.log: "Fan Turned Off!"
 
 script:
-  - id: control_fan  # Added id for the script
+  - id: control_fan
     then:
       - lambda: |-
           float t1 = id(temp_1).state;
@@ -96,34 +96,43 @@ script:
           
           ESP_LOGD("custom", "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f, Previous Heating Setting State: %.2f\x1b[0m", t1, t2, fan_speed_value, id(heating_setting).state, id(previous_heating_setting_state));
 
-      - if:
-          condition: state
-          entity_id: sensor.heating_setting
-          state: '0'
-        then:
-          - if:
-              condition: lambda
-              value: 'return id(previous_heating_setting_state) == true;'
-            then:
-              - fan.turn_on:
-                  id: fancontrol
-                  speed: 30  # Turn the fan on at 30% speed
-              - delay: 120s  # Wait for 2 minutes
-              - fan.turn_off:
-                  id: fancontrol
-              
-      - if:
-          condition: numeric_state
-          entity_id: sensor.heating_setting
-          above: 0
-        then:
-          - fan.turn_on:
-              id: fancontrol
-              speed: !lambda "return int(fan_speed_value);"
-            
+      - fan.turn_on:
+          id: fancontrol
+          speed: !lambda "return int(fan_speed_value);"
       - lambda: |-
-          if (id(heating_setting).state == 0) {
-            id(previous_heating_setting_state) = true;
+          if (id(heating_setting).state == 0 && id(previous_heating_setting_state) != 0) {
+            id(previous_heating_setting_state) = 0;
           } else {
-            id(previous_heating_setting_state) = false;
+            id(previous_heating_setting_state) = id(heating_setting).state;
           }
+
+# Automation to ensure fan is turned on for 2 minutes at 30% when heating setting is 0
+automation:
+  - alias: "Turn on fan for 2 minutes when heating setting is 0"
+    trigger:
+      platform: state
+      entity_id: sensor.heating_setting
+      to: '0'
+    condition:
+      condition: state
+      entity_id: sensor.heating_setting
+      state: '0'
+    action:
+      - lambda: |-
+          if (id(previous_heating_setting_state) != 0) {
+            id(previous_heating_setting_state) = 0;
+            id(fancontrol).turn_on();
+            id(fancontrol).set_speed(30);
+            delay(120s); 
+            id(fancontrol).turn_off();
+          }
+      
+  - alias: "Turn off fan when heating setting is not 0"
+    trigger:
+      platform: state
+      entity_id: sensor.heating_setting
+      from: '0'
+      to: '1'
+    action:
+      - fan.turn_off:
+          id: fancontrol
