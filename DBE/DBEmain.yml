@@ -97,8 +97,6 @@ script:
           ESP_LOGD("custom", "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f, Previous Heating Setting State: %.2f\x1b[0m", t1, t2, fan_speed_value, id(heating_setting).state, id(previous_heating_setting_state));
           
           if (id(heating_setting).state == 0 && !id(previous_heating_setting_state)) {
-            id(fancontrol).turn_on:
-              speed: 0.3
             id(previous_heating_setting_state) = true;
             delay(120000);  // Wait for 2 minutes
             if (id(heating_setting).state == 0) {
