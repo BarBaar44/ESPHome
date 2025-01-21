@@ -1,9 +1,9 @@
 #Set some global vars to prevent initial division by zeros
-globals:
-  - id: fanspeed
-    type: float
-    restore_value: no
-    initial_value: '1'
+#globals:
+#  - id: fanspeed
+#    type: float
+#    restore_value: no
+#    initial_value: '1'
 #  - id: deltatemp
 #    type: float
 #    restore_value: no
@@ -17,6 +17,13 @@ one_wire:
   - platform: gpio
     pin: D1
     id: dallas_1
+
+# Input boolean to store the previous state of the heating_sensor
+input_boolean:
+  - platform: template
+    id: previous_heating_sensor_state
+    name: "Previous Heating Sensor State"
+    initial_state: off
   
 sensor:
 # Sensor for Dallas 1
@@ -31,31 +38,9 @@ sensor:
     state_class: "measurement"
     filters:
       - filter_out: nan
-    on_value:
-      then:
-#        - lambda: |-
-#           id(deltatemp) = abs(id(temp_2).state - id(temp_1).state);
-#            id(fanspeed) = 100 * (1 - id(deltatemp)/20);
-        - lambda: |-
-            float t1 = id(temp_1).state;
-            float t2 = id(temp_2).state;
-            float diff = abs(t1 - t2);
-            float speed = max(0.0, min(100.0, (20.0 - diff) * 5.0));
-            id(fanspeed) = speed;  // Scale to 0.0-1.0
-
-        - if:
-            condition:
-              - lambda: 'return id(heating_setting).state == 0;'
-            then:
-              - fan.turn_off: fancontrol
-              - logger.log: "Stop fans"       
-            else:
-              - fan.turn_on:
-                  id: fancontrol
-                  speed: !lambda "return id(fanspeed);"
-              - logger.log:
-                  format: "Fanspeed is %.1f"
-                  args: [ 'id(fanspeed)' ]
+    on_value_change:
+        then:
+          - script.execute: control_fan  # Call the control_fan script when T1 changes
 
   - platform: pulse_counter
     pin:
@@ -103,3 +88,45 @@ fan:
     on_turn_off:
      - switch.turn_off: powerswitch
      - logger.log: "Fan Turned Off!"
+
+script:
+  - id: control_fan
+    then:
+      # Lambda to check if heating_sensor changed from non-zero to 0
+      - lambda: |-
+          float t1 = id(temp_1).state;
+          float t2 = id(temp_2).state;
+          float diff = abs(t1 - t2);
+          float fan_speed = 0.0;
+
+          // Calculate fan speed based on the temperature difference
+          fan_speed = max(0.0, min(100.0, (20.0 - diff) * 5.0));
+
+          // Check if heating_sensor was not 0, but is now 0
+          if (id(heating_sensor).state == 0 && !id(previous_heating_sensor_state).state) {
+            // Heating sensor has transitioned to 0, turn on fan at 30% speed for 2 minutes
+            id(my_fan).turn_on();
+            id(my_fan).set_speed(30.0);  // Set fan speed to 30%
+            delay: 120s  # Wait for 2 minutes
+            // After 2 minutes, check again if heating_sensor is still 0, if yes, turn off the fan
+            if (id(heating_sensor).state == 0) {
+              id(my_fan).turn_off();  # Turn off fan if heating_sensor is still 0 after 2 minutes
+            }
+          }
+          // When heating_sensor is not 0, fan speed depends on the temperature difference
+          else if (id(heating_sensor).state != 0) {
+            id(my_fan).turn_on();  # Turn the fan on
+            id(my_fan).set_speed(fan_speed);  # Set fan speed based on the temperature difference
+          }
+
+      # Store the current state of heating_sensor in previous_heating_sensor_state
+      - if:
+          condition:
+            lambda: 'id(heating_sensor).state == 0'
+          then:
+            - input_boolean.turn_on: previous_heating_sensor_state  # Set previous state to on if heating_sensor is 0
+      - if:
+          condition:
+            lambda: 'id(heating_sensor).state != 0'
+          then:
+            - input_boolean.turn_off: previous_heating_sensor_state  # Set previous state to off if heating_sensor is not 0
