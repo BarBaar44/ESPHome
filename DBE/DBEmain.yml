@@ -8,7 +8,7 @@ globals:
     type: float
     restore_value: no
     initial_value: '1'
-  - id: previous_heating_setting_state
+  - id: previous_heating_setting
     type: bool
     initial_value: 'false'
 
@@ -42,7 +42,7 @@ sensor:
             float diff = abs(t1 - t2);
             id(fanspeed) = max(0.0, min(100.0, (20.0 - diff) * 5.0));
 
-            if(id(heating_setting).state == 0 && id(previous_heating_setting_state) == 'false' {
+            if(id(heating_setting).state == 0 && id(previous_heating_setting) == 'false') {
               id(previous_heating_setting_state) = 'false';
             } else {
               id(previous_heating_setting_state) = 'true';
