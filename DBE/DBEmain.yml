@@ -87,7 +87,7 @@ fan:
 
 script:
   - id: control_fan
-    then:
+    sequence:  # Corrected start of the sequence
       - lambda: |-
           float t1 = id(temp_1).state;
           float t2 = id(temp_2).state;
