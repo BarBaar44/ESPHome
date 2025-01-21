@@ -96,15 +96,19 @@ script:
           fan_speed_value = max(0.0, min(100.0, (20.0 - diff) * 5.0));
           if (id(heating_setting).state == 0 && !id(previous_heating_setting_state)) {
             id(fancontrol).turn_on();
-            id(pwm_output).set_level(0.3);
-            delay: 120000
-            if (id(heating_setting).state == 0) {
-              id(fancontrol).turn_off();
-            }
+            id(pwm_output).set_level(0.3);  // Turn the fan on at 30% speed
+            id(previous_heating_setting_state) = true;
+            # Trigger delay and then turn off fan after 2 minutes
+            - delay: 120s
+            - if:
+                condition:
+                  lambda: 'return id(heating_setting).state == 0;'
+                then:
+                  - id(fancontrol).turn_off();
           }
           else if (id(heating_setting).state != 0) {
             id(fancontrol).turn_on();
-            id(pwm_output).set_level(fan_speed_value / 100.0);
+            id(pwm_output).set_level(fan_speed_value / 100.0);  // Set fan speed based on temperature difference
           }
       - lambda: |-
           if (id(heating_setting).state == 0) {
