@@ -102,8 +102,9 @@ script:
           if (id(heating_setting).state == 0 && !id(previous_heating_setting_state)) {
             // Heating setting has transitioned to 0, turn on fan at 30% speed for 2 minutes
             id(fancontrol).turn_on();
-            id(fancontrol).set_speed(30.0);  // Set fan speed to 30%
-            delay: 120s  # Wait for 2 minutes
+            // Set fan speed directly by controlling the output
+            id(fan_speed).write(0.3);  // Set fan speed to 30% (0.3)
+            delay: 120000  # Wait for 2 minutes (in milliseconds)
             // After 2 minutes, check again if heating_setting is still 0, if yes, turn off the fan
             if (id(heating_setting).state == 0) {
               id(fancontrol).turn_off();  # Turn off fan if heating_setting is still 0 after 2 minutes
@@ -112,7 +113,8 @@ script:
           // When heating_setting is not 0, fan speed depends on the temperature difference
           else if (id(heating_setting).state != 0) {
             id(fancontrol).turn_on();  # Turn the fan on
-            id(fancontrol).set_speed(fan_speed);  # Set fan speed based on the temperature difference
+            // Set fan speed based on the temperature difference
+            id(fan_speed).write(fan_speed / 100.0);  # Convert to 0-1 range for fan speed control
           }
 
       # Store the current state of heating_setting in previous_heating_setting_state
