@@ -8,7 +8,7 @@ globals:
     type: float
     restore_value: no
     initial_value: '1'
-  - id: previous_heating_setting
+  - id: previous_heating_on
     type: bool
     initial_value: 'false'
 
@@ -42,10 +42,10 @@ sensor:
             float diff = abs(t1 - t2);
             id(fanspeed) = max(0.0, min(100.0, (20.0 - diff) * 5.0));
 
-            if(id(heating_setting).state == 0 && id(previous_heating_setting) == '0') {
-              id(previous_heating_setting) = '0';
+            if(id(heating_setting).state != 0 && id(previous_heating_on) == '0') {
+              id(previous_heating_on) = '1';
             } else {
-              id(previous_heating_setting) = '1';
+              id(previous_heating_on) = '0';
             }
 
         - if:
@@ -59,8 +59,8 @@ sensor:
                   id: fancontrol
                   speed: !lambda "return id(fanspeed);"
               - logger.log:
-                  format: "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f, Previous Heating Setting State: %.2f\x1b[0m"
-                  args: ['id(temp_1).state', 'id(temp_2).state', 'id(fanspeed)', 'id(heating_setting).state', 'id(previous_heating_setting)']
+                  format: "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f, Previous Heating On: %.2f\x1b[0m"
+                  args: ['id(temp_1).state', 'id(temp_2).state', 'id(fanspeed)', 'id(heating_setting).state', 'id(previous_heating_on)']
 
   - platform: pulse_counter
     pin:
