@@ -98,7 +98,6 @@ script:
             id(fancontrol).turn_on();
             id(pwm_output).set_level(0.3);  // Turn the fan on at 30% speed
             id(previous_heating_setting_state) = true;
-            # Trigger delay and then turn off fan after 2 minutes
             - delay: 120s
             - if:
                 condition:
