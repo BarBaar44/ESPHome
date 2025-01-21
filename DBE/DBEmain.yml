@@ -102,37 +102,10 @@ script:
       - lambda: |-
           if (id(heating_setting).state == 0 && id(previous_heating_setting_state) != 0) {
             id(previous_heating_setting_state) = 0;
+            id(fancontrol).turn_on();
+            id(fancontrol).set_speed(30);  # Set fan speed to 30% for 2 minutes
+            delay(120s);  # Wait for 2 minutes
+            id(fancontrol).turn_off();
           } else {
             id(previous_heating_setting_state) = id(heating_setting).state;
           }
-
-# Automation to ensure fan is turned on for 2 minutes at 30% when heating setting is 0
-automation:
-  - alias: "Turn on fan for 2 minutes when heating setting is 0"
-    trigger:
-      platform: state
-      entity_id: sensor.heating_setting
-      to: '0'
-    condition:
-      condition: state
-      entity_id: sensor.heating_setting
-      state: '0'
-    action:
-      - lambda: |-
-          if (id(previous_heating_setting_state) != 0) {
-            id(previous_heating_setting_state) = 0;
-            id(fancontrol).turn_on();
-            id(fancontrol).set_speed(30);
-            delay(120s); 
-            id(fancontrol).turn_off();
-          }
-      
-  - alias: "Turn off fan when heating setting is not 0"
-    trigger:
-      platform: state
-      entity_id: sensor.heating_setting
-      from: '0'
-      to: '1'
-    action:
-      - fan.turn_off:
-          id: fancontrol
