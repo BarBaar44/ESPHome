@@ -3,10 +3,9 @@ globals:
    - id: previous_heating_setting_state
      type: bool
      initial_value: 'false'
-#  - id: fanspeed
-#    type: float
-#    restore_value: no
-#    initial_value: '1'
+   - id: fan_speed_value
+     type: float
+     initial_value: '0.0'
 #  - id: deltatemp
 #    type: float
 #    restore_value: no
@@ -92,20 +91,19 @@ script:
           float t1 = id(temp_1).state;
           float t2 = id(temp_2).state;
           float diff = abs(t1 - t2);
-          float fan_speed_value = max(0.0, min(100.0, (20.0 - diff) * 5.0));
-          ESP_LOGD("custom", "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f, Previous Heating Setting State: %.2f\x1b[0m", t1, t2, fan_speed_value, id(heating_setting).state, id(previous_heating_setting_state));
-          return fan_speed_value; 
+          id(fan_speed_value) = max(0.0, min(100.0, (20.0 - diff) * 5.0));  # Update global fan_speed_value
+          ESP_LOGD("custom", "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f, Previous Heating Setting State: %.2f\x1b[0m", t1, t2, id(fan_speed_value), id(heating_setting).state, id(previous_heating_setting_state));
 
       - fan.turn_on:
           id: fancontrol
-          speed: !lambda "return int(fan_speed_value);"
+          speed: !lambda "return int(id(fan_speed_value));"  # Set fan speed based on the global value
 
       - lambda: |-
           if (id(heating_setting).state == 0 && id(previous_heating_setting_state) != 0) {
             id(previous_heating_setting_state) = 0;
             id(fancontrol).turn_on();
-            id(fancontrol).set_speed(30);
-            delay(120s); 
+            id(fancontrol).set_speed(30);  # Set fan speed to 30% for 2 minutes
+            delay(120s);  # Wait for 2 minutes
             id(fancontrol).turn_off();
           } else {
             id(previous_heating_setting_state) = id(heating_setting).state;
