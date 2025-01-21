@@ -85,26 +85,17 @@ fan:
      - logger.log: "Fan Turned Off!"
 
 script:
-  - id: control_fan
+  - id: calculate_fan_speed
     then:
       - lambda: |-
           float t1 = id(temp_1).state;
           float t2 = id(temp_2).state;
           float diff = abs(t1 - t2);
-          id(fan_speed_value) = max(0.0, min(100.0, (20.0 - diff) * 5.0));  
-          ESP_LOGD("custom", "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f, Previous Heating Setting State: %.2f\x1b[0m", t1, t2, id(fan_speed_value), id(heating_setting).state, id(previous_heating_setting_state));
-
-      - fan.turn_on:
-          id: fancontrol
-          speed: !lambda "return int(id(fan_speed_value));"
-
-      - lambda: |-
-          if (id(heating_setting).state == 0 && id(previous_heating_setting_state) != 0) {
-            id(previous_heating_setting_state) = 0;
-            id(fancontrol).turn_on();
-            id(fancontrol).set_speed(30);
-            delay(120s); 
+          if (diff >= 20) {
+            id(fancontrol).turn_off();
+          } else if (diff == 0) {
             id(fancontrol).turn_off();
           } else {
-            id(previous_heating_setting_state) = id(heating_setting).state;
-          }
+            int fan_speed_value = max(0, min(100, (20 - diff) * 5));
+            id(fancontrol).turn_on();
+            id(fancontrol).set_speed(fan_speed_value);
