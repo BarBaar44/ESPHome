@@ -1,5 +1,8 @@
 #Set some global vars to prevent initial division by zeros
-#globals:
+globals:
+   - id: previous_heating_setting_state
+     type: bool
+     initial_value: 'false'
 #  - id: fanspeed
 #    type: float
 #    restore_value: no
@@ -106,7 +109,7 @@ script:
           fan_speed = max(0.0, min(100.0, (20.0 - diff) * 5.0));
 
           // Check if heating_setting was not 0, but is now 0
-          if (id(heating_setting).state == 0 && id(previous_heating_setting_state).state != 0) {
+          if (id(heating_setting).state == 0 && !id(previous_heating_setting_state)) {
             // Heating setting has transitioned to 0, turn on fan at 30% speed for 2 minutes
             id(my_fan).turn_on();
             id(my_fan).set_speed(30.0);  // Set fan speed to 30%
@@ -123,17 +126,9 @@ script:
           }
 
       # Store the current state of heating_setting in previous_heating_setting_state
-      - if:
-          condition:
-            lambda: 'id(heating_setting).state == 0'
-          then:
-            - input_number.set: 
-                id: previous_heating_setting_state
-                value: 0  # Set previous state to 0 if heating_setting is 0
-      - if:
-          condition:
-            lambda: 'id(heating_setting).state != 0'
-          then:
-            - input_number.set: 
-                id: previous_heating_setting_state
-                value: 1  # Set previous state to 1 if heating_setting is not 0
+      - lambda: |-
+          if (id(heating_setting).state == 0) {
+            id(previous_heating_setting_state) = true;  // Store true if heating_setting is 0
+          } else {
+            id(previous_heating_setting_state) = false;  // Store false if heating_setting is not 0
+          }
