@@ -86,8 +86,8 @@ fan:
      - logger.log: "Fan Turned Off!"
 
 script:
-  - id: control_fan
-    sequence:  # Corrected start of the sequence
+  - id: control_fan  # Added id for the script
+    sequence:
       - lambda: |-
           float t1 = id(temp_1).state;
           float t2 = id(temp_2).state;
