@@ -8,6 +8,9 @@ globals:
     type: float
     restore_value: no
     initial_value: '1'
+  - id: previous_heating_setting_state
+    type: bool
+    initial_value: 'false'
 
 # Enable logging
 logger:
@@ -36,6 +39,12 @@ sensor:
         - lambda: |-
             id(deltatemp) = abs(id(temp_2).state - id(temp_1).state);
             id(fanspeed) = 100 * (1 - id(deltatemp)/20);
+
+           if(id(heating_setting).state == 0 && id(previous_heating_setting_state) = 'false' {
+            id(previous_heating_setting_state) = 'false';
+          } else {
+            id(previous_heating_setting_state) = 'true';
+          }
 
         - if:
             condition:
