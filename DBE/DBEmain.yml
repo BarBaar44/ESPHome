@@ -92,25 +92,22 @@ script:
           float t1 = id(temp_1).state;
           float t2 = id(temp_2).state;
           float diff = abs(t1 - t2);
-          float fan_speed_value = 0.0;
-          fan_speed_value = max(0.0, min(100.0, (20.0 - diff) * 5.0));
-
-          // Log outputs for T1, T2, fanspeed, heating_setting, and previous_heating_setting_state
+          float fan_speed_value = max(0.0, min(100.0, (20.0 - diff) * 5.0));
+          
           ESP_LOGD("custom", "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f, Previous Heating Setting State: %.2f\x1b[0m", t1, t2, fan_speed_value, id(heating_setting).state, id(previous_heating_setting_state));
           
           if (id(heating_setting).state == 0 && !id(previous_heating_setting_state)) {
-            id(fancontrol).turn_on();
-            id(pwm_output).set_level(0.3);  // Turn the fan on at 30% speed
+            id(fancontrol).turn_on:
+              speed: 0.3
             id(previous_heating_setting_state) = true;
-            // Delay for 2 minutes
-            delay(120000);  // 120 seconds, converted to milliseconds
+            delay(120000);  // Wait for 2 minutes
             if (id(heating_setting).state == 0) {
               id(fancontrol).turn_off();
             }
           }
           else if (id(heating_setting).state != 0) {
-            id(fancontrol).turn_on();
-            id(pwm_output).set_level(fan_speed_value / 100.0);  // Set fan speed based on temperature difference
+            id(fancontrol).turn_on:
+              speed: fan_speed_value / 100.0
           }
       - lambda: |-
           if (id(heating_setting).state == 0) {
