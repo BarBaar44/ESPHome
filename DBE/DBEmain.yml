@@ -103,18 +103,18 @@ script:
           fan_speed = max(0.0, min(100.0, (20.0 - diff) * 5.0));
 
           // Check if heating_sensor was not 0, but is now 0
-          if (id(heating_sensor).state == 0 && !id(previous_heating_sensor_state).state) {
+          if (id(heating_setting).state == 0 && !id(previous_heating_sensor_state).state) {
             // Heating sensor has transitioned to 0, turn on fan at 30% speed for 2 minutes
             id(my_fan).turn_on();
             id(my_fan).set_speed(30.0);  // Set fan speed to 30%
             delay: 120s  # Wait for 2 minutes
             // After 2 minutes, check again if heating_sensor is still 0, if yes, turn off the fan
-            if (id(heating_sensor).state == 0) {
+            if (id(heating_setting).state == 0) {
               id(my_fan).turn_off();  # Turn off fan if heating_sensor is still 0 after 2 minutes
             }
           }
           // When heating_sensor is not 0, fan speed depends on the temperature difference
-          else if (id(heating_sensor).state != 0) {
+          else if (id(heating_setting).state != 0) {
             id(my_fan).turn_on();  # Turn the fan on
             id(my_fan).set_speed(fan_speed);  # Set fan speed based on the temperature difference
           }
@@ -122,11 +122,11 @@ script:
       # Store the current state of heating_sensor in previous_heating_sensor_state
       - if:
           condition:
-            lambda: 'id(heating_sensor).state == 0'
+            lambda: 'id(heating_setting).state == 0'
           then:
             - input_boolean.turn_on: previous_heating_sensor_state  # Set previous state to on if heating_sensor is 0
       - if:
           condition:
-            lambda: 'id(heating_sensor).state != 0'
+            lambda: 'id(heating_setting).state != 0'
           then:
             - input_boolean.turn_off: previous_heating_sensor_state  # Set previous state to off if heating_sensor is not 0
