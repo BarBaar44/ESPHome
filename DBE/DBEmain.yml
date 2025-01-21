@@ -98,7 +98,7 @@ script:
           
           if (id(heating_setting).state == 0 && !id(previous_heating_setting_state)) {
             id(fancontrol).turn_on:
-              speed: 0.3  # Set the fan speed to 30%
+              speed: 0.3
             id(previous_heating_setting_state) = true;
             delay(120000);  // Wait for 2 minutes
             if (id(heating_setting).state == 0) {
@@ -107,7 +107,7 @@ script:
           }
           else if (id(heating_setting).state != 0) {
             id(fancontrol).turn_on:
-              speed: fan_speed_value / 100.0  # Set fan speed based on temperature difference
+              speed: fan_speed_value / 100.0
           }
       - lambda: |-
           if (id(heating_setting).state == 0) {
