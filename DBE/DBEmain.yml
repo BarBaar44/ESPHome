@@ -95,32 +95,31 @@ script:
           float fan_speed_value = max(0.0, min(100.0, (20.0 - diff) * 5.0));
           
           ESP_LOGD("custom", "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f, Previous Heating Setting State: %.2f\x1b[0m", t1, t2, fan_speed_value, id(heating_setting).state, id(previous_heating_setting_state));
-          
+
       - if:
-          condition:
-            condition: state
-            entity_id: sensor.heating_setting
-            state: '0'
-          then:
-            - if:
-                condition:
-                  condition: lambda
-                  value: 'return id(previous_heating_setting_state) == true;'
-                then:
-                  - fan.turn_on:
-                      id: fancontrol
-                      speed: 0.3  # Turn the fan on at 30% speed
-                  - delay: 120s  # Wait for 2 minutes
-                  - fan.turn_off: fancontrol
+          condition: state
+          entity_id: sensor.heating_setting
+          state: '0'
+        then:
+          - if:
+              condition: lambda
+              value: 'return id(previous_heating_setting_state) == true;'
+            then:
+              - fan.turn_on:
+                  id: fancontrol
+                  speed: 30  # Turn the fan on at 30% speed
+              - delay: 120s  # Wait for 2 minutes
+              - fan.turn_off:
+                  id: fancontrol
+
       - if:
-          condition:
-            condition: numeric_state
-            entity_id: sensor.heating_setting
-            above: 0
-          then:
-            - fan.turn_on:
-                id: fancontrol
-                speed: !lambda "return fan_speed_value / 100.0;"
+          condition: numeric_state
+          entity_id: sensor.heating_setting
+          above: 0
+        then:
+          - fan.turn_on:
+              id: fancontrol
+              speed: !lambda "return int(fan_speed_value);"
             
       - lambda: |-
           if (id(heating_setting).state == 0) {
