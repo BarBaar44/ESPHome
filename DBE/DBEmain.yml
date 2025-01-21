@@ -42,7 +42,7 @@ sensor:
             float diff = abs(t1 - t2);
             id(fanspeed) = max(0.0, min(100.0, (20.0 - diff) * 5.0));
 
-            if(id(heating_setting).state != '0') {
+            if(id(heating_setting).state != 0.00) {
               id(previous_heating_on) = '1';
             } else {
               id(previous_heating_on) = '0';
