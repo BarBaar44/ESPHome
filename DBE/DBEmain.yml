@@ -42,14 +42,6 @@ sensor:
             float diff = abs(t1 - t2);
             id(fanspeed) = max(0.0, min(100.0, (20.0 - diff) * 5.0));
 
-           if(id(heating_setting).state == 0 && id(previous_heating_setting_state) = 'false' {
-            id(previous_heating_setting_state) = 'false';
-          } else {
-            id(previous_heating_setting_state) = 'true';
-          }
-
-          ESP_LOGD("custom", "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f, Previous Heating Setting State: %.2f\x1b[0m", t1, t2, id(fan_speed_value), id(heating_setting).state, id(previous_heating_setting_state));
-
         - if:
             condition:
               - lambda: 'return id(heating_setting).state == 0;'
