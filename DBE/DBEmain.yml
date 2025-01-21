@@ -111,7 +111,7 @@ script:
               - delay: 120s  # Wait for 2 minutes
               - fan.turn_off:
                   id: fancontrol
-
+              
       - if:
           condition: numeric_state
           entity_id: sensor.heating_setting
