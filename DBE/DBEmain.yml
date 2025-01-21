@@ -85,7 +85,7 @@ fan:
      - switch.turn_off: powerswitch
      - logger.log: "Fan Turned Off!"
 
-script:
+cript:
   - id: control_fan
     then:
       - lambda: |-
@@ -93,31 +93,22 @@ script:
           float t2 = id(temp_2).state;
           float diff = abs(t1 - t2);
           float fan_speed_value = 0.0;
-
-          // Calculate fan speed based on the temperature difference
           fan_speed_value = max(0.0, min(100.0, (20.0 - diff) * 5.0));
-
-          // Check if heating_setting was not 0, but is now 0
           if (id(heating_setting).state == 0 && !id(previous_heating_setting_state)) {
-            // Heating setting has transitioned to 0, turn on fan at 30% speed for 2 minutes
             id(fancontrol).turn_on();
             id(pwm_output).set_level(0.3);
-            delay: 120000 
-            // After 2 minutes, check again if heating_setting is still 0, if yes, turn off the fan
+            delay: 120000
             if (id(heating_setting).state == 0) {
-              id(fancontrol).turn_off(); 
+              id(fancontrol).turn_off();
             }
           }
-          // When heating_setting is not 0, fan speed depends on the temperature difference
           else if (id(heating_setting).state != 0) {
-            id(fancontrol).turn_on(); 
-            // Set fan speed based on the temperature difference (0-100)
-            id(pwm_output).set_level(fan_speed_value / 100.0); 
+            id(fancontrol).turn_on();
+            id(pwm_output).set_level(fan_speed_value / 100.0);
           }
-
       - lambda: |-
           if (id(heating_setting).state == 0) {
-            id(previous_heating_setting_state) = true;  // Store true if heating_setting is 0
+            id(previous_heating_setting_state) = true;
           } else {
-            id(previous_heating_setting_state) = false;  // Store false if heating_setting is not 0
+            id(previous_heating_setting_state) = false;
           }
