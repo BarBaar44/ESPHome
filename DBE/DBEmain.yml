@@ -20,16 +20,6 @@ one_wire:
   - platform: gpio
     pin: D1
     id: dallas_1
-
-# Input number to store the previous state of the heating_sensor
-input_number:
-  - platform: template
-    id: previous_heating_sensor_state
-    name: "Previous Heating Sensor State"
-    min_value: 0
-    max_value: 1
-    step: 1
-    initial_value: '0'
   
 sensor:
 # Sensor for Dallas 1
