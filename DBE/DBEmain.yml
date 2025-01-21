@@ -85,7 +85,7 @@ fan:
      - switch.turn_off: powerswitch
      - logger.log: "Fan Turned Off!"
 
-cript:
+script:
   - id: control_fan
     then:
       - lambda: |-
