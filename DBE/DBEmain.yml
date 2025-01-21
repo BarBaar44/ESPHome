@@ -93,17 +93,16 @@ script:
           float t1 = id(temp_1).state;
           float t2 = id(temp_2).state;
           float diff = abs(t1 - t2);
-          float fan_speed = 0.0;
+          float fan_speed_value = 0.0;
 
           // Calculate fan speed based on the temperature difference
-          fan_speed = max(0.0, min(100.0, (20.0 - diff) * 5.0));
+          fan_speed_value = max(0.0, min(100.0, (20.0 - diff) * 5.0));
 
           // Check if heating_setting was not 0, but is now 0
           if (id(heating_setting).state == 0 && !id(previous_heating_setting_state)) {
             // Heating setting has transitioned to 0, turn on fan at 30% speed for 2 minutes
             id(fancontrol).turn_on();
-            // Set fan speed directly by controlling the output
-            id(fan_speed).write(0.3);  // Set fan speed to 30% (0.3)
+            id(fancontrol).set_speed(30);  # Set fan speed to 30% (30 out of 100)
             delay: 120000  # Wait for 2 minutes (in milliseconds)
             // After 2 minutes, check again if heating_setting is still 0, if yes, turn off the fan
             if (id(heating_setting).state == 0) {
@@ -114,7 +113,7 @@ script:
           else if (id(heating_setting).state != 0) {
             id(fancontrol).turn_on();  # Turn the fan on
             // Set fan speed based on the temperature difference
-            id(fan_speed).write(fan_speed / 100.0);  # Convert to 0-1 range for fan speed control
+            id(fancontrol).set_speed(fan_speed_value);  # Set the fan speed directly (0-100)
           }
 
       # Store the current state of heating_setting in previous_heating_setting_state
