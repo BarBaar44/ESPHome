@@ -52,7 +52,7 @@ sensor:
             else:
               - fan.turn_on:
                   id: fancontrol
-                  speed: '!lambda return id(fanspeed);"
+                  speed: !lambda "return id(fanspeed);"
               - logger.log:
                   format: "Fanspeed is %.1f"
                   args: [ 'id(fanspeed)' ]
