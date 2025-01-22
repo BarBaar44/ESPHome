@@ -36,18 +36,18 @@ sensor:
             condition:
               - lambda: 'return id(heating_setting).state == 0.00;'
               - lambda: 'return id(heating_off) == true;'
-            then:
-              - logger.log:
-                  format: "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f\x1b[0m"
-                  args: ['id(temp_1).state', 'id(temp_2).state', 'id(fanspeed)', 'id(heating_setting).state'] 
-              - fan.turn_on:
-                  id: fancontrol
-                  speed: 30
-              - logger.log: "wait 120"
-              - delay: 120s
-              - fan.turn_off: 
-                  id: fancontrol    
-              - logger.log: "Fans off"
+             then:
+               - logger.log:
+                   format: "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f\x1b[0m"
+                   args: ['id(temp_1).state', 'id(temp_2).state', 'id(fanspeed)', 'id(heating_setting).state'] 
+               - fan.turn_on:
+                   id: fancontrol
+                   speed: 30
+               - logger.log: "wait 120"
+               - delay: 120s
+               - fan.turn_off: 
+                   id: fancontrol    
+               - logger.log: "Fans off"
         - if:
             condition:
                - lambda: 'return id(heating_setting).state > 0;'
