@@ -44,8 +44,11 @@ sensor:
               - fan.turn_on:
                   id: fancontrol
                   speed: 30
+              - logger.log: "wait 120"
               - delay: 120s
-              fan.turn_off: fancontrol      
+              - fan.turn_off: 
+                  id: fancontrol    
+              - logger.log: "Fans off"
             else:
               - fan.turn_on:
                   id: fancontrol
