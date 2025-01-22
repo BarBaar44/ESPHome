@@ -70,7 +70,7 @@ sensor:
                   else:
                     - globals.set:
                         id: heating_off
-                        value: 'false'
+                        value: 'true'
                     - logger.log: "test2"
 
   - platform: pulse_counter
