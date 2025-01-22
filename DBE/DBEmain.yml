@@ -52,6 +52,13 @@ sensor:
               - globals.set:
                   id: heating_off
                   value: 'false'
+              - if:
+                  condition:
+                    - - lambda: 'return id(heating_setting).state == 0.00;'
+                  then:
+                    - logger.log: "test"
+                  else:
+                    - logger.log: "test2"
 
 
 
