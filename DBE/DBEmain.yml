@@ -49,7 +49,7 @@ sensor:
               - fan.turn_off: 
                   id: fancontrol 
               - globals.set:
-                  id: heating_setting
+                  id: heating_off
                   value: 'true'
               - logger.log: "Fans off"
             else:
