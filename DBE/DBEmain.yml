@@ -37,6 +37,7 @@ sensor:
               - lambda: 'return id(heating_setting).state < 1;'
               - lambda: 'return id(heating_off) == false;'
             then:
+              - logger.log: "Spinning down..."
               - logger.log:
                   format: "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f\x1b[0m"
                   args: ['id(temp_1).state', 'id(temp_2).state', 'id(fanspeed)', 'id(heating_setting).state'] 
@@ -58,6 +59,7 @@ sensor:
                         float t2 = id(temp_2).state;
                         float diff = abs(t1 - t2);
                         id(fanspeed) = max(0.0, min(100.0, (20.0 - diff) * 5.0));
+                    - logger.log: "Cooling!"
                     - logger.log:
                          format: "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f\x1b[0m"
                          args: ['id(temp_1).state', 'id(temp_2).state', 'id(fanspeed)', 'id(heating_setting).state']
@@ -71,6 +73,7 @@ sensor:
                     - globals.set:
                         id: heating_off
                         value: 'true'
+                    - logger.log: "Done cooling..."
                     - logger.log:
                         format: "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f\x1b[0m"
                         args: ['id(temp_1).state', 'id(temp_2).state', 'id(fanspeed)', 'id(heating_setting).state'] 
