@@ -33,9 +33,8 @@ sensor:
       then:
         - if:
             condition:
-                all:
-                  - lambda: 'return id(heating_setting).state == 0.00;'
-                  - lambda: 'return id(heating_off) == false;'
+              - lambda: 'return id(heating_setting).state == 0.00;'
+              - lambda: 'return id(heating_off) == false;'
             then:
               - logger.log:
                   format: "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f\x1b[0m"
