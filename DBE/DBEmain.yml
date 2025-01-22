@@ -35,7 +35,7 @@ sensor:
         - if:
             condition:
               - lambda: 'return id(heating_setting).state < 1;'
-              - lambda: 'return id(heating_off) == true;'
+              - lambda: 'return id(heating_off) == false;'
             then:
               - logger.log:
                   format: "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f\x1b[0m"
@@ -71,7 +71,9 @@ sensor:
                     - globals.set:
                         id: heating_off
                         value: 'true'
-                    - logger.log: "test2"
+                    - logger.log:
+                        format: "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f\x1b[0m"
+                        args: ['id(temp_1).state', 'id(temp_2).state', 'id(fanspeed)', 'id(heating_setting).state'] 
 
   - platform: pulse_counter
     pin:
