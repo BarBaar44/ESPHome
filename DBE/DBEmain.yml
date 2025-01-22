@@ -50,12 +50,16 @@ sensor:
                   float t2 = id(temp_2).state;
                   float diff = abs(t1 - t2);
                   id(fanspeed) = max(0.0, min(100.0, (20.0 - diff) * 5.0));
-              - fan.turn_on:
-                  id: fancontrol
-                  speed: !lambda "return id(fanspeed);"
-              - logger.log:
-                  format: "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f\x1b[0m"
-                  args: ['id(temp_1).state', 'id(temp_2).state', 'id(fanspeed)', 'id(heating_setting).state']
+              - if:
+                  condition:
+                    - lambda: 'return id(heating_setting).state != 0.00;' 
+                  then:
+                    - fan.turn_on:
+                        id: fancontrol
+                        speed: !lambda "return id(fanspeed);"
+                    - logger.log:
+                        format: "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f\x1b[0m"
+                        args: ['id(temp_1).state', 'id(temp_2).state', 'id(fanspeed)', 'id(heating_setting).state']
 
   - platform: pulse_counter
     pin:
