@@ -34,7 +34,7 @@ sensor:
       then:
         - if:
             condition:
-              - lambda: 'return id(heating_setting).state == 0.00;'
+              - lambda: 'return id(heating_setting).state < 1;'
               - lambda: 'return id(heating_off) == true;'
             then:
               - logger.log:
