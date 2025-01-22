@@ -47,7 +47,10 @@ sensor:
               - logger.log: "wait 120"
               - delay: 120s
               - fan.turn_off: 
-                  id: fancontrol    
+                  id: fancontrol 
+              - globals.set:
+                  id: heating_setting
+                  value: 'true'
               - logger.log: "Fans off"
             else:
               - if:
