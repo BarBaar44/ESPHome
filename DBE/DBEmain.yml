@@ -1,3 +1,23 @@
+######################################################
+#
+# Main DBE configuration.
+# Two Dallas temperature sensors calculate the difference between the incoming
+# and outcoming water temperature. The aim is to have 20 degrees is a difference
+# (But this will never be reached). The smaller the difference, the faster the fans go.
+#
+# There is a required sensor outside this config:
+# sensor:
+#  - platform: homeassistant
+#    name: '${device_name} Heating Setting'
+#    id: heating_setting
+#    entity_id: sensor.living_room_heating
+#
+# This sensor indicates how 'open' the temperature valve is (I use Tado). Is the valve
+# is open (!= 0), the fans spin up. 120 seconds after the valve closes, all fans come to a full stop. 
+# The boolean 'heating_off' is used to monitor this
+#
+####################################################################
+
 #Set some global vars to prevent initial division by zeros
 globals:
   - id: fanspeed
