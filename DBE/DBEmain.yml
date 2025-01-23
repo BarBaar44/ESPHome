@@ -12,7 +12,7 @@
 #    id: heating_setting
 #    entity_id: sensor.living_room_heating
 #
-# This sensor indicates how 'open' the temperature valve is (I use Tado). Is the valve
+# This sensor indicates how 'open' the temperature valve is (I use Tado). When the valve
 # is open (!= 0), the fans spin up. 120 seconds after the valve closes, all fans come to a full stop. 
 # The boolean 'heating_off' is used to monitor this
 #
