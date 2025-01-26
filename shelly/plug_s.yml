@@ -35,6 +35,7 @@ switch:
   - platform: gpio
     pin: GPIO15
     id: relay
+    icon: "mdi:power-plug"
     name: "${channel_1} switch"
     on_turn_on:
       - output.turn_on: led
