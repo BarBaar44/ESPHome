@@ -35,7 +35,7 @@ switch:
   - platform: gpio
     pin: GPIO15
     id: relay
-    name: "${channel_1}"
+    name: "${device_name} switch"
     on_turn_on:
       - output.turn_on: led
     on_turn_off:
@@ -82,7 +82,7 @@ sensor:
     current_resistor: ${current_res}
     voltage_divider: ${voltage_div}
     current:
-      name: "${channel_1} current"
+      name: "${device_name} current"
       unit_of_measurement: "A"
       accuracy_decimals: 3
       icon: mdi:flash-outline
@@ -97,11 +97,11 @@ sensor:
                 data_template:
                   message: Switch turned off because current exceeded ${max_current}A
     voltage:
-      name: "${channel_1} voltage"
+      name: "${device_name} voltage"
       unit_of_measurement: "V"
       icon: mdi:flash-outline
     power:
-      name: "${channel_1} power"
+      name: "${device_name} power"
       id: power
       unit_of_measurement: "W"
       filters:
@@ -122,7 +122,7 @@ sensor:
     update_interval: 10s
 
   - platform: total_daily_energy
-    name: "${channel_1} daily energy"
+    name: "$${device_name} daily energy"
     power_id: power
     filters:
       # Multiplication factor from W to kW is 0.001
