@@ -22,7 +22,7 @@ switch:
     pin: GPIO4
     id: shelly_relay
     restore_mode: restore_default_off
-    icon:
+    icon: "mdi:lightbulb"
 
 binary_sensor:
   - platform: gpio
