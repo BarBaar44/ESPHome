@@ -14,20 +14,6 @@ api:
 web_server:
   port: 80
 
-# Text sensors with general information.
-text_sensor:
-  # Expose ESPHome version as sensor.
-  - platform: version
-    name: ${device_name} ESPHome Version
-  # Expose WiFi information as sensors.
-  - platform: wifi_info
-    ip_address:
-      name: ${device_name} IP
-    ssid:
-      name: ${device_name} SSID
-    bssid:
-      name: ${device_name} BSSID
-
 # Shelly 1 detached switch config with multi click options and fallback in case of wifi or api fail
 
 switch:
