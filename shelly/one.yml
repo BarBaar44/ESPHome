@@ -4,16 +4,11 @@ esphome:
 esp8266:
   board: esp01_1m
 
-captive_portal:
-
 # Enable logging
 logger:
 
 # Enable Home Assistant API
 api:
-
-# Enable OTA updates
-ota:
 
 # Enable Web server (optional).
 web_server:
@@ -32,17 +27,6 @@ text_sensor:
       name: ${device_name} SSID
     bssid:
       name: ${device_name} BSSID
-
-# Sensors with general information.
-sensor:
-  # Uptime sensor.
-  - platform: uptime
-    name: ${device_name} Uptime
-
-  # WiFi Signal sensor.
-  - platform: wifi_signal
-    name: ${device_name} WiFi Signal
-    update_interval: 60s
 
 # Shelly 1 detached switch config with multi click options and fallback in case of wifi or api fail
 
