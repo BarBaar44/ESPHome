@@ -88,6 +88,7 @@ binary_sensor:
                     event: esphome.button_pressed
                     data:
                       title: shelly ${device_name} short click
+                - switch.toggle: shelly_relay
               # toggle relay in case either wifi or api are not connected
               else:
                 - switch.toggle: shelly_relay
