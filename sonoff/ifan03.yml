@@ -28,10 +28,7 @@ sensor:
     entity_category: diagnostic
 
 button:
-  - platform: restart
-    name: "$name restart"
-    entity_category: diagnostic
-  
+
   - platform: template
     name: "$name Buzzer"
     id: buzzer
@@ -39,17 +36,6 @@ button:
       - switch.turn_on: buzzer_switch
       - delay: 50ms
       - switch.turn_off: buzzer_switch
-
-text_sensor:
-  - platform: uptime
-    name: "$name Uptime"
-    entity_category: diagnostic
-
-  - platform: wifi_info
-    ip_address:
-      id: wifi_ip
-      name: "$name IP Address"
-      entity_category: diagnostic
 
 output:
   - platform: gpio
