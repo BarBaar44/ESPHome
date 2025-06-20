@@ -33,7 +33,7 @@ output:
     id: relay_1
 
 switch:
-  - platform: binary
+  - platform: output
     name: ${device_name}
     id: light_1
     output: relay_1
