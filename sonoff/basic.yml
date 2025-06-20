@@ -22,7 +22,7 @@ binary_sensor:
     id: button_1
     on_press:
       then:
-        - light.toggle: light_1
+        - switch.toggle: light_1
 
   - platform: status
     name: "My LS Status"
