@@ -32,11 +32,12 @@ output:
     pin: GPIO12
     id: relay_1
 
-light:
+switch:
   - platform: binary
     name: ${device_name}
     id: light_1
     output: relay_1
+    icon: "mdi:lightbulb"
 
 status_led:
   pin:
