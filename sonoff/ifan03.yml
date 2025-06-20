@@ -1,12 +1,5 @@
-substitutions:
-  name: "buro-fan"
-  friendly_name: "Büro Ventilator"
-  comment: "Sonoff Ifan03 Ventilator (ESP01 1M)"
-  on_boot_light: ALWAYS_ON # or ALWAYS_OFF
-  spare_button_light_entity: "light.buro"
-
 esphome:
-  name: $name
+  name: $device_name
   comment: $comment
 
 esp8266:
@@ -20,12 +13,6 @@ captive_portal:
 
 logger:
   level: ERROR
-
-sensor:
-  - platform: wifi_signal
-    name: "$name WiFi Signal"
-    update_interval: 60s
-    entity_category: diagnostic
 
 button:
 
