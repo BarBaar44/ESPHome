@@ -54,7 +54,7 @@ switch:
 
 light:
   - platform: binary
-    name: "$friendly_name"
+    name: "$friendly_name Light"
     output: light_relay
     id: ifan03_light
     restore_mode: $on_boot_light
@@ -62,7 +62,7 @@ light:
 fan:
   - platform: template
     id: ifan03_fan
-    name: "$friendly_name"
+    name: "$friendly_name Fan"
     speed_count: 3
     restore_mode: NO_RESTORE # important
     on_turn_on:
