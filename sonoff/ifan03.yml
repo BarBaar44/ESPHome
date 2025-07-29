@@ -87,7 +87,9 @@ fan:
         }
 
 remote_receiver:
-  pin: GPIO3
+  pin: 
+    number: GPIO3
+    inverted: true
   dump: raw
 
 binary_sensor:
