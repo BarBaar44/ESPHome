@@ -11,9 +11,6 @@ logger:
 # Enable Home Assistant API
 api:
 
-# Enable OTA updates
-ota:
-
 # Enable Web server (optional).
 web_server:
   port: 80
