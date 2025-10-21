@@ -25,6 +25,6 @@ sensor:
     unit_of_measurement: "Signal %"
     entity_category: "diagnostic"
 
-button:
-  - platform: restart
-    name: '${device_name} restart'
+#button:
+#  - platform: restart
+#    name: '${device_name} restart'
