@@ -63,7 +63,7 @@ sensor:
                   args: ['id(temp_1).state', 'id(temp_2).state', 'id(fanspeed)', 'id(heating_setting).state'] 
               - fan.turn_on:
                   id: fancontrol
-                  speed: 30
+                  speed: 15
               - logger.log: "wait 120"
               - delay: 120s
               - fan.turn_off: 
