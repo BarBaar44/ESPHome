@@ -75,7 +75,7 @@ sensor:
             else:
               - if:
                   condition:
-                    - lambda: 'return id(heating_setting).state > 0;'
+                    - lambda: 'return id(heating_setting).state > 1;'
                   then:
                     - lambda: |-
                         float t1 = id(temp_1).state;
