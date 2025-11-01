@@ -75,31 +75,43 @@ sensor:
             else:
               - if:
                   condition:
-                    - lambda: 'return id(heating_setting).state > 1;'
+                    - lambda: 'return id(heating_setting).state > 1 && id(heating_setting).state < 10;'
                   then:
-                    - lambda: |-
-                        float t1 = id(temp_1).state;
-                        float t2 = id(temp_2).state;
-                        float diff = abs(t1 - t2);
-                        id(fanspeed) = max(0.0, min(100.0, (20.0 - diff) * 5.0));
-                    - logger.log: "Cooling!"
-                    - logger.log:
-                         format: "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f\x1b[0m"
-                         args: ['id(temp_1).state', 'id(temp_2).state', 'id(fanspeed)', 'id(heating_setting).state']
-                    - fan.turn_on:
-                        id: fancontrol
-                        speed: !lambda 'return id(fanspeed);'
-                    - globals.set:
-                        id: heating_off
-                        value: 'false'
-                  else:
-                    - globals.set:
-                        id: heating_off
-                        value: 'true'
-                    - logger.log: "Done cooling..."
+                    - logger.log: "Stale tempo"
                     - logger.log:
                         format: "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f\x1b[0m"
                         args: ['id(temp_1).state', 'id(temp_2).state', 'id(fanspeed)', 'id(heating_setting).state'] 
+                    - fan.turn_on:
+                        id: fancontrol
+                        speed: 15
+                  else:
+                    - if:
+                        condition:
+                          - lambda: 'return id(heating_setting).state > 10;'
+                        then:
+                          - lambda: |-
+                             float t1 = id(temp_1).state;
+                             float t2 = id(temp_2).state;
+                             float diff = abs(t1 - t2);
+                             id(fanspeed) = max(0.0, min(100.0, (20.0 - diff) * 5.0));
+                          - logger.log: "Cooling!"
+                          - logger.log:
+                               format: "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f\x1b[0m"
+                               args: ['id(temp_1).state', 'id(temp_2).state', 'id(fanspeed)', 'id(heating_setting).state']
+                          - fan.turn_on:
+                              id: fancontrol
+                              speed: !lambda 'return id(fanspeed);'
+                          - globals.set:
+                              id: heating_off
+                              value: 'false'
+                        else:
+                          - globals.set:
+                              id: heating_off
+                              value: 'true'
+                          - logger.log: "Done cooling..."
+                          - logger.log:
+                              format: "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f\x1b[0m"
+                              args: ['id(temp_1).state', 'id(temp_2).state', 'id(fanspeed)', 'id(heating_setting).state'] 
 
   - platform: pulse_counter
     pin:
