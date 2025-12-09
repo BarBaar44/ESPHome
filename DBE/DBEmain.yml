@@ -169,21 +169,4 @@ script:
             - logger.log: "Heating OFF → starting shutdown timer"
             - script.execute: shutdown_fans
 
-      # CASE 1 — Low heat (15% speed)
-      - if:
-          condition:
-            lambda: 'return id(mode_case) == 1;'
-          then:
-            - logger.log: "Heating LOW → fixed 15% speed"
-            - globals.set:
-                id: heating_off
-                value: 'false'
-            - fan.turn_on:
-                id: fancontrol
-                speed: 15
 
-      # CASE 2 — Cooling mode (dynamic speed)
-      - if:
-          condition:
-            lambda: 'return id(mode_case) == 2;'
-          then:
