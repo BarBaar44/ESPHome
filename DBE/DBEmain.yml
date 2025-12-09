@@ -141,7 +141,6 @@ script:
           float t1 = id(temp_1).state;
           float t2 = id(temp_2).state;
 
-          ESP_LOGD("fan_logic", "Heating=%.2f  T1=%.2f  T2=%.2f", hs, t1, t2);
 
           // CASE selection
           if (hs < 1.0f) {
