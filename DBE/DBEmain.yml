@@ -147,7 +147,7 @@ script:
           if (hs >= 1 && hs <= 10) {
             ESP_LOGD("fan_logic", "Heating LOW → Minimal fan speed 15%");
             id(fancontrol).turn_on();
-            id(fancontrol).on_speed_set(15);
+            id(fancontrol).set_speed(15);
             id(heating_off) = false;
             return;
           }
@@ -164,6 +164,6 @@ script:
           ESP_LOGD("fan_logic", "Cooling mode → Computed fan speed: %.2f", fs);
 
           id(fancontrol).turn_on();
-          id(fancontrol).on_speed_set(fs);
+          id(fancontrol).set_speed(fs);
 
           id(heating_off) = false;
