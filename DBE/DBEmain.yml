@@ -123,7 +123,7 @@ script:
       - fan.turn_off: fancontrol
       - globals.set:
           id: heating_off
-          value: true
+          value: 'true'
       - logger.log: "Fans OFF after delay."
 
   # --- Main fan logic ---
