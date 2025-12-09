@@ -20,9 +20,6 @@
 
 ###############################################################
 # Clean DBE Configuration
-# - Non-blocking 120s shutdown timer
-# - Unified control logic
-# - True 0–100% fan speed with speed_count: 100
 ###############################################################
 
 globals:
@@ -47,7 +44,6 @@ one_wire:
 ###############################################################
 
 sensor:
-  # Dallas sensor 1
   - platform: dallas_temp
     address: '${dallas_1_ID}'
     name: '${device_name} Dallas 1'
@@ -60,7 +56,6 @@ sensor:
       then:
         - script.execute: control_fans
 
-  # Dallas sensor 2
   - platform: dallas_temp
     address: '${dallas_2_ID}'
     name: '${device_name} Dallas 2'
@@ -73,7 +68,6 @@ sensor:
       then:
         - script.execute: control_fans
 
-  # Fan RPM counter
   - platform: pulse_counter
     pin: D5
     name: '${device_name} Fan RPM'
@@ -81,8 +75,16 @@ sensor:
     filters:
       - multiply: 0.5
 
+  - platform: homeassistant
+    id: heating_setting
+    name: '${device_name} Heating Setting'
+    entity_id: sensor.living_room_heating
+    on_value:
+      then:
+        - script.execute: control_fans
+
 ###############################################################
-# RELAY SWITCH FOR POWER
+# SWITCH
 ###############################################################
 
 switch:
@@ -91,9 +93,8 @@ switch:
     id: powerswitch
     internal: true
 
-
 ###############################################################
-# PWM & FAN
+# PWM + FAN
 ###############################################################
 
 output:
@@ -105,10 +106,10 @@ output:
 
 fan:
   - platform: speed
-    output: pwm_output
     id: fancontrol
+    output: pwm_output
     name: "${device_name} Fan"
-    speed_count: 100        # Enables 0–100% speed
+    speed_count: 100
     on_turn_on:
       - switch.turn_on: powerswitch
       - logger.log: "Fan Turned On!"
@@ -116,17 +117,16 @@ fan:
       - switch.turn_off: powerswitch
       - logger.log: "Fan Turned Off!"
 
-
 ###############################################################
 # SCRIPTS
 ###############################################################
 
-# Non-blocking 120-second shutdown script
 script:
+  # Non-blocking 120s shutdown
   - id: shutdown_fans
     mode: restart
     then:
-      - logger.log: "Heating closed → waiting 120 seconds before shutdown..."
+      - logger.log: "Heating closed → waiting 120 seconds..."
       - delay: 120s
       - fan.turn_off: fancontrol
       - globals.set:
@@ -134,59 +134,63 @@ script:
           value: 'true'
       - logger.log: "Fans OFF after delay."
 
-  # Main fan control logic
+  # Unified logic (NO return!)
   - id: control_fans
     mode: restart
     then:
-      #################################################################
-      # First: read heating setting
-      #################################################################
       - lambda: |-
           float hs = id(heating_setting).state;
-          ESP_LOGD("fan_logic", "Heating setting: %.2f", hs);
-          ESP_LOGD("fan_logic", "T1: %.2f  T2: %.2f", id(temp_1).state, id(temp_2).state);
+          float t1 = id(temp_1).state;
+          float t2 = id(temp_2).state;
 
-          // Heating completely OFF → trigger delayed shutdown
+          ESP_LOGD("fan_logic", "Heating Setting: %.2f", hs);
+          ESP_LOGD("fan_logic", "T1: %.2f  T2: %.2f", t1, t2);
+
+          // Case 1 → Heating OFF
           if (hs < 1.0f) {
-            ESP_LOGD("fan_logic", "Heating OFF → Initiating shutdown timer.");
-            id(shutdown_fans).execute();
+            id(_case) = 0;
             return;
           }
 
-      #################################################################
-      # Heating between 1–10% → minimum airflow mode (15% speed)
-      #################################################################
+          // Case 2 → Heating LOW 1–10%
+          if (hs >= 1.0f && hs <= 10.0f) {
+            id(_case) = 1;
+            return;
+          }
+
+          // Case 3 → Heating >10: cooling mode
+          float diff = fabs(t1 - t2);
+          float fs = fmaxf(0.0f, fminf(100.0f, (20.0f - diff) * 5.0f));
+          id(fanspeed) = fs;
+          id(_case) = 2;
+      # Now run actions based on _case
       - if:
           condition:
-            lambda: 'return id(heating_setting).state >= 1 && id(heating_setting).state <= 10;'
+            lambda: 'return id(_case) == 0;'
           then:
-            - logger.log: "Heating LOW → fan at 15%"
-            - fan.turn_on:
-                id: fancontrol
-                speed: 15
+            - logger.log: "Heating OFF → starting shutdown timer"
+            - script.execute: shutdown_fans
+
+      - if:
+          condition:
+            lambda: 'return id(_case) == 1;'
+          then:
+            - logger.log: "Heating LOW → fixed 15% speed"
             - globals.set:
                 id: heating_off
                 value: 'false'
-            - return:
+            - fan.turn_on:
+                id: fancontrol
+                speed: 15
 
-      #################################################################
-      # Heating > 10% → Cooling mode with ΔT-based speed control
-      #################################################################
-      - lambda: |-
-          float t1 = id(temp_1).state;
-          float t2 = id(temp_2).state;
-          float diff = fabs(t1 - t2);
-
-          // Compute fan speed: (20°C - ΔT) × 5 → 0–100%
-          float fs = fmaxf(0.0f, fminf(100.0f, (20.0f - diff) * 5.0f));
-          id(fanspeed) = fs;
-
-          ESP_LOGD("fan_logic", "Cooling mode: ΔT = %.2f → speed = %.2f", diff, fs);
-
-      - fan.turn_on:
-          id: fancontrol
-          speed: !lambda 'return id(fanspeed);'
-
-      - globals.set:
-          id: heating_off
-          value: 'false'
+      - if:
+          condition:
+            lambda: 'return id(_case) == 2;'
+          then:
+            - logger.log: "Cooling mode → setting dynamic speed"
+            - globals.set:
+                id: heating_off
+                value: 'false'
+            - fan.turn_on:
+                id: fancontrol
+                speed: !lambda "return id(fanspeed);"
