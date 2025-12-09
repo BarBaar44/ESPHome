@@ -184,13 +184,18 @@ script:
                 
 
       # CASE 2 — Cooling mode (dynamic speed)
-       - if:
+      - if:
           condition:
             lambda: 'return id(mode_case) == 2;'
           then:
             - lambda: |-
                 float heating = id(heating_setting).state;
-                if (heating < 1.0f) return; // Safety check
+
+                // Safety: do not run if heating off
+                if (heating < 1.0f) {
+                  id(fanspeed) = 0;
+                  return;
+                }
 
                 float deltaT = fabs(id(temp_1).state - id(temp_2).state);
                 float target_delta = 20.0f;
@@ -198,8 +203,8 @@ script:
                 // Small ΔT → higher base speed
                 float speed_base = fmaxf(0.0f, fminf(100.0f, (target_delta - deltaT) / target_delta * 100.0f));
 
-                // Scale by heating level (0–100)
-                if (heating > 100) heating = 100.0f; // clamp
+                // Scale by heating level
+                if (heating > 100) heating = 100.0f;
                 float final_speed = speed_base * (heating / 100.0f);
 
                 // Minimum airflow if heating > 1%
@@ -210,10 +215,18 @@ script:
                 ESP_LOGD("fan_logic","ΔT=%.2f Heating=%.2f SpeedBase=%.2f Final=%.2f",
                   deltaT, heating, speed_base, final_speed);
 
-             - globals.set:
-                id: heating_off
-                value: 'false'
-
-            - fan.turn_on:
-                id: fancontrol
-                speed: !lambda 'return id(fanspeed);'
+            - if:
+                condition:
+                  lambda: 'return id(fanspeed) > 0;'
+                then:
+                  - globals.set:
+                      id: heating_off
+                      value: 'false'
+                  - fan.turn_on:
+                      id: fancontrol
+                      speed: !lambda 'return id(fanspeed);'
+                else:
+                  - fan.turn_off: fancontrol
+                  - globals.set:
+                      id: heating_off
+                      value: 'true'
