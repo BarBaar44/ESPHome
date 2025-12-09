@@ -193,10 +193,6 @@ script:
 
                 id(fanspeed) = final_speed;
 
-                ESP_LOGD("fan_logic",
-                  "ΔT=%.2f  Heating=%.2f  SpeedBase=%.2f  Final=%.2f",
-                  deltaT, heating, speed_base, final_speed);
-
             - globals.set:
                 id: heating_off
                 value: 'false'
