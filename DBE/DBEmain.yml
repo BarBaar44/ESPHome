@@ -169,4 +169,15 @@ script:
             - logger.log: "Heating OFF → starting shutdown timer"
             - script.execute: shutdown_fans
 
-
+      # CASE 2 — Cooling mode (dynamic speed)
+      - if:
+          condition:
+            lambda: 'return id(mode_case) == 2;'
+          then:
+            - logger.log: !lambda "char msg[64]; sprintf(msg, \"Cooling mode → speed %.1f%%\", id(fanspeed)); return std::string(msg);"
+            - globals.set:
+                id: heating_off
+                value: 'false'
+            - fan.turn_on:
+                id: fancontrol
+                speed: !lambda 'return id(fanspeed);'
