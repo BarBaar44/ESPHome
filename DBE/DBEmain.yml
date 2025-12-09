@@ -18,9 +18,9 @@
 #
 ####################################################################
 
-###############################################################
-# Clean DBE Configuration – Final Fixed Version
-###############################################################
+######################################################
+# Main DBE configuration – Clean & Fixed
+######################################################
 
 globals:
   - id: fanspeed
@@ -32,7 +32,7 @@ globals:
     type: bool
     initial_value: 'true'
 
-  - id: mode_case        # <---- NEW: internal mode selector
+  - id: mode_case
     type: int
     restore_value: no
     initial_value: '0'
@@ -45,9 +45,9 @@ one_wire:
     pin: D1
     id: dallas_1
 
-###############################################################
+######################################################
 # SENSORS
-###############################################################
+######################################################
 
 sensor:
   - platform: dallas_temp
@@ -81,9 +81,9 @@ sensor:
     filters:
       - multiply: 0.5
 
-###############################################################
+######################################################
 # SWITCH
-###############################################################
+######################################################
 
 switch:
   - platform: gpio
@@ -91,9 +91,9 @@ switch:
     id: powerswitch
     internal: true
 
-###############################################################
+######################################################
 # PWM + FAN
-###############################################################
+######################################################
 
 output:
   - platform: esp8266_pwm
@@ -115,10 +115,9 @@ fan:
       - switch.turn_off: powerswitch
       - logger.log: "Fan Turned Off!"
 
-
-###############################################################
+######################################################
 # SCRIPTS
-###############################################################
+######################################################
 
 script:
   # --- 120-second non-blocking shutdown ---
@@ -144,22 +143,14 @@ script:
 
           ESP_LOGD("fan_logic", "Heating Setting=%.2f  T1=%.2f  T2=%.2f", hs, t1, t2);
 
-          // Case 0 → heating off
+          // Determine mode_case
           if (hs < 1.0f) {
-            id(mode_case) = 0;
-            return;
+            id(mode_case) = 0;   // Heating off
+          } else if (hs <= 10.0f) {
+            id(mode_case) = 1;   // Low heating
+          } else {
+            id(mode_case) = 2;   // Cooling / dynamic mode
           }
-
-          // Case 1 → low power heating
-          if (hs <= 10.0f) {
-            id(mode_case) = 1;
-            return;
-          }
-
-          // Case 2 → cooling mode
-          float diff = fabs(t1 - t2);
-          id(fanspeed) = fmaxf(0.0f, fminf(100.0f, (20.0f - diff) * 5.0f));
-          id(mode_case) = 2;
 
       # CASE 0 — Heating off
       - if:
@@ -181,7 +172,6 @@ script:
             - fan.turn_on:
                 id: fancontrol
                 speed: 15
-                
 
       # CASE 2 — Cooling mode (dynamic speed)
       - if:
@@ -211,6 +201,9 @@ script:
                 if (heating > 1 && final_speed < 10) final_speed = 10;
 
                 id(fanspeed) = final_speed;
+
+                ESP_LOGD("fan_logic","ΔT=%.2f Heating=%.2f SpeedBase=%.2f Final=%.2f",
+                  deltaT, heating, speed_base, final_speed);
 
             - if:
                 condition:
