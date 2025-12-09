@@ -19,7 +19,7 @@
 ####################################################################
 
 ###############################################################
-# DBE Configuration – Working Version with Positive ΔT
+# DBE Configuration – Positive ΔT & Correct Logging
 ###############################################################
 
 globals:
@@ -141,7 +141,7 @@ script:
           float t1 = id(temp_1).state;
           float t2 = id(temp_2).state;
 
-          ESP_LOGD("fan_logic", "Heating Setting=%.2f  T1=%.2f  T2=%.2f", hs, t1, t2);
+          ESP_LOGD("fan_logic", "Heating=%.2f  T1=%.2f  T2=%.2f", hs, t1, t2);
 
           // CASE selection
           if (hs < 1.0f) {
@@ -165,7 +165,7 @@ script:
           condition:
             lambda: 'return id(mode_case) == 1;'
           then:
-            - logger.log: "Heating LOW → fixed 15% speed"
+            - logger.log: "Heating LOW → fixed 15%% speed"
             - globals.set:
                 id: heating_off
                 value: 'false'
@@ -195,7 +195,7 @@ script:
                 id(fanspeed) = final_speed;
 
                 ESP_LOGD("fan_logic",
-                  "ΔT=%.2f Heating=%.1f SpeedBase=%.1f → Final=%.1f",
+                  "ΔT=%.2f  Heating=%.2f  SpeedBase=%.2f  Final=%.2f",
                   deltaT, heating, speed_base, final_speed);
 
             - globals.set:
