@@ -24,8 +24,8 @@
 globals:
   - id: fanspeed
     type: float
-    restore_value: no
-    initial_value: 0
+    restore_value: false
+    initial_value: '0'
 
   - id: heating_off
     type: bool
