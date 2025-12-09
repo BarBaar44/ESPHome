@@ -19,7 +19,7 @@
 ####################################################################
 
 ###############################################################
-# DBE Configuration – Positive ΔT & Safe Logging
+# DBE Configuration – Positive ΔT & Fully Safe Logging
 ###############################################################
 
 globals:
@@ -81,6 +81,7 @@ sensor:
     filters:
       - multiply: 0.5
 
+
 ###############################################################
 # SWITCH
 ###############################################################
@@ -110,10 +111,10 @@ fan:
     speed_count: 100
     on_turn_on:
       - switch.turn_on: powerswitch
-      - logger.log: "Fan Turned On!"
+      - logger.log: "Fan Turned On"
     on_turn_off:
       - switch.turn_off: powerswitch
-      - logger.log: "Fan Turned Off!"
+      - logger.log: "Fan Turned Off"
 
 ###############################################################
 # SCRIPTS
@@ -130,7 +131,7 @@ script:
       - globals.set:
           id: heating_off
           value: 'true'
-      - logger.log: "Fans OFF after delay."
+      - logger.log: "Fans OFF after delay"
 
 # Main fan control logic
   - id: control_fans
@@ -141,6 +142,7 @@ script:
           float t1 = id(temp_1).state;
           float t2 = id(temp_2).state;
 
+          ESP_LOGD("fan_logic", "Heating=%.2f  T1=%.2f  T2=%.2f", hs, t1, t2);
 
           // CASE selection
           if (hs < 1.0f) {
@@ -178,9 +180,9 @@ script:
             lambda: 'return id(mode_case) == 2;'
           then:
             - lambda: |-
-                float heating = id(heating_setting).state;                  // 0–100 heating demand
-                float deltaT = fabs(id(temp_1).state - id(temp_2).state);   // always positive
-                float target_delta = 20.0;                                  // desired ΔT
+                float heating = id(heating_setting).state;                  
+                float deltaT = fabs(id(temp_1).state - id(temp_2).state);   
+                float target_delta = 20.0;                                   // desired ΔT
 
                 // Inverse ΔT → small ΔT → high fan speed
                 float speed_base = fmaxf(0.0f, fminf(100.0f, (target_delta - deltaT) / target_delta * 100.0f));
@@ -192,6 +194,10 @@ script:
                 if (heating > 1 && final_speed < 10) final_speed = 10;
 
                 id(fanspeed) = final_speed;
+
+                ESP_LOGD("fan_logic",
+                  "ΔT=%.2f  Heating=%.2f  SpeedBase=%.2f  Final=%.2f",
+                  deltaT, heating, speed_base, final_speed);
 
             - globals.set:
                 id: heating_off
