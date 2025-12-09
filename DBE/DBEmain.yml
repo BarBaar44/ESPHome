@@ -81,14 +81,6 @@ sensor:
     filters:
       - multiply: 0.5
 
-  - platform: homeassistant
-    id: heating_setting
-    name: '${device_name} Heating Setting'
-    entity_id: sensor.living_room_heating
-    on_value:
-      then:
-        - script.execute: control_fans
-
 
 ###############################################################
 # SWITCH
