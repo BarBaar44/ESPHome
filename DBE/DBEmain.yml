@@ -19,7 +19,7 @@
 ####################################################################
 
 ###############################################################
-# DBE Configuration – Positive ΔT & Fully Safe Logging
+# Clean DBE Configuration – Final Fixed Version
 ###############################################################
 
 globals:
@@ -32,7 +32,7 @@ globals:
     type: bool
     initial_value: 'true'
 
-  - id: mode_case
+  - id: mode_case        # <---- NEW: internal mode selector
     type: int
     restore_value: no
     initial_value: '0'
@@ -81,7 +81,6 @@ sensor:
     filters:
       - multiply: 0.5
 
-
 ###############################################################
 # SWITCH
 ###############################################################
@@ -111,17 +110,18 @@ fan:
     speed_count: 100
     on_turn_on:
       - switch.turn_on: powerswitch
-      - logger.log: "Fan Turned On"
+      - logger.log: "Fan Turned On!"
     on_turn_off:
       - switch.turn_off: powerswitch
-      - logger.log: "Fan Turned Off"
+      - logger.log: "Fan Turned Off!"
+
 
 ###############################################################
 # SCRIPTS
 ###############################################################
 
-# 120-second shutdown timer
 script:
+  # --- 120-second non-blocking shutdown ---
   - id: shutdown_fans
     mode: restart
     then:
@@ -131,9 +131,9 @@ script:
       - globals.set:
           id: heating_off
           value: 'true'
-      - logger.log: "Fans OFF after delay"
+      - logger.log: "Fans OFF after delay."
 
-# Main fan control logic
+  # --- Main fan logic ---
   - id: control_fans
     mode: restart
     then:
@@ -142,16 +142,24 @@ script:
           float t1 = id(temp_1).state;
           float t2 = id(temp_2).state;
 
-          ESP_LOGD("fan_logic", "Heating=%.2f  T1=%.2f  T2=%.2f", hs, t1, t2);
+          ESP_LOGD("fan_logic", "Heating Setting=%.2f  T1=%.2f  T2=%.2f", hs, t1, t2);
 
-          // CASE selection
+          // Case 0 → heating off
           if (hs < 1.0f) {
-            id(mode_case) = 0;   // Heating off
-          } else if (hs <= 10.0f) {
-            id(mode_case) = 1;   // Low heating
-          } else {
-            id(mode_case) = 2;   // Cooling mode
+            id(mode_case) = 0;
+            return;
           }
+
+          // Case 1 → low power heating
+          if (hs <= 10.0f) {
+            id(mode_case) = 1;
+            return;
+          }
+
+          // Case 2 → cooling mode
+          float diff = fabs(t1 - t2);
+          id(fanspeed) = fmaxf(0.0f, fminf(100.0f, (20.0f - diff) * 5.0f));
+          id(mode_case) = 2;
 
       # CASE 0 — Heating off
       - if:
@@ -161,12 +169,12 @@ script:
             - logger.log: "Heating OFF → starting shutdown timer"
             - script.execute: shutdown_fans
 
-      # CASE 1 — Low heat (fixed 15% speed)
+      # CASE 1 — Low heat (15% speed)
       - if:
           condition:
             lambda: 'return id(mode_case) == 1;'
           then:
-            - logger.log: "Heating LOW → fixed 15%% speed"
+            - logger.log: "Heating LOW → fixed 15% speed"
             - globals.set:
                 id: heating_off
                 value: 'false'
@@ -174,35 +182,15 @@ script:
                 id: fancontrol
                 speed: 15
 
-      # CASE 2 — Cooling mode (inverse ΔT × heating, ΔT always positive)
+      # CASE 2 — Cooling mode (dynamic speed)
       - if:
           condition:
             lambda: 'return id(mode_case) == 2;'
           then:
-            - lambda: |-
-                float heating = id(heating_setting).state;                  
-                float deltaT = fabs(id(temp_1).state - id(temp_2).state);   
-                float target_delta = 20.0;                                   // desired ΔT
-
-                // Inverse ΔT → small ΔT → high fan speed
-                float speed_base = fmaxf(0.0f, fminf(100.0f, (target_delta - deltaT) / target_delta * 100.0f));
-
-                // Scale by heating level
-                float final_speed = speed_base * (heating / 100.0f);
-
-                // Optional minimum airflow if heating > 1%
-                if (heating > 1 && final_speed < 10) final_speed = 10;
-
-                id(fanspeed) = final_speed;
-
-                ESP_LOGD("fan_logic",
-                  "ΔT=%.2f  Heating=%.2f  SpeedBase=%.2f  Final=%.2f",
-                  deltaT, heating, speed_base, final_speed);
-
+            - logger.log: !lambda "char msg[64]; sprintf(msg, \"Cooling mode → speed %.1f%%\", id(fanspeed)); return std::string(msg);"
             - globals.set:
                 id: heating_off
                 value: 'false'
-
             - fan.turn_on:
                 id: fancontrol
                 speed: !lambda 'return id(fanspeed);'
