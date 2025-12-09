@@ -19,7 +19,7 @@
 ####################################################################
 
 ###############################################################
-# Clean DBE Configuration – Final Fixed Version
+# DBE Configuration – Working Version with Positive ΔT
 ###############################################################
 
 globals:
@@ -32,7 +32,7 @@ globals:
     type: bool
     initial_value: 'true'
 
-  - id: mode_case        # <---- NEW: internal mode selector
+  - id: mode_case
     type: int
     restore_value: no
     initial_value: '0'
@@ -81,6 +81,13 @@ sensor:
     filters:
       - multiply: 0.5
 
+  - platform: homeassistant
+    id: heating_setting
+    name: '${device_name} Heating Setting'
+    entity_id: sensor.living_room_heating
+    on_value:
+      then:
+        - script.execute: control_fans
 
 ###############################################################
 # SWITCH
@@ -116,13 +123,12 @@ fan:
       - switch.turn_off: powerswitch
       - logger.log: "Fan Turned Off!"
 
-
 ###############################################################
 # SCRIPTS
 ###############################################################
 
+# 120-second shutdown timer
 script:
-  # --- 120-second non-blocking shutdown ---
   - id: shutdown_fans
     mode: restart
     then:
@@ -134,7 +140,7 @@ script:
           value: 'true'
       - logger.log: "Fans OFF after delay."
 
-  # --- Main fan logic ---
+# Main fan control logic
   - id: control_fans
     mode: restart
     then:
@@ -145,16 +151,65 @@ script:
 
           ESP_LOGD("fan_logic", "Heating Setting=%.2f  T1=%.2f  T2=%.2f", hs, t1, t2);
 
-          // Case 0 → heating off
+          // CASE selection
           if (hs < 1.0f) {
-            id(mode_case) = 0;
-            return;
+            id(mode_case) = 0;   // Heating off
+          } else if (hs <= 10.0f) {
+            id(mode_case) = 1;   // Low heating
+          } else {
+            id(mode_case) = 2;   // Cooling mode
           }
 
-          // Case 1 → low power heating
-          if (hs <= 10.0f) {
-            id(mode_case) = 1;
-            return;
-          }
+      # CASE 0 — Heating off
+      - if:
+          condition:
+            lambda: 'return id(mode_case) == 0;'
+          then:
+            - logger.log: "Heating OFF → starting shutdown timer"
+            - script.execute: shutdown_fans
 
-          // Case 2 → cooling m
+      # CASE 1 — Low heat (fixed 15% speed)
+      - if:
+          condition:
+            lambda: 'return id(mode_case) == 1;'
+          then:
+            - logger.log: "Heating LOW → fixed 15% speed"
+            - globals.set:
+                id: heating_off
+                value: 'false'
+            - fan.turn_on:
+                id: fancontrol
+                speed: 15
+
+      # CASE 2 — Cooling mode (inverse ΔT × heating, ΔT always positive)
+      - if:
+          condition:
+            lambda: 'return id(mode_case) == 2;'
+          then:
+            - lambda: |-
+                float heating = id(heating_setting).state;                  // 0–100 heating demand
+                float deltaT = fabs(id(temp_1).state - id(temp_2).state);   // always positive
+                float target_delta = 20.0;                                  // desired ΔT
+
+                // Inverse ΔT → small ΔT → high fan speed
+                float speed_base = fmaxf(0.0f, fminf(100.0f, (target_delta - deltaT) / target_delta * 100.0f));
+
+                // Scale by heating level
+                float final_speed = speed_base * (heating / 100.0f);
+
+                // Optional minimum airflow if heating > 1%
+                if (heating > 1 && final_speed < 10) final_speed = 10;
+
+                id(fanspeed) = final_speed;
+
+                ESP_LOGD("fan_logic",
+                  "ΔT=%.2f Heating=%.1f SpeedBase=%.1f → Final=%.1f",
+                  deltaT, heating, speed_base, final_speed);
+
+            - globals.set:
+                id: heating_off
+                value: 'false'
+
+            - fan.turn_on:
+                id: fancontrol
+                speed: !lambda 'return id(fanspeed);'
