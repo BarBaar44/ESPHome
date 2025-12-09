@@ -74,16 +74,6 @@ sensor:
     filters:
       - multiply: 0.5
 
-  # Heating valve % from Home Assistant
-  - platform: homeassistant
-    name: "${device_name} Heating Setting"
-    id: heating_setting
-    entity_id: sensor.living_room_heating
-    on_value:
-      then:
-        - script.execute: control_fans
-
-
 ###############################################################
 # POWER SWITCH
 ###############################################################
