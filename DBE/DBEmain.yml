@@ -140,6 +140,13 @@ script:
           float t1 = id(temp_1).state;
           float t2 = id(temp_2).state;
 
+      - logger.log:
+        format: "Heating Setting=%.2f  T1=%.2f  T2=%.2f"
+        args:
+          - hs
+          - t1
+          - t2
+
           // Determine mode_case
           if (hs < 1.0f) {
             id(mode_case) = 0;   // Heating off
