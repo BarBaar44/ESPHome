@@ -187,7 +187,6 @@ script:
           condition:
             lambda: 'return id(mode_case) == 2;'
           then:
-            - logger.log: !lambda "char msg[64]; sprintf(msg, \"Cooling mode → speed %.1f%%\", id(fanspeed)); return std::string(msg);"
             - globals.set:
                 id: heating_off
                 value: 'false'
