@@ -132,38 +132,42 @@ script:
     then:
       - lambda: |-
           float hs = id(heating_setting).state;
-
           ESP_LOGD("fan_logic", "Heating Setting: %.2f", hs);
           ESP_LOGD("fan_logic", "T1: %.2f  T2: %.2f", id(temp_1).state, id(temp_2).state);
 
-          // If heating is OFF (0 or very low)
           if (hs < 1.0f) {
             ESP_LOGD("fan_logic", "Heating OFF → Start shutdown timer.");
-            id(shutdown_fans).execute();   // Non-blocking
+            id(shutdown_fans).execute();
             return;
           }
 
-          // If heating is on a low but non-zero setting (1–10)
-          if (hs >= 1 && hs <= 10) {
-            ESP_LOGD("fan_logic", "Heating LOW → Minimal fan speed 15%");
-            id(fancontrol).turn_on();
-            id(fancontrol).set_speed(15);
-            id(heating_off) = false;
-            return;
-          }
+      # Heating 1–10 → 15% fixed speed
+      - if:
+          condition:
+            lambda: 'return id(heating_setting).state >= 1 && id(heating_setting).state <= 10;'
+          then:
+            - logger.log: "Heating LOW → 15% fixed speed"
+            - fan.turn_on:
+                id: fancontrol
+                speed: 15
+            - globals.set:
+                id: heating_off
+                value: 'false'
+            - return:
 
-          // Heating > 10 → Cooling mode, compute ΔT
+      # Heating >10 → Cooling mode
+      - lambda: |-
           float t1 = id(temp_1).state;
           float t2 = id(temp_2).state;
           float diff = fabs(t1 - t2);
-
-          // fanspeed = (20°C - ΔT) * 5 → 0–100%
           float fs = fmaxf(0.0f, fminf(100.0f, (20.0f - diff) * 5.0f));
           id(fanspeed) = fs;
+          ESP_LOGD("fan_logic", "Cooling mode → Fan speed: %.2f", fs);
 
-          ESP_LOGD("fan_logic", "Cooling mode → Computed fan speed: %.2f", fs);
+      - fan.turn_on:
+          id: fancontrol
+          speed: !lambda 'return id(fanspeed);'
 
-          id(fancontrol).turn_on();
-          id(fancontrol).set_speed(fs);
-
-          id(heating_off) = false;
+      - globals.set:
+          id: heating_off
+          value: 'false'
