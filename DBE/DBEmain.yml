@@ -169,7 +169,7 @@ script:
           then:
             - globals.set:
                 id: heating_off
-                value: false
+                value: 'false'
             - fan.turn_on:
                 id: fancontrol
                 speed: !lambda 'return id(fanspeed);'
@@ -177,4 +177,4 @@ script:
             - fan.turn_off: fancontrol
             - globals.set:
                 id: heating_off
-                value: true
+                value: 'true'
