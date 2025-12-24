@@ -4,6 +4,7 @@ ethernet:
   mdio_pin: GPIO18
   clk: 
     pin: GPIO0_IN
+    mode: CLK_EXT_IN
   phy_addr: 1
   power_pin: GPIO5
 
