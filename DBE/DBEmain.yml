@@ -144,16 +144,16 @@ script:
           // Decide fan speed
           float speed = 0;
 
-         // Dynamic cooling mode → small ΔT → higher speed
-            float base = fmaxf(0.0f, fminf(100.0f, (20.0f - deltaT) / 20.0f * 100.0f));
-            speed = base * (heating / 100.0f);
-            if (speed < 10) speed = 10;  // Minimum airflow
+          // Dynamic cooling mode → small ΔT → higher speed
+          float base = fmaxf(0.0f, fminf(100.0f, (20.0f - deltaT) / 20.0f * 100.0f));
+          speed = base * (heating / 100.0f);
+          if (speed < 10) speed = 10;  // Minimum airflow
 
           // Save fanspeed global
           id(fanspeed) = speed;
 
       - logger.log:
-          format:  ΔT=%.2f  Fanspeed=%.2f"
+          format:  "ΔT=%.2f  Fanspeed=%.2f"
           args:
             - 'fabs(id(temp_1).state - id(temp_2).state)'
             - 'id(fanspeed)'
