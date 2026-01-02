@@ -137,7 +137,6 @@ script:
     then:
       - lambda: |-
           // Read values
-          // float heating = id(heating_setting).state;
           float t1 = id(temp_1).state;
           float t2 = id(temp_2).state;
           float deltaT = fabs(t1 - t2);
@@ -145,18 +144,10 @@ script:
           // Decide fan speed
           float speed = 0;
 
-          //if (heating < 1.0f) {
-            // Heating off
-          //  speed = 0;
-          //} else if (heating <= 10.0f) {
-            // Low heating → fixed low speed
-         //   speed = 15;
-        //  } else {
-            // Dynamic cooling mode → small ΔT → higher speed
+         // Dynamic cooling mode → small ΔT → higher speed
             float base = fmaxf(0.0f, fminf(100.0f, (20.0f - deltaT) / 20.0f * 100.0f));
             speed = base * (heating / 100.0f);
             if (speed < 10) speed = 10;  // Minimum airflow
-        //  }
 
           // Save fanspeed global
           id(fanspeed) = speed;
