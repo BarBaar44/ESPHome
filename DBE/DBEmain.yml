@@ -162,9 +162,8 @@ script:
           id(fanspeed) = speed;
 
       - logger.log:
-          format: "Heating=%.2f  ΔT=%.2f  Fanspeed=%.2f"
+          format:  ΔT=%.2f  Fanspeed=%.2f"
           args:
-           # - 'id(heating_setting).state'
             - 'fabs(id(temp_1).state - id(temp_2).state)'
             - 'id(fanspeed)'
 
