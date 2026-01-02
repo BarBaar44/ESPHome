@@ -147,7 +147,7 @@ script:
           // Dynamic cooling mode → small ΔT → higher speed
           speed = fmaxf(0.0f, fminf(100.0f, (20.0f - deltaT) / 20.0f * 100.0f));
           if (speed < 10) speed = 10;  // Minimum airflow
-          if (speed > 80) speed = 80;
+          if (speed > 80) speed = 70;
 
           // Save fanspeed global
           id(fanspeed) = speed;
