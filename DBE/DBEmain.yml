@@ -1,29 +1,9 @@
- ######################################################
-#
-# Main DBE configuration.
-# Two Dallas temperature sensors calculate the difference between the incoming
-# and outgoing water temperature. The aim is to have 20 degrees is a difference
-# (But this will never be reached). The smaller the difference, the faster the fans go.
-#
-# There is a required sensor outside this config:
-# sensor:
-#  - platform: homeassistant
-#    name: "${device_name} Heating Setting"
-#    id: heating_setting
-#    entity_id: sensor.living_room_heating
-#    on_value:
-#      then:
-#        - script.execute: control_fans
-#
-# This sensor indicates how 'open' the temperature valve is (I use Tado). When the valve
-# is open (!= 0), the fans spin up. 120 seconds after the valve closes, all fans come to a full stop. 
-# The boolean 'heating_off' is used to monitor this
-#
-# As this is a device-specific sensor, it's left out of this code
-#
-####################################################################
 ######################################################
-# Optimized DBE Configuration
+# ESPHome: Interval-based fan control with HARD OFF
+# - Exponential fan curve based on ΔT
+# - Fan stops completely when ΔT < 1
+# - Powerswitch cuts physical power when fan is off
+# - No shutdown delay
 ######################################################
 
 globals:
@@ -45,18 +25,16 @@ one_wire:
     id: dallas_1
 
 ######################################################
-# INTERVAL (failsafe control loop)
+# Interval trigger for fan control
 ######################################################
-
 interval:
   - interval: 5s
     then:
       - script.execute: control_fans
 
 ######################################################
-# SENSORS
+# Sensors
 ######################################################
-
 sensor:
   - platform: dallas_temp
     address: '${dallas_1_ID}'
@@ -90,9 +68,8 @@ sensor:
       - multiply: 0.5
 
 ######################################################
-# SWITCH
+# Switch (powerswitch to cut physical fan power)
 ######################################################
-
 switch:
   - platform: gpio
     pin: D0
@@ -100,9 +77,8 @@ switch:
     internal: true
 
 ######################################################
-# PWM + FAN
+# PWM + Fan
 ######################################################
-
 output:
   - platform: esp8266_pwm
     pin: D6
@@ -125,71 +101,67 @@ fan:
       - logger.log: "Fan Turned Off!"
 
 ######################################################
-# SCRIPTS
+# Fan control script
 ######################################################
-
 script:
-  # --- 120-second shutdown ---
-  - id: shutdown_fans
+  - id: control_fans
     mode: restart
     then:
-      - logger.log: "Heating closed → waiting 120s..."
-      - delay: 120s
-      - fan.turn_off: fancontrol
-      - globals.set:
-          id: heating_off
-          value: 'true'
-      - logger.log: "Fans OFF after delay."
+      - lambda: |-
+          // Read temperatures
+          float t1 = id(temp_1).state;
+          float t2 = id(temp_2).state;
 
-  # --- Main fan logic ---
-  - lambda: |-
-    float t1 = id(temp_1).state;
-    float t2 = id(temp_2).state;
+          // Safety: ignore invalid readings
+          if (!isfinite(t1) || !isfinite(t2)) {
+            id(fanspeed) = 0;
+            id(fancontrol).turn_off();    // PWM fully off
+            id(powerswitch).turn_off();   // Cut physical power
+            id(heating_off) = true;
+            return;
+          }
 
-    // Sensor safety
-    if (!isfinite(t1) || !isfinite(t2)) {
-      id(fanspeed) = 0;
-      id(fancontrol).turn_off();  // PWM to 0
-      id(powerswitch).turn_off(); // Physical power off
-      id(heating_off) = true;
-      return;
-    }
+          float deltaT = fabsf(t1 - t2);
 
-    float deltaT = fabsf(t1 - t2);
+          // --- HARD OFF logic ---
+          if (deltaT < 1.0f) {
+            id(fanspeed) = 0;
+            id(fancontrol).turn_off();    // PWM off
+            id(powerswitch).turn_off();   // relay cuts power
+            id(heating_off) = true;
+            return;
+          }
 
-    // HARD OFF zone
-    if (deltaT < 1.0f) {
-      id(fanspeed) = 0;
-      id(fancontrol).turn_off();  // PWM off
-      id(powerswitch).turn_off(); // cut power
-      id(heating_off) = true;
-      return;
-    }
+          // --- Fan speed curve ---
+          const float dt_min = 1.0f;      // fan starts
+          const float dt_max = 20.0f;     // fan reaches minimum
+          const float speed_min = 10.0f;
+          const float speed_max = 70.0f;
+          const float exponent = 2.5f;    // curve strength
 
-    // Parameters for curve
-    const float dt_min = 1.0f;
-    const float dt_max = 20.0f;
-    const float speed_min = 10.0f;
-    const float speed_max = 70.0f;
-    const float exponent = 2.5f;
+          // Normalize ΔT to 0-1
+          float x = (deltaT - dt_min) / (dt_max - dt_min);
+          x = fmaxf(0.0f, fminf(1.0f, x));
 
-    // Normalize ΔT
-    float x = (deltaT - dt_min) / (dt_max - dt_min);
-    x = fmaxf(0.0f, fminf(1.0f, x));
+          // Exponential inverse curve
+          float curve = 1.0f - powf(x, exponent);
 
-    // Exponential inverse curve
-    float curve = 1.0f - powf(x, exponent);
+          // Scale to fan speed
+          float speed = speed_min + curve * (speed_max - speed_min);
+          speed = fmaxf(speed_min, fminf(speed_max, speed));
 
-    // Scale to fan speed
-    float speed = speed_min + curve * (speed_max - speed_min);
-    speed = fmaxf(speed_min, fminf(speed_max, speed));
+          // Save fanspeed global
+          id(fanspeed) = speed;
 
-    id(fanspeed) = speed;
+          // --- Activate fan ---
+          id(powerswitch).turn_on();      // physical power
+          id(fancontrol).turn_on();       // PWM
+          id(fancontrol).set_speed(speed);
 
-    // Apply fan speed
-    id(fancontrol).turn_on();
-    id(fancontrol).set_speed(speed);
+          id(heating_off) = false;
 
-    // Ensure powerswitch is on while fan runs
-    id(powerswitch).turn_on();
-    id(heating_off) = false;
+      - logger.log:
+          format: "ΔT=%.2f  Fanspeed=%.1f"
+          args:
+            - 'fabs(id(temp_1).state - id(temp_2).state)'
+            - 'id(fanspeed)'
