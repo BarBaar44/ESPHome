@@ -104,6 +104,7 @@ output:
 fan:
   - platform: speed
     id: fancontrol
+    internal: true
     output: pwm_output
     name: "${device_name} Fan"
     speed_count: 100
