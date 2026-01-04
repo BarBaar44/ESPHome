@@ -107,7 +107,7 @@ script:
   - id: control_fans
     mode: restart
     then:
-      # --- 1️⃣ Calculate fanspeed ---
+      # --- Calculate fanspeed ---
       - lambda: |-
           float t1 = id(temp_1).state;
           float t2 = id(temp_2).state;
@@ -121,7 +121,7 @@ script:
           float deltaT = fabsf(t1 - t2);
 
           // HARD OFF zone
-          if (deltaT < 1.0f) {
+          if (deltaT < 2.0f) {
             id(fanspeed) = 0;
             return;
           }
@@ -139,7 +139,7 @@ script:
           float curve = 1.0f - powf(x, exponent);
           id(fanspeed) = speed_min + curve * (speed_max - speed_min);
 
-      # --- 2️⃣ Apply fan state ---
+      # --- Apply fan state ---
       - if:
           condition:
             lambda: 'return id(fanspeed) > 0;'
@@ -158,7 +158,7 @@ script:
                 id: heating_off
                 value: 'true'
 
-      # --- 3️⃣ Logging ---
+      # --- Logging ---
       - logger.log:
           format: "ΔT=%.2f  Fanspeed=%.1f"
           args:
