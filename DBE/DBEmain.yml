@@ -115,6 +115,11 @@ fan:
       - switch.turn_off: powerswitch
       - logger.log: "Fan Turned Off!"
 
+interval:
+  - interval: 5s
+    then:
+      - script.execute: control_fans
+
 ######################################################
 # SCRIPTS
 ######################################################
