@@ -127,7 +127,7 @@ script:
           }
 
           // Exponential fan curve
-          const float dt_min = 1.0f;
+          const float dt_min = 1.5f;
           const float dt_max = 20.0f;
           const float speed_min = 10.0f;
           const float speed_max = 70.0f;
