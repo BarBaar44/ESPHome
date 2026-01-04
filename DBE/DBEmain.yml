@@ -45,6 +45,15 @@ one_wire:
     id: dallas_1
 
 ######################################################
+# INTERVAL (failsafe control loop)
+######################################################
+
+interval:
+  - interval: 5s
+    then:
+      - script.execute: control_fans
+
+######################################################
 # SENSORS
 ######################################################
 
@@ -115,11 +124,6 @@ fan:
       - switch.turn_off: powerswitch
       - logger.log: "Fan Turned Off!"
 
-interval:
-  - interval: 5s
-    then:
-      - script.execute: control_fans
-
 ######################################################
 # SCRIPTS
 ######################################################
@@ -142,57 +146,56 @@ script:
     mode: restart
     then:
       - lambda: |-
-          // Read values
           float t1 = id(temp_1).state;
           float t2 = id(temp_2).state;
-          float deltaT = fabs(t1 - t2);
 
-         // OFF zone
-         if (deltaT < 1.0f) {
-           id(fanspeed) = 0;
-           return;
-         }
+          // Sensor safety
+          if (!isfinite(t1) || !isfinite(t2)) {
+            id(fanspeed) = 0;
+            id(fancontrol).turn_off();
+            return;
+          }
 
-         // Parameters
-         const float dt_min = 1.0f;   // fan starts
-         const float dt_max = 20.0f;  // fan reaches minimum
-         const float speed_min = 10.0f;
-         const float speed_max = 70.0f;
-         const float exponent = 2.5f; // curve strength (↑ = more aggressive)
+          float deltaT = fabsf(t1 - t2);
 
-        // Normalize ΔT to 0–1
-        float x = (deltaT - dt_min) / (dt_max - dt_min);
-        x = fmaxf(0.0f, fminf(1.0f, x));
+          // HARD OFF zone
+          if (deltaT < 1.0f) {
+            id(fanspeed) = 0;
+            id(fancontrol).turn_off();
+            id(heating_off) = true;
+            return;
+          }
 
-        // Exponential inverse curve
-        float curve = 1.0f - powf(x, exponent);
+          // Parameters
+          const float dt_min = 1.0f;
+          const float dt_max = 20.0f;
+          const float speed_min = 10.0f;
+          const float speed_max = 70.0f;
+          const float exponent = 2.5f;
 
-        // Scale to fan speed
-        float speed = speed_min + curve * (speed_max - speed_min);
+          // Normalize ΔT
+          float x = (deltaT - dt_min) / (dt_max - dt_min);
+          x = fmaxf(0.0f, fminf(1.0f, x));
 
-        // Clamp (extra safety)
-        speed = fmaxf(speed_min, fminf(speed_max, speed));
+          // Exponential inverse curve
+          float curve = 1.0f - powf(x, exponent);
 
-        id(fanspeed) = speed;
+          // Scale to fan speed
+          float speed = speed_min + curve * (speed_max - speed_min);
+          speed = fmaxf(speed_min, fminf(speed_max, speed));
+
+          id(fanspeed) = speed;
 
       - logger.log:
-          format:  "ΔT=%.2f  Fanspeed=%.2f"
+          format: "ΔT=%.2f  Fanspeed=%.1f"
           args:
             - 'fabs(id(temp_1).state - id(temp_2).state)'
             - 'id(fanspeed)'
 
-      - if:
-          condition:
-            lambda: 'return id(fanspeed) > 0;'
-          then:
-            - globals.set:
-                id: heating_off
-                value: 'false'
-            - fan.turn_on:
-                id: fancontrol
-                speed: !lambda 'return id(fanspeed);'
-          else:
-            - fan.turn_off: fancontrol
-            - globals.set:
-                id: heating_off
-                value: 'true'
+      - globals.set:
+          id: heating_off
+          value: 'false'
+
+      - fan.turn_on:
+          id: fancontrol
+          speed: !lambda 'return id(fanspeed);'
