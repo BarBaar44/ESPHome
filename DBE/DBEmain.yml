@@ -170,7 +170,7 @@ script:
           const float dt_min = 1.0f;
           const float dt_max = 20.0f;
           const float speed_min = 10.0f;
-          const float speed_max = 70.0f;
+          const float speed_max = 85.0f;
           const float exponent = 2.5f;
 
           // Normalize ΔT
