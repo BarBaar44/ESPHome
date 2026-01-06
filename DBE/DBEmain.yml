@@ -107,7 +107,6 @@ script:
   - id: control_fans
     mode: restart
     then:
-      # --- Calculate fanspeed ---
       - lambda: |-
           float t1 = id(temp_1).state;
           float t2 = id(temp_2).state;
@@ -120,24 +119,34 @@ script:
 
           float deltaT = fabsf(t1 - t2);
 
-          // HARD OFF zone
-          if (deltaT < 2.0f) {
+          // --- Hysteresis thresholds ---
+          const float off_threshold = 1.5f;  // fan turns OFF below this
+          const float on_threshold  = 2.5f;  // fan turns ON above this
+          static bool fan_was_on = false;
+
+          // HARD OFF zone with hysteresis
+          if (!fan_was_on && deltaT < on_threshold) {
             id(fanspeed) = 0;
-            return;
+          } else if (fan_was_on && deltaT < off_threshold) {
+            // Keep fan on until deltaT drops below off_threshold
+            id(fanspeed) = 0; // keep zero speed if you want fully off
+          } else {
+            // --- Exponential fan curve ---
+            const float dt_min = 2.0f;
+            const float dt_max = 20.0f;
+            const float speed_min = 10.0f;
+            const float speed_max = 80.0f;
+            const float exponent = 2.5f;
+
+            float x = (deltaT - dt_min) / (dt_max - dt_min);
+            x = fmaxf(0.0f, fminf(1.0f, x));
+
+            float curve = powf(x, exponent);  // correct exponential growth
+            id(fanspeed) = speed_min + curve * (speed_max - speed_min);
           }
 
-          // Exponential fan curve
-          const float dt_min = 2.0f;
-          const float dt_max = 20.0f;
-          const float speed_min = 10.0f;
-          const float speed_max = 80.0f;
-          const float exponent = 2.5f;
-
-          float x = (deltaT - dt_min) / (dt_max - dt_min);
-          x = fmaxf(0.0f, fminf(1.0f, x));
-
-          float curve = 1.0f - powf(x, exponent);
-          id(fanspeed) = speed_min + curve * (speed_max - speed_min);
+          // Remember fan state
+          fan_was_on = id(fanspeed) > 0;
 
       # --- Apply fan state ---
       - if:
