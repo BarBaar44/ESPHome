@@ -1,9 +1,9 @@
 ######################################################
 # ESPHome: Interval-based fan control with HARD OFF
+# - AUTO / MANUAL mode (Home Assistant)
 # - Exponential fan curve based on ΔT
-# - Fan stops completely when ΔT < 1
-# - Powerswitch cuts physical power when fan is off
-# - Interval trigger every 5 seconds
+# - HARD OFF via relay when speed = 0
+# - Interval control every 5 seconds
 ######################################################
 
 globals:
@@ -12,13 +12,12 @@ globals:
     restore_value: false
     initial_value: '0'
 
-  - id: heating_off
-    type: bool
-    initial_value: 'true'
-
 logger:
   level: DEBUG
 
+######################################################
+# OneWire bus
+######################################################
 one_wire:
   - platform: gpio
     pin: D1
@@ -36,9 +35,6 @@ sensor:
     accuracy_decimals: 1
     filters:
       - filter_out: nan
-    on_value:
-      then:
-        - script.execute: control_fans
 
   - platform: dallas_temp
     address: '${dallas_2_ID}'
@@ -48,9 +44,6 @@ sensor:
     accuracy_decimals: 1
     filters:
       - filter_out: nan
-    on_value:
-      then:
-        - script.execute: control_fans
 
   - platform: pulse_counter
     pin: D5
@@ -60,16 +53,17 @@ sensor:
       - multiply: 0.5
 
 ######################################################
-# Powerswitch for physical fan control
+# Physical power relay (HARD OFF)
 ######################################################
 switch:
   - platform: gpio
     pin: D0
     id: powerswitch
     internal: true
+    restore_mode: ALWAYS_OFF
 
 ######################################################
-# PWM output + fan
+# PWM output + Fan
 ######################################################
 output:
   - platform: esp8266_pwm
@@ -81,16 +75,39 @@ output:
 fan:
   - platform: speed
     id: fancontrol
+    name: "${device_name} Fan"
     internal: true
     output: pwm_output
-    name: "${device_name} Fan"
     speed_count: 100
     on_turn_on:
       - switch.turn_on: powerswitch
-      - logger.log: "Fan Turned On!"
+      - logger.log: "Fan turned ON"
     on_turn_off:
       - switch.turn_off: powerswitch
-      - logger.log: "Fan Turned Off!"
+      - logger.log: "Fan turned OFF"
+
+######################################################
+# Home Assistant controls
+######################################################
+select:
+  - platform: template
+    name: "${device_name} Fan Mode"
+    id: fan_mode
+    optimistic: true
+    options:
+      - AUTO
+      - MANUAL
+    initial_option: AUTO
+
+number:
+  - platform: template
+    name: "${device_name} Manual Fan Speed"
+    id: manual_fanspeed
+    min_value: 0
+    max_value: 100
+    step: 1
+    optimistic: true
+    restore_value: true
 
 ######################################################
 # Interval trigger
@@ -101,17 +118,27 @@ interval:
       - script.execute: control_fans
 
 ######################################################
-# Fan control script
+# Fan control logic
 ######################################################
 script:
   - id: control_fans
     mode: restart
     then:
       - lambda: |-
+          // ==============================
+          // MANUAL MODE
+          // ==============================
+          if (id(fan_mode).state == "MANUAL") {
+            id(fanspeed) = id(manual_fanspeed).state;
+            return;
+          }
+
+          // ==============================
+          // AUTOMATIC MODE
+          // ==============================
           float t1 = id(temp_1).state;
           float t2 = id(temp_2).state;
 
-          // Safety: ignore invalid readings
           if (!isfinite(t1) || !isfinite(t2)) {
             id(fanspeed) = 0;
             return;
@@ -119,17 +146,16 @@ script:
 
           float deltaT = fabsf(t1 - t2);
 
-          // --- Hysteresis thresholds ---
-          const float off_threshold = 1.5f;  // fan turns OFF below this
-          const float on_threshold  = 2.5f;  // fan turns ON above this
+          // --- HARD OFF hysteresis ---
+          const float off_threshold = 1.5f;
+          const float on_threshold  = 2.5f;
+
           static bool fan_was_on = false;
 
-          // HARD OFF zone with hysteresis
           if (!fan_was_on && deltaT < on_threshold) {
             id(fanspeed) = 0;
           } else if (fan_was_on && deltaT < off_threshold) {
-            // Keep fan on until deltaT drops below off_threshold
-            id(fanspeed) = 0; // keep zero speed if you want fully off
+            id(fanspeed) = 0;
           } else {
             // --- Exponential fan curve ---
             const float dt_min = 2.0f;
@@ -141,14 +167,15 @@ script:
             float x = (deltaT - dt_min) / (dt_max - dt_min);
             x = fmaxf(0.0f, fminf(1.0f, x));
 
-            float curve = powf(x, exponent);  // correct exponential growth
+            float curve = powf(x, exponent);
             id(fanspeed) = speed_min + curve * (speed_max - speed_min);
           }
 
-          // Remember fan state
           fan_was_on = id(fanspeed) > 0;
 
-      # --- Apply fan state ---
+      # ==============================
+      # APPLY FAN STATE
+      # ==============================
       - if:
           condition:
             lambda: 'return id(fanspeed) > 0;'
@@ -156,20 +183,15 @@ script:
             - fan.turn_on:
                 id: fancontrol
                 speed: !lambda 'return id(fanspeed);'
-            - switch.turn_on: powerswitch
-            - globals.set:
-                id: heating_off
-                value: 'false'
           else:
             - fan.turn_off: fancontrol
-            - switch.turn_off: powerswitch
-            - globals.set:
-                id: heating_off
-                value: 'true'
 
-      # --- Logging ---
+      # ==============================
+      # LOGGING
+      # ==============================
       - logger.log:
-          format: "ΔT=%.2f  Fanspeed=%.1f"
+          format: "Mode=%s ΔT=%.2f Fanspeed=%.1f"
           args:
+            - 'id(fan_mode).state.c_str()'
             - 'fabs(id(temp_1).state - id(temp_2).state)'
             - 'id(fanspeed)'
