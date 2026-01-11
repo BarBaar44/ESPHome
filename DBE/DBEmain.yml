@@ -147,8 +147,8 @@ script:
           float deltaT = fabsf(t1 - t2);
 
           // --- HARD OFF hysteresis ---
-          const float off_threshold = 1.5f;
-          const float on_threshold  = 2.5f;
+          const float off_threshold = 0.8f;
+          const float on_threshold  = 1.5f;
 
           static bool fan_was_on = false;
 
@@ -160,9 +160,9 @@ script:
             // --- Exponential fan curve ---
             const float dt_min = 2.0f;
             const float dt_max = 20.0f;
-            const float speed_min = 10.0f;
+            const float speed_min = 25.0f;
             const float speed_max = 80.0f;
-            const float exponent = 1.3f;
+            const float exponent = 1.1f;
 
             float x = (deltaT - dt_min) / (dt_max - dt_min);
             x = fmaxf(0.0f, fminf(1.0f, x));
