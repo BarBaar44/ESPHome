@@ -190,8 +190,8 @@ script:
       # LOGGING
       # ==============================
       - logger.log:
-          format: "Mode=%s ΔT=%.2f Fanspeed=%.1f"
-          args:
-            - 'id(fan_mode).current_option()'
-            - 'fabs(id(temp_1).state - id(temp_2).state)'
-            - 'id(fanspeed)'
+        format: "Mode=%s ΔT=%.2f Fanspeed=%.1f"
+        args:
+          - 'id(fan_mode).current_option().c_str()'
+          - 'fabs(id(temp_1).state - id(temp_2).state)'
+          - 'id(fanspeed)'
