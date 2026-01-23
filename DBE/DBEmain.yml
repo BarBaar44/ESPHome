@@ -1,9 +1,5 @@
 ######################################################
 # ESPHome: Interval-based fan control with HARD OFF
-# - AUTO / MANUAL mode (Home Assistant)
-# - Exponential fan curve based on ΔT
-# - HARD OFF via relay when speed = 0
-# - Interval control every 5 seconds
 ######################################################
 
 globals:
@@ -49,6 +45,7 @@ sensor:
     pin: D5
     name: '${device_name} Fan RPM'
     unit_of_measurement: 'RPM'
+    update_interval: 5s
     filters:
       - multiply: 0.5
 
@@ -128,8 +125,9 @@ script:
           // ==============================
           // MANUAL MODE
           // ==============================
-          if (strcmp(id(fan_mode).current_option(), "MANUAL") == 0) {
-            id(fanspeed) = id(manual_fanspeed).state;
+          if (strcmp(id(fan_mode).current_option().c_str(), "MANUAL") == 0) {
+            float manual = id(manual_fanspeed).state;
+            id(fanspeed) = (manual < 1.0f) ? 0.0f : manual;
             return;
           }
 
@@ -150,11 +148,11 @@ script:
           const float off_threshold = 0.8f;
           const float on_threshold  = 1.5f;
 
-          static bool fan_was_on = false;
+          bool fan_is_on = id(fancontrol).state;
 
-          if (!fan_was_on && deltaT < on_threshold) {
+          if (!fan_is_on && deltaT < on_threshold) {
             id(fanspeed) = 0;
-          } else if (fan_was_on && deltaT < off_threshold) {
+          } else if (fan_is_on && deltaT < off_threshold) {
             id(fanspeed) = 0;
           } else {
             // --- Exponential fan curve ---
@@ -171,7 +169,7 @@ script:
             id(fanspeed) = speed_min + curve * (speed_max - speed_min);
           }
 
-          fan_was_on = id(fanspeed) > 0;
+          id(fanspeed) = fmaxf(0.0f, fminf(100.0f, id(fanspeed)));
 
       # ==============================
       # APPLY FAN STATE
@@ -187,11 +185,11 @@ script:
             - fan.turn_off: fancontrol
 
       # ==============================
-      # LOGGING
+      # LOGGING (FIXED)
       # ==============================
       - logger.log:
-        format: "Mode=%s ΔT=%.2f Fanspeed=%.1f"
-        args:
-          - 'id(fan_mode).current_option().c_str()'
-          - 'fabs(id(temp_1).state - id(temp_2).state)'
-          - 'id(fanspeed)'
+          format: "Mode=%s ΔT=%.2f Fanspeed=%.1f"
+          args:
+            - 'id(fan_mode).current_option().c_str()'
+            - 'fabs(id(temp_1).state - id(temp_2).state)'
+            - 'id(fanspeed)'
