@@ -3,7 +3,7 @@ wifi:
   password: '${WIFI_passwd}'
   min_auth_mode: WPA2
   fast_connect: on
-  power_save_mode: none
+  power_save_mode: light
   ap:
     ssid: '${device_name} Fallback Hotspot'
     password: '${fallback_passwd}'
