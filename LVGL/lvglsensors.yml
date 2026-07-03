@@ -18,6 +18,16 @@ script:
           else:
             - light.turn_off: back_light
 
+  # Wake the screen on touch and keep it awake for 30s of inactivity.
+  # mode restart -> each touch restarts the 30s timer.
+  # After the timeout, re-evaluate: if motion/light keep it on, it stays on; otherwise off.
+  - id: wake_screen
+    mode: restart
+    then:
+      - light.turn_on: back_light
+      - delay: 30s
+      - script.execute: update_screen_state
+
 text_sensor:
   # Weather condition
   - platform: homeassistant
