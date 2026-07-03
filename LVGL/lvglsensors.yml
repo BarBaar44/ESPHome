@@ -414,7 +414,7 @@ sensor:
             id: cover_slider
             value: !lambda 'return 100 - (int)x;'
 
-  # Climate setpoint sync from HA → Display
+  # Climate setpoint sync from HA → Display (number only; °C is a separate label)
   - platform: homeassistant
     id: ha_climate_setpoint
     entity_id: climate.virtual_thermostat_master_bedroom
@@ -428,7 +428,7 @@ sensor:
             id: climate_setpoint_label
             text: !lambda |-
               char buf[16];
-              snprintf(buf, sizeof(buf), "%.1f °C", x);
+              snprintf(buf, sizeof(buf), "%.1f", x);
               return buf;
 
   # Current temperature
