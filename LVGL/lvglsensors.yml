@@ -132,6 +132,26 @@ text_sensor:
                   bg_color: 0xFF0000
                   bg_opa: COVER
 
+  # Living room lights status sync (second page).
+  # Uses a text_sensor on the raw light state ("on"/"off") which is reliable
+  # for dimmable lights (a binary_sensor import can be unreliable when the
+  # light reports a brightness attribute).
+  - platform: homeassistant
+    id: livingroom_light_state
+    entity_id: light.livingroom_lights
+    on_value:
+      then:
+        - lvgl.widget.update:
+            id: livingroom_light_switch
+            state:
+              checked: !lambda 'return x == "on";'
+            shadow_width: !lambda 'return x == "on" ? 15 : 0;'
+        # Bulb icon: filled amber when on, grey outline when off
+        - lvgl.label.update:
+            id: lbl_bulb_livingroom
+            text: !lambda 'return std::string(x == "on" ? "\U000F0335" : "\U000F0336");'
+            text_color: !lambda 'return lv_color_hex(x == "on" ? 0xFDB813 : 0xBBBBBB);'
+
   # Cover Open Time helper sync
   - platform: homeassistant
     id: ha_cover_open_time
@@ -297,23 +317,6 @@ binary_sensor:
         # Bulb icon: filled amber when on, grey outline when off
         - lvgl.label.update:
             id: lbl_bulb_right
-            text: !lambda 'return std::string(x ? "\U000F0335" : "\U000F0336");'
-            text_color: !lambda 'return lv_color_hex(x ? 0xFDB813 : 0xBBBBBB);'
-
-  # Living room lights status sync (second page)
-  - platform: homeassistant
-    id: livingroom_light_on
-    entity_id: light.livingroom_lights
-    on_state:
-      then:
-        - lvgl.widget.update:
-            id: livingroom_light_switch
-            state:
-              checked: !lambda return x;
-            shadow_width: !lambda 'return x ? 15 : 0;'
-        # Bulb icon: filled amber when on, grey outline when off
-        - lvgl.label.update:
-            id: lbl_bulb_livingroom
             text: !lambda 'return std::string(x ? "\U000F0335" : "\U000F0336");'
             text_color: !lambda 'return lv_color_hex(x ? 0xFDB813 : 0xBBBBBB);'
 
