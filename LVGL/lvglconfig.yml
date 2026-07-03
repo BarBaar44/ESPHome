@@ -347,9 +347,9 @@ lvgl:
                                 - homeassistant.action:
                                     action: fan.turn_off
                                     data:
-                                      entity_id: fan.sonoff_ifan_ifan03_masterbedroom
+                                      entity_id: fan.sonoff_ifan_ifan03_masterbedroom_fan
 
-                          # LOW button (33%)
+                          # LOW button (speed 1 -> 33%)
                           - button:
                               id: fan_low_button
                               width: 75
@@ -366,10 +366,10 @@ lvgl:
                                 - homeassistant.action:
                                     action: fan.set_percentage
                                     data:
-                                      entity_id: fan.sonoff_ifan_ifan03_masterbedroom
+                                      entity_id: fan.sonoff_ifan_ifan03_masterbedroom_fan
                                       percentage: "33"
 
-                          # MID button (66%)
+                          # MID button (speed 2 -> 67%)
                           - button:
                               id: fan_mid_button
                               width: 75
@@ -386,10 +386,10 @@ lvgl:
                                 - homeassistant.action:
                                     action: fan.set_percentage
                                     data:
-                                      entity_id: fan.sonoff_ifan_ifan03_masterbedroom
-                                      percentage: "66"
+                                      entity_id: fan.sonoff_ifan_ifan03_masterbedroom_fan
+                                      percentage: "67"
 
-                          # HIGH button (100%)
+                          # HIGH button (speed 3 -> 100%)
                           - button:
                               id: fan_high_button
                               width: 75
@@ -406,7 +406,7 @@ lvgl:
                                 - homeassistant.action:
                                     action: fan.set_percentage
                                     data:
-                                      entity_id: fan.sonoff_ifan_ifan03_masterbedroom
+                                      entity_id: fan.sonoff_ifan_ifan03_masterbedroom_fan
                                       percentage: "100"
 
 
