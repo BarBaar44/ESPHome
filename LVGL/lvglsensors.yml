@@ -201,6 +201,7 @@ binary_sensor:
             id: main_light_switch_main
             state:
               checked: !lambda return x;
+            shadow_width: !lambda 'return x ? 15 : 0;'
         # Bulb icon: filled amber when on, grey outline when off
         - lvgl.label.update:
             id: lbl_bulb_main
@@ -217,6 +218,7 @@ binary_sensor:
             id: main_light_switch_left
             state:
               checked: !lambda return x;
+            shadow_width: !lambda 'return x ? 15 : 0;'
         # Bulb icon: filled amber when on, grey outline when off
         - lvgl.label.update:
             id: lbl_bulb_left
@@ -233,6 +235,7 @@ binary_sensor:
             id: main_light_switch_right
             state:
               checked: !lambda return x;
+            shadow_width: !lambda 'return x ? 15 : 0;'
         # Bulb icon: filled amber when on, grey outline when off
         - lvgl.label.update:
             id: lbl_bulb_right
