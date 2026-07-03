@@ -10,7 +10,7 @@ light:
     output: gpio_backlight_pwm
     name: ${device_name} Display Backlight
     id: back_light
-    restore_mode: ALWAYS_ON
+    restore_mode: ALWAYS_OFF  # Screen off by default; turned on by motion or ceiling light
 
 display:
   - platform: rpi_dpi_rgb
