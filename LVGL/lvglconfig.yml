@@ -320,6 +320,8 @@ lvgl:
                               y: 25
                               align: CENTER
                               checkable: true
+                              bg_color: 0x444444
+                              bg_opa: COVER
                               widgets:
                                 - label:
                                     text: "OFF"
@@ -340,6 +342,8 @@ lvgl:
                               y: 25
                               align: CENTER
                               checkable: true
+                              bg_color: 0x444444
+                              bg_opa: COVER
                               widgets:
                                 - label:
                                     text: "LOW"
@@ -361,6 +365,8 @@ lvgl:
                               y: 25
                               align: CENTER
                               checkable: true
+                              bg_color: 0x444444
+                              bg_opa: COVER
                               widgets:
                                 - label:
                                     text: "MID"
@@ -382,6 +388,8 @@ lvgl:
                               y: 25
                               align: CENTER
                               checkable: true
+                              bg_color: 0x444444
+                              bg_opa: COVER
                               widgets:
                                 - label:
                                     text: "HIGH"
@@ -497,7 +505,7 @@ lvgl:
                                         };
                                         return options[(int)x];
 
-                          # Onderaan: Slider
+                          # Onderaan: Slider (inverted: 0 = open/top, 100 = closed/bottom)
                           - slider:
                               id: cover_slider
                               width: 90%
@@ -510,7 +518,7 @@ lvgl:
                                     action: cover.set_cover_position
                                     data:
                                       entity_id: cover.cover_master_bedroom
-                                      position: !lambda 'return (int)x;'
+                                      position: !lambda 'return 100 - (int)x;'
                               
               # =========================
               # RIGHT COLUMN
@@ -742,7 +750,7 @@ lvgl:
                               text_font: montserrat_14
                               text_color: 0x0B0A0A
 
-                          # Setpoint label (replaces spinbox) - big font + outline
+                          # Setpoint label (replaces spinbox) - big font + black outline/text
                           - label:
                               id: climate_setpoint_label
                               text: "21.0 °C"
@@ -750,10 +758,10 @@ lvgl:
                               y: 0
                               text_align: CENTER
                               text_font: montserrat_22
-                              text_color: 0x2F8CD8
+                              text_color: 0x000000
                               pad_all: 4
                               border_width: 2
-                              border_color: 0x2F8CD8
+                              border_color: 0x000000
                               radius: 4
 
                           # + knop links boven setpoint label (custom +0.5)
