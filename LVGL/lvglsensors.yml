@@ -47,6 +47,43 @@ text_sensor:
               }
               return "\U000F0599";
 
+  # Fan state sync (on/off) - ensures OFF is reflected even when percentage attr is missing/0
+  - platform: homeassistant
+    id: ha_fan_state
+    entity_id: fan.sonoff_ifan_ifan03_masterbedroom
+    on_value:
+      then:
+        - if:
+            condition:
+              lambda: 'return x == "off" || x == "unavailable" || x == "unknown";'
+            then:
+              # Reset LOW/MID/HIGH to default style
+              - lvgl.widget.update:
+                  id: fan_low_button
+                  state:
+                    checked: false
+                  bg_color: 0x444444
+                  bg_opa: COVER
+              - lvgl.widget.update:
+                  id: fan_mid_button
+                  state:
+                    checked: false
+                  bg_color: 0x444444
+                  bg_opa: COVER
+              - lvgl.widget.update:
+                  id: fan_high_button
+                  state:
+                    checked: false
+                  bg_color: 0x444444
+                  bg_opa: COVER
+              # Highlight OFF button in red
+              - lvgl.widget.update:
+                  id: fan_off_button
+                  state:
+                    checked: true
+                  bg_color: 0xFF0000
+                  bg_opa: COVER
+
   # Cover Open Time helper sync
   - platform: homeassistant
     id: ha_cover_open_time
