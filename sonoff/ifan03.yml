@@ -67,25 +67,55 @@ fan:
       - switch.turn_on: fan_relay1
       - switch.turn_off: fan_relay2
       - switch.turn_off: fan_relay3
+      - script.execute: publish_fan_speed_state
     on_turn_off:
       - switch.turn_off: fan_relay1
       - switch.turn_off: fan_relay2
       - switch.turn_off: fan_relay3
+      - script.execute: publish_fan_speed_state
     on_speed_set:
-      lambda: |-
-        if (id(ifan03_fan).speed == 1) {
-          id(fan_relay1).turn_on();
-          id(fan_relay2).turn_off();
-          id(fan_relay3).turn_off();
-        } else if (id(ifan03_fan).speed == 2) {
-          id(fan_relay1).turn_on();
-          id(fan_relay2).turn_on();
-          id(fan_relay3).turn_off();
-        } else if (id(ifan03_fan).speed == 3) {
-          id(fan_relay1).turn_off();
-          id(fan_relay2).turn_off();
-          id(fan_relay3).turn_on();
-        }
+      - lambda: |-
+          if (id(ifan03_fan).speed == 1) {
+            id(fan_relay1).turn_on();
+            id(fan_relay2).turn_off();
+            id(fan_relay3).turn_off();
+          } else if (id(ifan03_fan).speed == 2) {
+            id(fan_relay1).turn_on();
+            id(fan_relay2).turn_on();
+            id(fan_relay3).turn_off();
+          } else if (id(ifan03_fan).speed == 3) {
+            id(fan_relay1).turn_off();
+            id(fan_relay2).turn_off();
+            id(fan_relay3).turn_on();
+          }
+      - script.execute: publish_fan_speed_state
+
+# =========================
+# CLEAN FAN SPEED STATE
+# Publishes an explicit, unambiguous state that consumers (e.g. the LVGL
+# display) can use directly: "off" / "low" / "mid" / "high".
+# This avoids relying on the fan.percentage attribute, which lingers stale
+# when the fan is off.
+# =========================
+script:
+  - id: publish_fan_speed_state
+    then:
+      - text_sensor.template.publish:
+          id: fan_speed_state
+          state: !lambda |-
+            if (!id(ifan03_fan).state) return "off";
+            switch (id(ifan03_fan).speed) {
+              case 1: return "low";
+              case 2: return "mid";
+              case 3: return "high";
+              default: return "off";
+            }
+
+text_sensor:
+  - platform: template
+    id: fan_speed_state
+    name: "$friendly_name Fan Speed State"
+    update_interval: never
 
 remote_receiver:
   pin: 
