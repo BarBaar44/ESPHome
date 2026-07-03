@@ -73,6 +73,65 @@ text_sensor:
               }
               return "\U000F0599";
 
+  # Fan speed state sync (off/low/mid/high) from iFan03's clean text sensor.
+  # This reliably highlights the active fan button in red regardless of
+  # who changed the fan (display, physical remote, or HA automation).
+  - platform: homeassistant
+    id: ha_fan_speed_state
+    entity_id: sensor.sonoff_ifan_ifan03_masterbedroom_fan_speed_state
+    on_value:
+      then:
+        # Reset all buttons to default style
+        - lvgl.widget.update:
+            id: fan_off_button
+            bg_color: 0x444444
+            bg_opa: COVER
+        - lvgl.widget.update:
+            id: fan_low_button
+            bg_color: 0x444444
+            bg_opa: COVER
+        - lvgl.widget.update:
+            id: fan_mid_button
+            bg_color: 0x444444
+            bg_opa: COVER
+        - lvgl.widget.update:
+            id: fan_high_button
+            bg_color: 0x444444
+            bg_opa: COVER
+        # Highlight the active button in red
+        - if:
+            condition:
+              lambda: 'return x == "off";'
+            then:
+              - lvgl.widget.update:
+                  id: fan_off_button
+                  bg_color: 0xFF0000
+                  bg_opa: COVER
+        - if:
+            condition:
+              lambda: 'return x == "low";'
+            then:
+              - lvgl.widget.update:
+                  id: fan_low_button
+                  bg_color: 0xFF0000
+                  bg_opa: COVER
+        - if:
+            condition:
+              lambda: 'return x == "mid";'
+            then:
+              - lvgl.widget.update:
+                  id: fan_mid_button
+                  bg_color: 0xFF0000
+                  bg_opa: COVER
+        - if:
+            condition:
+              lambda: 'return x == "high";'
+            then:
+              - lvgl.widget.update:
+                  id: fan_high_button
+                  bg_color: 0xFF0000
+                  bg_opa: COVER
+
   # Cover Open Time helper sync
   - platform: homeassistant
     id: ha_cover_open_time
