@@ -73,43 +73,6 @@ text_sensor:
               }
               return "\U000F0599";
 
-  # Fan state sync (on/off) - ensures OFF is reflected even when percentage attr is missing/0
-  - platform: homeassistant
-    id: ha_fan_state
-    entity_id: fan.sonoff_ifan_ifan03_masterbedroom
-    on_value:
-      then:
-        - if:
-            condition:
-              lambda: 'return x == "off" || x == "unavailable" || x == "unknown";'
-            then:
-              # Reset LOW/MID/HIGH to default style
-              - lvgl.widget.update:
-                  id: fan_low_button
-                  state:
-                    checked: false
-                  bg_color: 0x444444
-                  bg_opa: COVER
-              - lvgl.widget.update:
-                  id: fan_mid_button
-                  state:
-                    checked: false
-                  bg_color: 0x444444
-                  bg_opa: COVER
-              - lvgl.widget.update:
-                  id: fan_high_button
-                  state:
-                    checked: false
-                  bg_color: 0x444444
-                  bg_opa: COVER
-              # Highlight OFF button in red
-              - lvgl.widget.update:
-                  id: fan_off_button
-                  state:
-                    checked: true
-                  bg_color: 0xFF0000
-                  bg_opa: COVER
-
   # Cover Open Time helper sync
   - platform: homeassistant
     id: ha_cover_open_time
@@ -290,83 +253,9 @@ binary_sensor:
               checked: !lambda return x;
 
 # =========================
-# FAN STATE FROM HOME ASSISTANT
+# SENSORS FROM HOME ASSISTANT
 # =========================
 sensor:
-  # Fan percentage status sync
-  - platform: homeassistant
-    id: ha_fan_percentage
-    entity_id: fan.sonoff_ifan_ifan03_masterbedroom
-    attribute: percentage
-    on_value:
-      then:
-        # Reset all buttons to default style first
-        - lvgl.widget.update:
-            id: fan_off_button
-            state:
-              checked: false
-            bg_color: 0x444444
-            bg_opa: COVER
-        - lvgl.widget.update:
-            id: fan_low_button
-            state:
-              checked: false
-            bg_color: 0x444444
-            bg_opa: COVER
-        - lvgl.widget.update:
-            id: fan_mid_button
-            state:
-              checked: false
-            bg_color: 0x444444
-            bg_opa: COVER
-        - lvgl.widget.update:
-            id: fan_high_button
-            state:
-              checked: false
-            bg_color: 0x444444
-            bg_opa: COVER
-        # Then highlight the active one in red
-        - if:
-            condition:
-              lambda: 'return x <= 5;'  # OFF (0% or near)
-            then:
-              - lvgl.widget.update:
-                  id: fan_off_button
-                  state:
-                    checked: true
-                  bg_color: 0xFF0000
-                  bg_opa: COVER
-        - if:
-            condition:
-              lambda: 'return x > 5 && x <= 40;'  # LOW (33%)
-            then:
-              - lvgl.widget.update:
-                  id: fan_low_button
-                  state:
-                    checked: true
-                  bg_color: 0xFF0000
-                  bg_opa: COVER
-        - if:
-            condition:
-              lambda: 'return x > 40 && x <= 75;'  # MID (66%)
-            then:
-              - lvgl.widget.update:
-                  id: fan_mid_button
-                  state:
-                    checked: true
-                  bg_color: 0xFF0000
-                  bg_opa: COVER
-        - if:
-            condition:
-              lambda: 'return x > 75;'  # HIGH (100%)
-            then:
-              - lvgl.widget.update:
-                  id: fan_high_button
-                  state:
-                    checked: true
-                  bg_color: 0xFF0000
-                  bg_opa: COVER
-
   # Current temperature (Now)
   - platform: homeassistant
     id: ha_weather_temp_now
