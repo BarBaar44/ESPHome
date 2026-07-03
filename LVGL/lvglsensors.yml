@@ -28,6 +28,18 @@ script:
       - delay: !lambda 'return id(screen_timeout) * 1000;'
       - script.execute: update_screen_state
 
+  # Sync the screen timeout dropdown to the restored global value (called on boot).
+  - id: sync_timeout_dropdown
+    then:
+      - lvgl.dropdown.update:
+          id: screen_timeout_dropdown
+          selected_index: !lambda |-
+            int secs[] = {30, 60, 120, 300, 600, 1800};
+            for (int i = 0; i < 6; i++) {
+              if (secs[i] == id(screen_timeout)) return i;
+            }
+            return 3;  // Default 5 min
+
 text_sensor:
   # Weather condition
   - platform: homeassistant
