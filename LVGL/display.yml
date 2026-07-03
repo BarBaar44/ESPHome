@@ -19,13 +19,18 @@ esphome:
     board_build.flash_mode: dio
   on_boot:
     # Sync the screen timeout dropdown to the restored global value.
-    # Priority -100 runs late, after LVGL is set up. Logic lives in a
-    # script (defined in lvglsensors.yml) so it is validated in the
-    # component pass, not the packages pass.
+    # Priority -100 runs late, after LVGL is set up.
     priority: -100
     then:
       - delay: 2s
-      - script.execute: sync_timeout_dropdown
+      - lvgl.dropdown.update:
+          id: screen_timeout_dropdown
+          selected_index: !lambda |-
+            int secs[] = {30, 60, 120, 300, 600, 1800};
+            for (int i = 0; i < 6; i++) {
+              if (secs[i] == id(screen_timeout)) return i;
+            }
+            return 3;  // Default 5 min
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -79,5 +84,5 @@ globals:
 packages:
   Generic_config:
     url: https://github.com/BarBaar44/ESPHome
-    files: [generic/wifi.yml, generic/generic_sensors.yml, LVGL/display.yml, LVGL/displayconfig.yml, LVGL/lvglconfig.yml, LVGL/lvglsensors.yml]
+    files: [generic/wifi.yml, generic/generic_sensors.yml, LVGL/displayconfig.yml, LVGL/lvglconfig.yml, LVGL/lvglsensors.yml]
     refresh: 1min
