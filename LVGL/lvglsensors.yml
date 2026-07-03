@@ -205,8 +205,8 @@ binary_sensor:
         # Bulb icon: filled amber when on, grey outline when off
         - lvgl.label.update:
             id: lbl_bulb_main
-            text: !lambda 'return x ? "\U000F0335" : "\U000F0336";'
-            text_color: !lambda 'return x ? 0xFDB813 : 0xBBBBBB;'
+            text: !lambda 'return std::string(x ? "\U000F0335" : "\U000F0336");'
+            text_color: !lambda 'return lv_color_hex(x ? 0xFDB813 : 0xBBBBBB);'
 
   # Left light status sync
   - platform: homeassistant
@@ -222,8 +222,8 @@ binary_sensor:
         # Bulb icon: filled amber when on, grey outline when off
         - lvgl.label.update:
             id: lbl_bulb_left
-            text: !lambda 'return x ? "\U000F0335" : "\U000F0336";'
-            text_color: !lambda 'return x ? 0xFDB813 : 0xBBBBBB;'
+            text: !lambda 'return std::string(x ? "\U000F0335" : "\U000F0336");'
+            text_color: !lambda 'return lv_color_hex(x ? 0xFDB813 : 0xBBBBBB);'
 
   # Right light status sync
   - platform: homeassistant
@@ -239,8 +239,8 @@ binary_sensor:
         # Bulb icon: filled amber when on, grey outline when off
         - lvgl.label.update:
             id: lbl_bulb_right
-            text: !lambda 'return x ? "\U000F0335" : "\U000F0336";'
-            text_color: !lambda 'return x ? 0xFDB813 : 0xBBBBBB;'
+            text: !lambda 'return std::string(x ? "\U000F0335" : "\U000F0336");'
+            text_color: !lambda 'return lv_color_hex(x ? 0xFDB813 : 0xBBBBBB);'
 
   # Cover Default Times boolean sync
   - platform: homeassistant
