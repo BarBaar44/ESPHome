@@ -1,0 +1,390 @@
+# =========================
+# WEATHER DATA FROM HOME ASSISTANT (OpenWeatherMap)
+# =========================
+
+text_sensor:
+  # Weather condition
+  - platform: homeassistant
+    id: ha_weather_condition
+    entity_id: weather.openweathermap
+    on_value:
+      then:
+        # Update condition name (capitalize first letter)
+        - lvgl.label.update:
+            id: lbl_weather_forecast_condition_name
+            text: !lambda |-
+              std::string condition = x;
+              if (!condition.empty()) {
+                condition[0] = toupper(condition[0]);
+              }
+              return condition.c_str();
+        
+        # Update weather icon
+        - lvgl.label.update:
+            id: lbl_weather_forecast_condition_icon
+            text: !lambda |-
+              std::map<std::string, std::string> weather_icons = {
+                {"clear-night", "\U000F0594"},
+                {"cloudy", "\U000F0590"},
+                {"exceptional", "\U000F0F2F"},
+                {"fog", "\U000F0591"},
+                {"hail", "\U000F0592"},
+                {"lightning", "\U000F0593"},
+                {"lightning-rainy", "\U000F067E"},
+                {"partlycloudy", "\U000F0595"},
+                {"pouring", "\U000F0596"},
+                {"rainy", "\U000F0597"},
+                {"snowy", "\U000F0598"},
+                {"snowy-rainy", "\U000F067F"},
+                {"sunny", "\U000F0599"},
+                {"windy", "\U000F059D"},
+                {"windy-variant", "\U000F059E"}
+              };
+              
+              std::string condition = x;
+              if (weather_icons.count(condition)) {
+                return weather_icons[condition].c_str();
+              }
+              return "\U000F0599";
+
+  # Cover Open Time helper sync
+  - platform: homeassistant
+    id: ha_cover_open_time
+    entity_id: input_select.master_bedroom_cover_open_time
+    on_value:
+      then:
+        - lvgl.dropdown.update:
+            id: cover_morning_dropdown
+            selected_index: !lambda |-
+              std::vector<std::string> options = {
+                "6:00", "6:30", "7:00", "7:30", "8:00",
+                "8:30", "9:00", "9:30", "10:00"
+              };
+              for (size_t i = 0; i < options.size(); i++) {
+                if (options[i] == x) return (int)i;
+              }
+              return 4;  // Default 8:00
+
+  # Cover Close Time helper sync
+  - platform: homeassistant
+    id: ha_cover_close_time
+    entity_id: input_select.master_bedroom_cover_close_time
+    on_value:
+      then:
+        - lvgl.dropdown.update:
+            id: cover_evening_dropdown
+            selected_index: !lambda |-
+              std::vector<std::string> options = {
+                "19:00", "19:30", "20:00", "20:30", "21:00",
+                "21:30", "22:00", "22:30", "23:00"
+              };
+              for (size_t i = 0; i < options.size(); i++) {
+                if (options[i] == x) return (int)i;
+              }
+              return 4;  // Default 21:00
+
+  # Climate HVAC mode sync
+  - platform: homeassistant
+    id: ha_climate_hvac_mode
+    entity_id: climate.virtual_thermostat_master_bedroom
+    on_value:
+      then:
+        # Reset all mode buttons
+        - lvgl.widget.update:
+            id: climate_off_button
+            state:
+              checked: false
+        - lvgl.widget.update:
+            id: climate_eco_button
+            state:
+              checked: false
+        - lvgl.widget.update:
+            id: climate_warm_button
+            state:
+              checked: false
+        # Highlight Off button if hvac_mode is off
+        - if:
+            condition:
+              lambda: 'return x == "off";'
+            then:
+              - lvgl.widget.update:
+                  id: climate_off_button
+                  state:
+                    checked: true
+
+  # Climate preset mode sync
+  - platform: homeassistant
+    id: ha_climate_preset_mode
+    entity_id: climate.virtual_thermostat_master_bedroom
+    attribute: preset_mode
+    on_value:
+      then:
+        - if:
+            condition:
+              lambda: 'return x == "eco";'
+            then:
+              - lvgl.widget.update:
+                  id: climate_eco_button
+                  state:
+                    checked: true
+              - lvgl.widget.update:
+                  id: climate_warm_button
+                  state:
+                    checked: false
+        - if:
+            condition:
+              lambda: 'return x == "comfort";'
+            then:
+              - lvgl.widget.update:
+                  id: climate_warm_button
+                  state:
+                    checked: true
+              - lvgl.widget.update:
+                  id: climate_eco_button
+                  state:
+                    checked: false
+
+# =========================
+# HOME ASSISTANT LIGHT STATES
+# =========================
+# =========================
+# BINARY SENSOR (status)
+# =========================
+binary_sensor:
+  - platform: status
+    name: Status sensor
+
+  # Main light (plafondlamp) status sync
+  - platform: homeassistant
+    id: ha_light_main
+    entity_id: light.sonoff_ifan_ifan03_masterbedroom_light
+    on_state:
+      then:
+        - lvgl.widget.update:
+            id: main_light_switch_main
+            state:
+              checked: !lambda return x;
+
+  # Left light status sync
+  - platform: homeassistant
+    id: ha_light_left
+    entity_id: light.master_bedroom_light_left
+    on_state:
+      then:
+        - lvgl.widget.update:
+            id: main_light_switch_left
+            state:
+              checked: !lambda return x;
+
+  # Right light status sync
+  - platform: homeassistant
+    id: ha_light_right
+    entity_id: light.master_bedroom_light_right
+    on_state:
+      then:
+        - lvgl.widget.update:
+            id: main_light_switch_right
+            state:
+              checked: !lambda return x;
+
+  # Cover Default Times boolean sync
+  - platform: homeassistant
+    id: ha_cover_default
+    entity_id: input_boolean.master_bedroom_cover_default_times
+    on_state:
+      then:
+        - lvgl.widget.update:
+            id: cover_default_checkbox
+            state:
+              checked: !lambda return x;
+
+# =========================
+# FAN STATE FROM HOME ASSISTANT
+# =========================
+sensor:
+  # Fan percentage status sync
+  - platform: homeassistant
+    id: ha_fan_percentage
+    entity_id: fan.sonoff_ifan_ifan03_masterbedroom
+    attribute: percentage
+    on_value:
+      then:
+        # Reset all buttons to default style first
+        - lvgl.widget.update:
+            id: fan_off_button
+            state:
+              checked: false
+            bg_color: 0x444444
+            bg_opa: COVER
+        - lvgl.widget.update:
+            id: fan_low_button
+            state:
+              checked: false
+            bg_color: 0x444444
+            bg_opa: COVER
+        - lvgl.widget.update:
+            id: fan_mid_button
+            state:
+              checked: false
+            bg_color: 0x444444
+            bg_opa: COVER
+        - lvgl.widget.update:
+            id: fan_high_button
+            state:
+              checked: false
+            bg_color: 0x444444
+            bg_opa: COVER
+        # Then highlight the active one in red
+        - if:
+            condition:
+              lambda: 'return x <= 5;'  # OFF (0% or near)
+            then:
+              - lvgl.widget.update:
+                  id: fan_off_button
+                  state:
+                    checked: true
+                  bg_color: 0xFF0000
+                  bg_opa: COVER
+        - if:
+            condition:
+              lambda: 'return x > 5 && x <= 40;'  # LOW (33%)
+            then:
+              - lvgl.widget.update:
+                  id: fan_low_button
+                  state:
+                    checked: true
+                  bg_color: 0xFF0000
+                  bg_opa: COVER
+        - if:
+            condition:
+              lambda: 'return x > 40 && x <= 75;'  # MID (66%)
+            then:
+              - lvgl.widget.update:
+                  id: fan_mid_button
+                  state:
+                    checked: true
+                  bg_color: 0xFF0000
+                  bg_opa: COVER
+        - if:
+            condition:
+              lambda: 'return x > 75;'  # HIGH (100%)
+            then:
+              - lvgl.widget.update:
+                  id: fan_high_button
+                  state:
+                    checked: true
+                  bg_color: 0xFF0000
+                  bg_opa: COVER
+
+  # Current temperature (Now)
+  - platform: homeassistant
+    id: ha_weather_temp_now
+    entity_id: weather.openweathermap
+    attribute: temperature
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_weather_outdoor_now
+            text: !lambda |-
+              char buf[16];
+              snprintf(buf, sizeof(buf), "%.1f °C", x);
+              return buf;
+
+  # Feels like temperature
+  - platform: homeassistant
+    id: ha_weather_feels_like
+    entity_id: weather.openweathermap
+    attribute: apparent_temperature
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_weather_forecast_tempap
+            text: !lambda |-
+              char buf[16];
+              snprintf(buf, sizeof(buf), "%.1f °C", x);
+              return buf;
+
+  # Cloud coverage for Maximum field
+  - platform: homeassistant
+    id: ha_weather_cloud
+    entity_id: weather.openweathermap
+    attribute: cloud_coverage
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_weather_forecast_temphi
+            text: !lambda |-
+              char buf[16];
+              snprintf(buf, sizeof(buf), "%d%%", (int)x);
+              return buf;
+
+  # Humidity for Minimum field
+  - platform: homeassistant
+    id: ha_weather_humidity
+    entity_id: weather.openweathermap
+    attribute: humidity
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_weather_forecast_templo
+            text: !lambda |-
+              char buf[16];
+              snprintf(buf, sizeof(buf), "%d%%", (int)x);
+              return buf;
+
+    # Wind bearing (richting in graden)
+  # Wind speed
+  - platform: homeassistant
+    id: ha_weather_wind_speed
+    entity_id: weather.openweathermap
+    attribute: wind_speed
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: lbl_weather_wind_speed
+            text: !lambda |-
+              char buf[16];
+              snprintf(buf, sizeof(buf), "%.1f km/h", x);
+              return buf;
+
+  # Cover position sync from HA
+  - platform: homeassistant
+    id: ha_cover_position
+    entity_id: cover.cover_master_bedroom
+    attribute: current_position
+    on_value:
+      then:
+        - lvgl.slider.update:
+            id: cover_slider
+            value: !lambda 'return (int)x;'
+
+  # Climate setpoint sync from HA → Display
+  - platform: homeassistant
+    id: ha_climate_setpoint
+    entity_id: climate.virtual_thermostat_master_bedroom
+    attribute: temperature
+    on_value:
+      then:
+        - globals.set:
+            id: climate_setpoint_value
+            value: !lambda 'return x;'
+        - lvgl.label.update:
+            id: climate_setpoint_label
+            text: !lambda |-
+              char buf[16];
+              snprintf(buf, sizeof(buf), "%.1f °C", x);
+              return buf;
+
+  # Current temperature
+  - platform: homeassistant
+    id: ha_climate_current_temp
+    entity_id: climate.virtual_thermostat_master_bedroom
+    attribute: current_temperature
+    on_value:
+      then:
+        - lvgl.label.update:
+            id: climate_current_temp
+            text: !lambda |-
+              char buf[16];
+              snprintf(buf, sizeof(buf), "%.1f °C", x);
+              return buf;
