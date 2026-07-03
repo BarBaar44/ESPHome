@@ -61,6 +61,12 @@ globals:
     restore_value: no
     initial_value: '21.0'
 
+  # Screen inactivity timeout in seconds (default 300 = 5 minutes)
+  - id: screen_timeout
+    type: int
+    restore_value: yes
+    initial_value: '300'
+
 packages:
   Generic_config:
     url: https://github.com/BarBaar44/ESPHome
