@@ -17,6 +17,20 @@ esphome:
   platformio_options:
     board_build.esp-idf.memory_type: qio_opi
     board_build.flash_mode: dio
+  on_boot:
+    # Sync the screen timeout dropdown to the restored global value.
+    # Priority -100 runs late, after LVGL is set up.
+    priority: -100
+    then:
+      - delay: 2s
+      - lvgl.dropdown.update:
+          id: screen_timeout_dropdown
+          selected_index: !lambda |-
+            int secs[] = {30, 60, 120, 300, 600, 1800};
+            for (int i = 0; i < 6; i++) {
+              if (secs[i] == id(screen_timeout)) return i;
+            }
+            return 3;  // Default 5 min
 
 esp32:
   board: esp32-s3-devkitc-1
