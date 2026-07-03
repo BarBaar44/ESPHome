@@ -201,6 +201,11 @@ binary_sensor:
             id: main_light_switch_main
             state:
               checked: !lambda return x;
+        # Bulb icon: filled amber when on, grey outline when off
+        - lvgl.label.update:
+            id: lbl_bulb_main
+            text: !lambda 'return x ? "\U000F0335" : "\U000F0336";'
+            text_color: !lambda 'return x ? 0xFDB813 : 0xBBBBBB;'
 
   # Left light status sync
   - platform: homeassistant
@@ -212,6 +217,11 @@ binary_sensor:
             id: main_light_switch_left
             state:
               checked: !lambda return x;
+        # Bulb icon: filled amber when on, grey outline when off
+        - lvgl.label.update:
+            id: lbl_bulb_left
+            text: !lambda 'return x ? "\U000F0335" : "\U000F0336";'
+            text_color: !lambda 'return x ? 0xFDB813 : 0xBBBBBB;'
 
   # Right light status sync
   - platform: homeassistant
@@ -223,6 +233,11 @@ binary_sensor:
             id: main_light_switch_right
             state:
               checked: !lambda return x;
+        # Bulb icon: filled amber when on, grey outline when off
+        - lvgl.label.update:
+            id: lbl_bulb_right
+            text: !lambda 'return x ? "\U000F0335" : "\U000F0336";'
+            text_color: !lambda 'return x ? 0xFDB813 : 0xBBBBBB;'
 
   # Cover Default Times boolean sync
   - platform: homeassistant
