@@ -98,12 +98,13 @@ lvgl:
                   text_font: montserrat_22
                   text_color: 0xFFFFFF
 
+              # HA connectivity icon - left of the > nav button
               - label:
                   text: "\U000F05A9"
                   id: lbl_hastatus
                   hidden: true
                   align: RIGHT_MID
-                  x: -50
+                  x: -55
                   text_font: icons_24
                   text_color: 0xFFFFFF
 
@@ -757,11 +758,12 @@ lvgl:
                               text_font: montserrat_14
                               text_color: 0x0B0A0A
 
-                          # Setpoint label (replaces spinbox) - big font + black outline/text
+                          # Setpoint label (number only, in black bordered box)
                           - label:
                               id: climate_setpoint_label
-                              text: "21.0 °C"
+                              text: "21.0"
                               align: CENTER
+                              x: -15
                               y: 0
                               text_align: CENTER
                               text_font: montserrat_22
@@ -770,6 +772,16 @@ lvgl:
                               border_width: 2
                               border_color: 0x000000
                               radius: 4
+
+                          # Degrees unit - outside the bordered box, to its right
+                          - label:
+                              id: climate_setpoint_unit
+                              text: "°C"
+                              align: CENTER
+                              x: 35
+                              y: 0
+                              text_font: montserrat_22
+                              text_color: 0x000000
 
                           # + knop links boven setpoint label (custom +0.5)
                           - button:
@@ -795,7 +807,7 @@ lvgl:
                                     id: climate_setpoint_label
                                     text: !lambda |-
                                       char buf[16];
-                                      snprintf(buf, sizeof(buf), "%.1f °C", id(climate_setpoint_value));
+                                      snprintf(buf, sizeof(buf), "%.1f", id(climate_setpoint_value));
                                       return buf;
                                 - delay: 100ms
                                 - homeassistant.action:
@@ -828,7 +840,7 @@ lvgl:
                                     id: climate_setpoint_label
                                     text: !lambda |-
                                       char buf[16];
-                                      snprintf(buf, sizeof(buf), "%.1f °C", id(climate_setpoint_value));
+                                      snprintf(buf, sizeof(buf), "%.1f", id(climate_setpoint_value));
                                       return buf;
                                 - delay: 100ms
                                 - homeassistant.action:
