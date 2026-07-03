@@ -9,6 +9,8 @@ font:
     bpp: 4
     glyphs: [
       "\U000F05A9", # home-assistant icon
+      "\U000F0141", # chevron-left
+      "\U000F0142", # chevron-right
       ]
 
   # Light bulb icons voor Main Light switches
@@ -101,9 +103,26 @@ lvgl:
                   id: lbl_hastatus
                   hidden: true
                   align: RIGHT_MID
-                  x: -10
+                  x: -50
                   text_font: icons_24
                   text_color: 0xFFFFFF
+
+              # Page navigation: go to Living Room (next page)
+              - button:
+                  align: RIGHT_MID
+                  x: -5
+                  width: 40
+                  height: 34
+                  bg_opa: TRANSP
+                  shadow_width: 0
+                  widgets:
+                    - label:
+                        text: "\U000F0142"
+                        align: CENTER
+                        text_font: icons_24
+                        text_color: 0xFFFFFF
+                  on_click:
+                    - lvgl.page.show: second_page
 
 
         # =========================
@@ -890,6 +909,192 @@ lvgl:
                                     data:
                                       entity_id: climate.virtual_thermostat_master_bedroom
                                       preset_mode: "comfort"
+
+    # =========================
+    # SECOND PAGE - LIVING ROOM
+    # =========================
+    - id: second_page
+      bg_color: 0x0B0A0A
+      pad_all: 0
+      scrollable: false
+      scrollbar_mode: "off"
+
+      widgets:
+
+        # =========================
+        # HEADER
+        # =========================
+        - obj:
+            align: TOP_MID
+            styles: header_footer
+            width: 100%
+            height: 40
+            scrollable: false
+            scrollbar_mode: "off"
+
+            widgets:
+              - label:
+                  text: "Living Room Control"
+                  align: CENTER
+                  text_font: montserrat_22
+                  text_color: 0xFFFFFF
+
+              # Page navigation: go back to Master Bedroom (previous page)
+              - button:
+                  align: LEFT_MID
+                  x: 5
+                  width: 40
+                  height: 34
+                  bg_opa: TRANSP
+                  shadow_width: 0
+                  widgets:
+                    - label:
+                        text: "\U000F0141"
+                        align: CENTER
+                        text_font: icons_24
+                        text_color: 0xFFFFFF
+                  on_click:
+                    - lvgl.page.show: main_page
+
+        # =========================
+        # MAIN GRID (second page)
+        # =========================
+        - obj:
+            id: main_grid_2
+            x: 0
+            y: 40
+            width: 800
+            height: 440
+            bg_color: 0xD3D6D9
+            pad_all: 8
+            scrollable: false
+            scrollbar_mode: "off"
+
+            layout:
+              type: GRID
+              pad_row: 8
+              pad_column: 8
+              grid_rows:
+                - FR(1)
+              grid_columns:
+                - FR(1)
+                - FR(1)
+
+            widgets:
+
+              # =========================
+              # LIVING ROOM LIGHT
+              # =========================
+              - obj:
+                  id: livingroom_light_obj
+                  bg_color: 0xFFFFFF
+                  radius: 6
+                  pad_all: 6
+                  scrollable: false
+                  scrollbar_mode: "off"
+
+                  grid_cell_row_pos: 0
+                  grid_cell_column_pos: 0
+                  grid_cell_x_align: STRETCH
+                  grid_cell_y_align: STRETCH
+
+                  widgets:
+
+                    - label:
+                        text: "Living Room Lights"
+                        align: TOP_LEFT
+                        x: 10
+                        y: 5
+                        text_font: montserrat_20
+                        text_color: 0x0B0A0A
+
+                    # Living room light bulb icon
+                    - label:
+                        id: lbl_bulb_livingroom
+                        text: "\U000F0336"
+                        align: CENTER
+                        x: -40
+                        y: 0
+                        text_font: icons_28
+                        text_color: 0xBBBBBB
+
+                    - label:
+                        text: "Lights"
+                        align: CENTER
+                        x: 20
+                        y: 0
+                        text_font: montserrat_16
+                        text_color: 0x0B0A0A
+
+                    - switch:
+                        id: livingroom_light_switch
+                        align: CENTER
+                        x: 90
+                        y: 0
+                        shadow_color: 0xFDB813
+                        shadow_width: 0
+                        shadow_spread: 2
+                        on_value:
+                          - homeassistant.action:
+                              action: light.toggle
+                              data:
+                                entity_id: light.livingroom_lights
+
+              # =========================
+              # SCREEN TIMEOUT SETTING
+              # =========================
+              - obj:
+                  id: settings_obj
+                  bg_color: 0xFFFFFF
+                  radius: 6
+                  pad_all: 12
+                  scrollable: false
+                  scrollbar_mode: "off"
+
+                  grid_cell_row_pos: 0
+                  grid_cell_column_pos: 1
+                  grid_cell_x_align: STRETCH
+                  grid_cell_y_align: STRETCH
+
+                  widgets:
+
+                    - label:
+                        text: "Settings"
+                        align: TOP_LEFT
+                        x: 0
+                        y: 0
+                        text_font: montserrat_20
+                        text_color: 0x0B0A0A
+
+                    - label:
+                        text: "Screen timeout:"
+                        align: LEFT_MID
+                        x: 0
+                        y: 0
+                        text_font: montserrat_16
+                        text_color: 0x0B0A0A
+
+                    # Screen timeout dropdown (writes to screen_timeout global, in seconds)
+                    - dropdown:
+                        id: screen_timeout_dropdown
+                        align: LEFT_MID
+                        x: 150
+                        y: 0
+                        width: 120
+                        options:
+                          - "30 sec"
+                          - "1 min"
+                          - "2 min"
+                          - "5 min"
+                          - "10 min"
+                          - "30 min"
+                        selected_index: 3  # Default: 5 min
+                        on_value:
+                          - globals.set:
+                              id: screen_timeout
+                              value: !lambda |-
+                                int secs[] = {30, 60, 120, 300, 600, 1800};
+                                return secs[(int)x];
   
   # =========================
   # STYLE DEFINITIONS
