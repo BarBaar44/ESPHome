@@ -319,9 +319,6 @@ lvgl:
                               x: -123
                               y: 25
                               align: CENTER
-                              checkable: true
-                              bg_color: 0x444444
-                              bg_opa: COVER
                               widgets:
                                 - label:
                                     text: "OFF"
@@ -341,9 +338,6 @@ lvgl:
                               x: -41
                               y: 25
                               align: CENTER
-                              checkable: true
-                              bg_color: 0x444444
-                              bg_opa: COVER
                               widgets:
                                 - label:
                                     text: "LOW"
@@ -364,9 +358,6 @@ lvgl:
                               x: 41
                               y: 25
                               align: CENTER
-                              checkable: true
-                              bg_color: 0x444444
-                              bg_opa: COVER
                               widgets:
                                 - label:
                                     text: "MID"
@@ -387,9 +378,6 @@ lvgl:
                               x: 123
                               y: 25
                               align: CENTER
-                              checkable: true
-                              bg_color: 0x444444
-                              bg_opa: COVER
                               widgets:
                                 - label:
                                     text: "HIGH"
