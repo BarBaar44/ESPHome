@@ -209,12 +209,9 @@ lvgl:
                               align: CENTER
                               x: 130
                               y: -30
-                              bg_color:
-                                checked: 0xFDB813
                               shadow_color: 0xFDB813
-                              shadow_width:
-                                checked: 15
-                                default: 0
+                              shadow_width: 0
+                              shadow_spread: 2
                               on_value:
                                 - homeassistant.action:
                                     action: light.toggle
@@ -245,12 +242,9 @@ lvgl:
                               align: CENTER
                               x: 130
                               y: 5
-                              bg_color:
-                                checked: 0xFDB813
                               shadow_color: 0xFDB813
-                              shadow_width:
-                                checked: 15
-                                default: 0
+                              shadow_width: 0
+                              shadow_spread: 2
                               on_value:
                                 - homeassistant.action:
                                     action: light.toggle
@@ -281,12 +275,9 @@ lvgl:
                               align: CENTER
                               x: 130
                               y: 40
-                              bg_color:
-                                checked: 0xFDB813
                               shadow_color: 0xFDB813
-                              shadow_width:
-                                checked: 15
-                                default: 0
+                              shadow_width: 0
+                              shadow_spread: 2
                               on_value:
                                 - homeassistant.action:
                                     action: light.toggle
