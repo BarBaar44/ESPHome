@@ -2,6 +2,22 @@
 # WEATHER DATA FROM HOME ASSISTANT (OpenWeatherMap)
 # =========================
 
+# =========================
+# SCRIPTS
+# =========================
+script:
+  # Turn the display backlight on/off based on motion OR ceiling light.
+  # Screen is on when motion is detected OR the ceiling light is on; otherwise off.
+  - id: update_screen_state
+    then:
+      - if:
+          condition:
+            lambda: 'return id(motion_occupancy).state || id(ceiling_light_on).state;'
+          then:
+            - light.turn_on: back_light
+          else:
+            - light.turn_off: back_light
+
 text_sensor:
   # Weather condition
   - platform: homeassistant
@@ -191,9 +207,17 @@ binary_sensor:
   - platform: status
     name: Status sensor
 
+  # Motion / occupancy sensor - drives the screen backlight
+  - platform: homeassistant
+    id: motion_occupancy
+    entity_id: binary_sensor.multisensor_6_home_security_motion_detection
+    on_state:
+      then:
+        - script.execute: update_screen_state
+
   # Main light (plafondlamp) status sync
   - platform: homeassistant
-    id: ha_light_main
+    id: ceiling_light_on
     entity_id: light.sonoff_ifan_ifan03_masterbedroom_light
     on_state:
       then:
@@ -207,6 +231,8 @@ binary_sensor:
             id: lbl_bulb_main
             text: !lambda 'return std::string(x ? "\U000F0335" : "\U000F0336");'
             text_color: !lambda 'return lv_color_hex(x ? 0xFDB813 : 0xBBBBBB);'
+        # Update screen state (light on -> screen on)
+        - script.execute: update_screen_state
 
   # Left light status sync
   - platform: homeassistant
@@ -402,7 +428,7 @@ sensor:
               snprintf(buf, sizeof(buf), "%.1f km/h", x);
               return buf;
 
-  # Cover position sync from HA
+  # Cover position sync from HA (inverted display: 0 = open, 100 = closed)
   - platform: homeassistant
     id: ha_cover_position
     entity_id: cover.cover_master_bedroom
@@ -411,7 +437,7 @@ sensor:
       then:
         - lvgl.slider.update:
             id: cover_slider
-            value: !lambda 'return (int)x;'
+            value: !lambda 'return 100 - (int)x;'
 
   # Climate setpoint sync from HA → Display
   - platform: homeassistant
