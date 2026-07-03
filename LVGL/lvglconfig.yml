@@ -693,15 +693,19 @@ lvgl:
                               text_font: montserrat_14
                               text_color: 0x0B0A0A
 
-                          # Setpoint label (replaces spinbox)
+                          # Setpoint label (replaces spinbox) - big font + outline
                           - label:
                               id: climate_setpoint_label
                               text: "21.0 °C"
                               align: CENTER
                               y: 0
                               text_align: CENTER
-                              text_font: montserrat_20
+                              text_font: montserrat_22
                               text_color: 0x2F8CD8
+                              pad_all: 4
+                              border_width: 2
+                              border_color: 0x2F8CD8
+                              radius: 4
 
                           # + knop links boven setpoint label (custom +0.5)
                           - button:
