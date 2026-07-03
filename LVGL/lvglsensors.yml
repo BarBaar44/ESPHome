@@ -18,14 +18,14 @@ script:
           else:
             - light.turn_off: back_light
 
-  # Wake the screen on touch and keep it awake for 5 minutes of inactivity.
-  # mode restart -> each touch restarts the 5 minute timer.
+  # Wake the screen on touch and keep it awake for the configured timeout.
+  # mode restart -> each touch restarts the timer.
   # After the timeout, re-evaluate: if motion/light keep it on, it stays on; otherwise off.
   - id: wake_screen
     mode: restart
     then:
       - light.turn_on: back_light
-      - delay: 5min
+      - delay: !lambda 'return id(screen_timeout) * 1000;'
       - script.execute: update_screen_state
 
 text_sensor:
@@ -238,6 +238,23 @@ binary_sensor:
         # Bulb icon: filled amber when on, grey outline when off
         - lvgl.label.update:
             id: lbl_bulb_right
+            text: !lambda 'return std::string(x ? "\U000F0335" : "\U000F0336");'
+            text_color: !lambda 'return lv_color_hex(x ? 0xFDB813 : 0xBBBBBB);'
+
+  # Living room lights status sync (second page)
+  - platform: homeassistant
+    id: livingroom_light_on
+    entity_id: light.livingroom_lights
+    on_state:
+      then:
+        - lvgl.widget.update:
+            id: livingroom_light_switch
+            state:
+              checked: !lambda return x;
+            shadow_width: !lambda 'return x ? 15 : 0;'
+        # Bulb icon: filled amber when on, grey outline when off
+        - lvgl.label.update:
+            id: lbl_bulb_livingroom
             text: !lambda 'return std::string(x ? "\U000F0335" : "\U000F0336");'
             text_color: !lambda 'return lv_color_hex(x ? 0xFDB813 : 0xBBBBBB);'
 
