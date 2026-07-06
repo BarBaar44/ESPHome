@@ -3,6 +3,21 @@
 # =========================
 
 # =========================
+# GUARD GLOBAL
+# =========================
+# Prevents the feedback loop described in esphome/esphome#17161:
+# lvgl.widget.update on a `switch` widget fires on_value even when the
+# update is programmatic (e.g. mirroring HA state). Without this guard,
+# every HA-side state change (including from other automations) gets
+# echoed straight back to HA as a toggle, causing the light to "fight"
+# with whatever automation just changed it.
+globals:
+  - id: mirroring_light_switches
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+# =========================
 # SCRIPTS
 # =========================
 script:
@@ -253,6 +268,9 @@ binary_sensor:
     entity_id: light.sonoff_ifan_ifan03_masterbedroom_light
     on_state:
       then:
+        # Guard: this update must not be echoed back to HA via the
+        # switch's on_value handler (see esphome/esphome#17161).
+        - lambda: 'id(mirroring_light_switches) = true;'
         - lvgl.widget.update:
             id: main_light_switch_main
             state:
@@ -263,6 +281,7 @@ binary_sensor:
             id: lbl_bulb_main
             text: !lambda 'return std::string(x ? "\U000F0335" : "\U000F0336");'
             text_color: !lambda 'return lv_color_hex(x ? 0xFDB813 : 0xBBBBBB);'
+        - lambda: 'id(mirroring_light_switches) = false;'
         # Update screen state (light on -> screen on)
         - script.execute: update_screen_state
 
@@ -272,6 +291,9 @@ binary_sensor:
     entity_id: light.master_bedroom_light_left
     on_state:
       then:
+        # Guard: this update must not be echoed back to HA via the
+        # switch's on_value handler (see esphome/esphome#17161).
+        - lambda: 'id(mirroring_light_switches) = true;'
         - lvgl.widget.update:
             id: main_light_switch_left
             state:
@@ -282,6 +304,7 @@ binary_sensor:
             id: lbl_bulb_left
             text: !lambda 'return std::string(x ? "\U000F0335" : "\U000F0336");'
             text_color: !lambda 'return lv_color_hex(x ? 0xFDB813 : 0xBBBBBB);'
+        - lambda: 'id(mirroring_light_switches) = false;'
 
   # Right light status sync
   - platform: homeassistant
@@ -289,6 +312,9 @@ binary_sensor:
     entity_id: light.master_bedroom_light_right
     on_state:
       then:
+        # Guard: this update must not be echoed back to HA via the
+        # switch's on_value handler (see esphome/esphome#17161).
+        - lambda: 'id(mirroring_light_switches) = true;'
         - lvgl.widget.update:
             id: main_light_switch_right
             state:
@@ -299,6 +325,7 @@ binary_sensor:
             id: lbl_bulb_right
             text: !lambda 'return std::string(x ? "\U000F0335" : "\U000F0336");'
             text_color: !lambda 'return lv_color_hex(x ? 0xFDB813 : 0xBBBBBB);'
+        - lambda: 'id(mirroring_light_switches) = false;'
 
   # Living room lights status sync (second page)
   - platform: homeassistant
@@ -306,6 +333,9 @@ binary_sensor:
     entity_id: light.livingroom_lights
     on_state:
       then:
+        # Guard: this update must not be echoed back to HA via the
+        # switch's on_value handler (see esphome/esphome#17161).
+        - lambda: 'id(mirroring_light_switches) = true;'
         - lvgl.widget.update:
             id: livingroom_light_switch
             state:
@@ -316,6 +346,7 @@ binary_sensor:
             id: lbl_bulb_livingroom
             text: !lambda 'return std::string(x ? "\U000F0335" : "\U000F0336");'
             text_color: !lambda 'return lv_color_hex(x ? 0xFDB813 : 0xBBBBBB);'
+        - lambda: 'id(mirroring_light_switches) = false;'
 
   # Cover Default Times boolean sync
   - platform: homeassistant
