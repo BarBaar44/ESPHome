@@ -1038,6 +1038,16 @@ lvgl:
                         text_font: montserrat_16
                         text_color: 0x0B0A0A
 
+                    # Living room light switch.
+                    # Mirrors the "Livingroom Light Button Toggle" HA automation
+                    # that runs off light.livingroom_front_button, so the display
+                    # behaves the same as the physical wall button and correctly
+                    # sets/clears the dark_lockout and force_on helpers:
+                    #   - Switching ON:  clear dark_lockout, turn lights on,
+                    #                    pulse force_on for 2s (tells other
+                    #                    automations this was a manual on).
+                    #   - Switching OFF: turn lights off, set dark_lockout on
+                    #                    (suppresses auto-on-when-dark logic).
                     - switch:
                         id: livingroom_light_switch
                         align: CENTER
@@ -1047,10 +1057,36 @@ lvgl:
                         shadow_width: 0
                         shadow_spread: 2
                         on_value:
-                          - homeassistant.action:
-                              action: light.toggle
-                              data:
-                                entity_id: light.livingroom_lights
+                          - if:
+                              condition:
+                                lambda: 'return x;'
+                              then:
+                                - homeassistant.action:
+                                    action: input_boolean.turn_off
+                                    data:
+                                      entity_id: input_boolean.livingroom_light_dark_lockout
+                                - homeassistant.action:
+                                    action: light.turn_on
+                                    data:
+                                      entity_id: light.livingroom_lights
+                                - homeassistant.action:
+                                    action: input_boolean.turn_on
+                                    data:
+                                      entity_id: input_boolean.livingroom_light_force_on
+                                - delay: 2s
+                                - homeassistant.action:
+                                    action: input_boolean.turn_off
+                                    data:
+                                      entity_id: input_boolean.livingroom_light_force_on
+                              else:
+                                - homeassistant.action:
+                                    action: light.turn_off
+                                    data:
+                                      entity_id: light.livingroom_lights
+                                - homeassistant.action:
+                                    action: input_boolean.turn_on
+                                    data:
+                                      entity_id: input_boolean.livingroom_light_dark_lockout
 
               # =========================
               # SCREEN TIMEOUT SETTING
