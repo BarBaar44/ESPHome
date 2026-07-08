@@ -98,7 +98,10 @@ lvgl:
                   text_font: montserrat_22
                   text_color: 0xFFFFFF
 
-              # HA connectivity icon - left of the > nav button
+              # HA connectivity icon - left of the > nav button.
+              # Visibility is driven by update_ha_connectivity_icon
+              # (see lvglsensors.yml), which shows this whenever the
+              # device's API connection to Home Assistant is down.
               - label:
                   text: "\U000F05A9"
                   id: lbl_hastatus
@@ -509,7 +512,8 @@ lvgl:
                                 # lvgl.dropdown.update firing on_value
                                 # (esphome/esphome#17161). Only forward to HA
                                 # when this was a genuine user touch, not a
-                                # programmatic sync from ha_cover_open_time.
+                                # programmatic sync from ha_cover_open_time /
+                                # the cover_default_checkbox handler.
                                 - if:
                                     condition:
                                       lambda: 'return !id(mirroring_cover_settings);'
@@ -548,7 +552,8 @@ lvgl:
                                 # lvgl.dropdown.update firing on_value
                                 # (esphome/esphome#17161). Only forward to HA
                                 # when this was a genuine user touch, not a
-                                # programmatic sync from ha_cover_close_time.
+                                # programmatic sync from ha_cover_close_time /
+                                # the cover_default_checkbox handler.
                                 - if:
                                     condition:
                                       lambda: 'return !id(mirroring_cover_settings);'
@@ -1016,6 +1021,20 @@ lvgl:
                   text: "Living Room Control"
                   align: CENTER
                   text_font: montserrat_22
+                  text_color: 0xFFFFFF
+
+              # HA connectivity icon (page 2). LVGL widget ids are
+              # per-page, so the main page's lbl_hastatus can't be
+              # reused here - this is a separate widget with its own id
+              # that update_ha_connectivity_icon (see lvglsensors.yml)
+              # keeps in sync with lbl_hastatus on the main page.
+              - label:
+                  text: "\U000F05A9"
+                  id: lbl_hastatus_2
+                  hidden: true
+                  align: RIGHT_MID
+                  x: -15
+                  text_font: icons_24
                   text_color: 0xFFFFFF
 
               # Page navigation: go back to Master Bedroom (previous page)
