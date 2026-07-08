@@ -472,10 +472,19 @@ lvgl:
                               text: "Default"
                               text_font: montserrat_14
                               on_value:
-                                - homeassistant.action:
-                                    action: input_boolean.toggle
-                                    data:
-                                      entity_id: input_boolean.master_bedroom_cover_default_times
+                                # Guard against the mirror-loop caused by
+                                # lvgl.widget.update firing on_value
+                                # (esphome/esphome#17161). Only forward to HA
+                                # when this was a genuine user touch, not a
+                                # programmatic sync from ha_cover_default.
+                                - if:
+                                    condition:
+                                      lambda: 'return !id(mirroring_cover_settings);'
+                                    then:
+                                      - homeassistant.action:
+                                          action: input_boolean.toggle
+                                          data:
+                                            entity_id: input_boolean.master_bedroom_cover_default_times
 
                           # Midden: Open dropdown (6:00 - 10:00, elk half uur)
                           - dropdown:
@@ -496,16 +505,25 @@ lvgl:
                                 - "10:00"
                               selected_index: 4  # Default: 8:00
                               on_value:
-                                - homeassistant.action:
-                                    action: input_select.select_option
-                                    data:
-                                      entity_id: input_select.master_bedroom_cover_open_time
-                                      option: !lambda |-
-                                        std::vector<std::string> options = {
-                                          "6:00", "6:30", "7:00", "7:30", "8:00",
-                                          "8:30", "9:00", "9:30", "10:00"
-                                        };
-                                        return options[(int)x];
+                                # Guard against the mirror-loop caused by
+                                # lvgl.dropdown.update firing on_value
+                                # (esphome/esphome#17161). Only forward to HA
+                                # when this was a genuine user touch, not a
+                                # programmatic sync from ha_cover_open_time.
+                                - if:
+                                    condition:
+                                      lambda: 'return !id(mirroring_cover_settings);'
+                                    then:
+                                      - homeassistant.action:
+                                          action: input_select.select_option
+                                          data:
+                                            entity_id: input_select.master_bedroom_cover_open_time
+                                            option: !lambda |-
+                                              std::vector<std::string> options = {
+                                                "6:00", "6:30", "7:00", "7:30", "8:00",
+                                                "8:30", "9:00", "9:30", "10:00"
+                                              };
+                                              return options[(int)x];
 
                           # Midden: Close dropdown (19:00 - 23:00, elk half uur)
                           - dropdown:
@@ -526,16 +544,25 @@ lvgl:
                                 - "23:00"
                               selected_index: 4  # Default: 21:00
                               on_value:
-                                - homeassistant.action:
-                                    action: input_select.select_option
-                                    data:
-                                      entity_id: input_select.master_bedroom_cover_close_time
-                                      option: !lambda |-
-                                        std::vector<std::string> options = {
-                                          "19:00", "19:30", "20:00", "20:30", "21:00",
-                                          "21:30", "22:00", "22:30", "23:00"
-                                        };
-                                        return options[(int)x];
+                                # Guard against the mirror-loop caused by
+                                # lvgl.dropdown.update firing on_value
+                                # (esphome/esphome#17161). Only forward to HA
+                                # when this was a genuine user touch, not a
+                                # programmatic sync from ha_cover_close_time.
+                                - if:
+                                    condition:
+                                      lambda: 'return !id(mirroring_cover_settings);'
+                                    then:
+                                      - homeassistant.action:
+                                          action: input_select.select_option
+                                          data:
+                                            entity_id: input_select.master_bedroom_cover_close_time
+                                            option: !lambda |-
+                                              std::vector<std::string> options = {
+                                                "19:00", "19:30", "20:00", "20:30", "21:00",
+                                                "21:30", "22:00", "22:30", "23:00"
+                                              };
+                                              return options[(int)x];
 
                           # Onderaan: Slider (inverted: 0 = open/top, 100 = closed/bottom)
                           - slider:
@@ -546,11 +573,27 @@ lvgl:
                               min_value: 0
                               max_value: 100
                               on_release:
+                                # Remember the requested target (in HA's
+                                # 0=closed/100=open terms) and mark the
+                                # position as "pending" so ha_cover_position
+                                # won't yank the slider back to the
+                                # in-transit current_position while the
+                                # cover is still moving. See
+                                # cover_position_pending_timeout for the
+                                # failsafe that clears this if the target is
+                                # never reached.
+                                - globals.set:
+                                    id: cover_target_position
+                                    value: !lambda 'return 100 - (int)x;'
+                                - globals.set:
+                                    id: cover_position_pending
+                                    value: true
+                                - script.execute: cover_position_pending_timeout
                                 - homeassistant.action:
                                     action: cover.set_cover_position
                                     data:
                                       entity_id: cover.cover_master_bedroom
-                                      position: !lambda 'return 100 - (int)x;'
+                                      position: !lambda 'return id(cover_target_position);'
                               
               # =========================
               # RIGHT COLUMN
