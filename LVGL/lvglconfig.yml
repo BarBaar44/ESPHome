@@ -587,7 +587,7 @@ lvgl:
                                     value: !lambda 'return 100 - (int)x;'
                                 - globals.set:
                                     id: cover_position_pending
-                                    value: true
+                                    value: !lambda 'return true;'
                                 - script.execute: cover_position_pending_timeout
                                 - homeassistant.action:
                                     action: cover.set_cover_position
