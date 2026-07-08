@@ -81,9 +81,9 @@ script:
           id: cover_position_pending
           value: 'false'
 
-  # Shows the HA connectivity icon (on both pages) whenever the device's
-  # API connection to Home Assistant is currently down, and hides it
-  # while connected. Driven periodically by the interval below.
+  # Shows the HA connectivity icon (on both pages) whenever the device
+  # currently has an active API connection to Home Assistant, and hides
+  # it while disconnected. Driven periodically by the interval below.
   - id: update_ha_connectivity_icon
     then:
       - if:
@@ -92,17 +92,17 @@ script:
           then:
             - lvgl.widget.update:
                 id: lbl_hastatus
-                hidden: true
+                hidden: false
             - lvgl.widget.update:
                 id: lbl_hastatus_2
-                hidden: true
+                hidden: false
           else:
             - lvgl.widget.update:
                 id: lbl_hastatus
-                hidden: false
+                hidden: true
             - lvgl.widget.update:
                 id: lbl_hastatus_2
-                hidden: false
+                hidden: true
 
 # =========================
 # INTERVALS
