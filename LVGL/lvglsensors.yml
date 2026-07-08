@@ -93,7 +93,7 @@ text_sensor:
   # who changed the fan (display, physical remote, or HA automation).
   - platform: homeassistant
     id: ha_fan_speed_state
-    entity_id: sensor.sonoff_ifan_ifan03_masterbedroom_fan_speed_state
+    entity_id: sensor.master_bedroom_sonoff_ifan_ifan03_masterbedroom_fan_speed_state
     on_value:
       then:
         # Reset all buttons to default style
