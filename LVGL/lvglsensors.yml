@@ -441,6 +441,18 @@ binary_sensor:
             id: cover_default_checkbox
             state:
               checked: !lambda return x;
+        # Grey out (disable) the time dropdowns while Default is active,
+        # since any manual selection would just get overwritten the
+        # next time this handler fires. Re-enable them as soon as
+        # Default is unchecked.
+        - lvgl.widget.update:
+            id: cover_morning_dropdown
+            state:
+              disabled: !lambda return x;
+        - lvgl.widget.update:
+            id: cover_evening_dropdown
+            state:
+              disabled: !lambda return x;
         # When "Default" is enabled, the open/close dropdowns should
         # reflect the fixed default times (8:30 open / 22:00 close)
         # regardless of whatever the input_select helpers currently
