@@ -81,6 +81,37 @@ script:
           id: cover_position_pending
           value: 'false'
 
+  # Shows the HA connectivity icon (on both pages) whenever the device's
+  # API connection to Home Assistant is currently down, and hides it
+  # while connected. Driven periodically by the interval below.
+  - id: update_ha_connectivity_icon
+    then:
+      - if:
+          condition:
+            api.connected:
+          then:
+            - lvgl.widget.update:
+                id: lbl_hastatus
+                hidden: true
+            - lvgl.widget.update:
+                id: lbl_hastatus_2
+                hidden: true
+          else:
+            - lvgl.widget.update:
+                id: lbl_hastatus
+                hidden: false
+            - lvgl.widget.update:
+                id: lbl_hastatus_2
+                hidden: false
+
+# =========================
+# INTERVALS
+# =========================
+interval:
+  - interval: 5s
+    then:
+      - script.execute: update_ha_connectivity_icon
+
 text_sensor:
   # Weather condition
   - platform: homeassistant
@@ -403,13 +434,48 @@ binary_sensor:
     on_state:
       then:
         # Guard: this update must not be echoed back to HA via the
-        # checkbox's on_value handler (see esphome/esphome#17161).
+        # checkbox's/dropdowns' on_value handlers (see
+        # esphome/esphome#17161).
         - lambda: 'id(mirroring_cover_settings) = true;'
         - lvgl.widget.update:
             id: cover_default_checkbox
             state:
               checked: !lambda return x;
+        # When "Default" is enabled, the open/close dropdowns should
+        # reflect the fixed default times (8:30 open / 22:00 close)
+        # regardless of whatever the input_select helpers currently
+        # hold. Update the dropdown widgets while still under the
+        # guard above so this doesn't echo back to HA as a fresh
+        # selection.
+        - if:
+            condition:
+              lambda: 'return x;'
+            then:
+              - lvgl.dropdown.update:
+                  id: cover_morning_dropdown
+                  selected_index: 5  # 8:30
+              - lvgl.dropdown.update:
+                  id: cover_evening_dropdown
+                  selected_index: 6  # 22:00
         - lambda: 'id(mirroring_cover_settings) = false;'
+        # Now (outside the guard) push those same default times to the
+        # input_select helpers in HA, so Home Assistant's state matches
+        # what the display just showed, no matter what triggered
+        # "Default" to be enabled (display tap, HA UI, or an automation).
+        - if:
+            condition:
+              lambda: 'return x;'
+            then:
+              - homeassistant.action:
+                  action: input_select.select_option
+                  data:
+                    entity_id: input_select.master_bedroom_cover_open_time
+                    option: "8:30"
+              - homeassistant.action:
+                  action: input_select.select_option
+                  data:
+                    entity_id: input_select.master_bedroom_cover_close_time
+                    option: "22:00"
 
 # =========================
 # SENSORS FROM HOME ASSISTANT
