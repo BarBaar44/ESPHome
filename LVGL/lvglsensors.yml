@@ -3,16 +3,40 @@
 # =========================
 
 # =========================
-# GUARD GLOBAL
+# GUARD GLOBALS
 # =========================
 # Prevents the feedback loop described in esphome/esphome#17161:
-# lvgl.widget.update on a `switch` widget fires on_value even when the
-# update is programmatic (e.g. mirroring HA state). Without this guard,
-# every HA-side state change (including from other automations) gets
-# echoed straight back to HA as a toggle, causing the light to "fight"
-# with whatever automation just changed it.
+# lvgl.widget.update / lvgl.dropdown.update on a widget also fires its
+# on_value handler even when the update is purely programmatic (e.g.
+# mirroring HA state). Without a guard, every HA-side state change
+# (including from other automations) gets echoed straight back to HA as
+# a fresh user action, causing the widget to "fight" with whatever just
+# changed it.
 globals:
   - id: mirroring_light_switches
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+  # Same guard, used by the Cover panel's "Default" checkbox and the
+  # open/close time dropdowns.
+  - id: mirroring_cover_settings
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+  # Tracks the cover position the user last requested via the slider
+  # (in HA's 0=closed/100=open terms), and whether we're still waiting
+  # for the physical cover to reach it. While pending, incoming
+  # current_position updates that don't yet match the target are
+  # ignored (see ha_cover_position) so the slider doesn't visually jump
+  # back to the in-transit position while the cover is still moving.
+  - id: cover_target_position
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+  - id: cover_position_pending
     type: bool
     restore_value: no
     initial_value: 'false'
@@ -42,6 +66,20 @@ script:
       - light.turn_on: back_light
       - delay: !lambda 'return id(screen_timeout) * 1000;'
       - script.execute: update_screen_state
+
+  # Failsafe for the cover position slider: if the cover never reports a
+  # current_position matching the requested target (e.g. it stalls, gets
+  # manually stopped, or the command is lost), stop ignoring HA position
+  # updates after a while so the slider can't get stuck out of sync
+  # forever. Restarted on every slider release so only the most recent
+  # request counts.
+  - id: cover_position_pending_timeout
+    mode: restart
+    then:
+      - delay: 20s
+      - globals.set:
+          id: cover_position_pending
+          value: 'false'
 
 text_sensor:
   # Weather condition
@@ -91,27 +129,29 @@ text_sensor:
   # Fan speed state sync (off/low/mid/high) from iFan03's clean text sensor.
   # This reliably highlights the active fan button in red regardless of
   # who changed the fan (display, physical remote, or HA automation).
+  # Unselected buttons are reset to the app's blue accent (0x2F8CD8),
+  # matching the color they had before this red-highlight logic existed.
   - platform: homeassistant
     id: ha_fan_speed_state
     entity_id: sensor.master_bedroom_sonoff_ifan_ifan03_masterbedroom_fan_speed_state
     on_value:
       then:
-        # Reset all buttons to default style
+        # Reset all buttons to default (blue) style
         - lvgl.widget.update:
             id: fan_off_button
-            bg_color: 0x444444
+            bg_color: 0x2F8CD8
             bg_opa: COVER
         - lvgl.widget.update:
             id: fan_low_button
-            bg_color: 0x444444
+            bg_color: 0x2F8CD8
             bg_opa: COVER
         - lvgl.widget.update:
             id: fan_mid_button
-            bg_color: 0x444444
+            bg_color: 0x2F8CD8
             bg_opa: COVER
         - lvgl.widget.update:
             id: fan_high_button
-            bg_color: 0x444444
+            bg_color: 0x2F8CD8
             bg_opa: COVER
         # Highlight the active button in red
         - if:
@@ -153,6 +193,9 @@ text_sensor:
     entity_id: input_select.master_bedroom_cover_open_time
     on_value:
       then:
+        # Guard: this update must not be echoed back to HA via the
+        # dropdown's on_value handler (see esphome/esphome#17161).
+        - lambda: 'id(mirroring_cover_settings) = true;'
         - lvgl.dropdown.update:
             id: cover_morning_dropdown
             selected_index: !lambda |-
@@ -164,6 +207,7 @@ text_sensor:
                 if (options[i] == x) return (int)i;
               }
               return 4;  // Default 8:00
+        - lambda: 'id(mirroring_cover_settings) = false;'
 
   # Cover Close Time helper sync
   - platform: homeassistant
@@ -171,6 +215,9 @@ text_sensor:
     entity_id: input_select.master_bedroom_cover_close_time
     on_value:
       then:
+        # Guard: this update must not be echoed back to HA via the
+        # dropdown's on_value handler (see esphome/esphome#17161).
+        - lambda: 'id(mirroring_cover_settings) = true;'
         - lvgl.dropdown.update:
             id: cover_evening_dropdown
             selected_index: !lambda |-
@@ -182,6 +229,7 @@ text_sensor:
                 if (options[i] == x) return (int)i;
               }
               return 4;  // Default 21:00
+        - lambda: 'id(mirroring_cover_settings) = false;'
 
   # Climate HVAC mode sync
   - platform: homeassistant
@@ -354,10 +402,14 @@ binary_sensor:
     entity_id: input_boolean.master_bedroom_cover_default_times
     on_state:
       then:
+        # Guard: this update must not be echoed back to HA via the
+        # checkbox's on_value handler (see esphome/esphome#17161).
+        - lambda: 'id(mirroring_cover_settings) = true;'
         - lvgl.widget.update:
             id: cover_default_checkbox
             state:
               checked: !lambda return x;
+        - lambda: 'id(mirroring_cover_settings) = false;'
 
 # =========================
 # SENSORS FROM HOME ASSISTANT
@@ -434,16 +486,36 @@ sensor:
               snprintf(buf, sizeof(buf), "%.1f km/h", x);
               return buf;
 
-  # Cover position sync from HA (inverted display: 0 = open, 100 = closed)
+  # Cover position sync from HA (inverted display: 0 = open, 100 = closed).
+  # While the user has an in-flight target position (cover_position_pending),
+  # intermediate current_position reports that don't yet match the target
+  # are ignored so the slider holds steady at the requested position
+  # instead of jumping back to wherever the cover currently is mid-travel
+  # (see cover_target_position / cover_position_pending_timeout globals).
   - platform: homeassistant
     id: ha_cover_position
     entity_id: cover.cover_master_bedroom
     attribute: current_position
     on_value:
       then:
-        - lvgl.slider.update:
-            id: cover_slider
-            value: !lambda 'return 100 - (int)x;'
+        - lambda: |-
+            if (id(cover_position_pending)) {
+              int target = id(cover_target_position);
+              if (std::abs((int)x - target) > 2) {
+                // Still travelling toward the requested target; skip this
+                // intermediate update.
+                return;
+              }
+              // Target reached (within tolerance): resume normal syncing.
+              id(cover_position_pending) = false;
+            }
+        - if:
+            condition:
+              lambda: 'return !id(cover_position_pending);'
+            then:
+              - lvgl.slider.update:
+                  id: cover_slider
+                  value: !lambda 'return 100 - (int)x;'
 
   # Climate setpoint sync from HA → Display (number only; °C is a separate label)
   - platform: homeassistant
