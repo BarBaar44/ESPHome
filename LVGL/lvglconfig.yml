@@ -2,13 +2,15 @@
 # FONTS (buiten lvgl sectie!)
 # =========================
 font:
-  # Klein icoon voor HA status in header
+  # Kleine iconen voor WiFi/HA status in header
   - file: "fonts/materialdesignicons-webfont.ttf"
     id: icons_24
     size: 24
     bpp: 4
     glyphs: [
-      "\U000F05A9", # home-assistant icon
+      "\U000F07D0", # home-assistant icon
+      "\U000F05A9", # wifi
+      "\U000F16B5", # wifi-alert
       "\U000F0141", # chevron-left
       "\U000F0142", # chevron-right
       ]
@@ -98,14 +100,24 @@ lvgl:
                   text_font: montserrat_22
                   text_color: 0xFFFFFF
 
-              # HA connectivity icon - left of the > nav button.
-              # Visibility is driven by update_ha_connectivity_icon
-              # (see lvglsensors.yml), which shows this whenever the
-              # device's API connection to Home Assistant is down.
+              # WiFi connectivity icon - white wifi glyph while connected,
+              # red wifi-alert glyph while disconnected. Driven by
+              # update_connectivity_icons (see lvglsensors.yml).
               - label:
                   text: "\U000F05A9"
+                  id: lbl_wifistatus
+                  align: RIGHT_MID
+                  x: -95
+                  text_font: icons_24
+                  text_color: 0xFFFFFF
+
+              # HA connectivity icon - white home-assistant glyph while the
+              # device's API connection to Home Assistant is up, red while
+              # it's down. Driven by update_connectivity_icons (see
+              # lvglsensors.yml).
+              - label:
+                  text: "\U000F07D0"
                   id: lbl_hastatus
-                  hidden: true
                   align: RIGHT_MID
                   x: -55
                   text_font: icons_24
@@ -1023,15 +1035,25 @@ lvgl:
                   text_font: montserrat_22
                   text_color: 0xFFFFFF
 
-              # HA connectivity icon (page 2). LVGL widget ids are
-              # per-page, so the main page's lbl_hastatus can't be
+              # WiFi connectivity icon (page 2). LVGL widget ids are
+              # per-page, so the main page's lbl_wifistatus can't be
               # reused here - this is a separate widget with its own id
-              # that update_ha_connectivity_icon (see lvglsensors.yml)
-              # keeps in sync with lbl_hastatus on the main page.
+              # that update_connectivity_icons (see lvglsensors.yml)
+              # keeps in sync with lbl_wifistatus on the main page.
               - label:
                   text: "\U000F05A9"
+                  id: lbl_wifistatus_2
+                  align: RIGHT_MID
+                  x: -55
+                  text_font: icons_24
+                  text_color: 0xFFFFFF
+
+              # HA connectivity icon (page 2). Same per-page-id caveat as
+              # lbl_wifistatus_2 above; kept in sync with lbl_hastatus on
+              # the main page by update_connectivity_icons.
+              - label:
+                  text: "\U000F07D0"
                   id: lbl_hastatus_2
-                  hidden: true
                   align: RIGHT_MID
                   x: -15
                   text_font: icons_24
