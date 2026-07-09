@@ -81,28 +81,54 @@ script:
           id: cover_position_pending
           value: 'false'
 
-  # Shows the HA connectivity icon (on both pages) whenever the device
-  # currently has an active API connection to Home Assistant, and hides
-  # it while disconnected. Driven periodically by the interval below.
-  - id: update_ha_connectivity_icon
+  # Drives the two header status icons on both pages:
+  #   - WiFi icon: white wifi glyph while connected to the WiFi network,
+  #     red wifi-alert glyph while disconnected.
+  #   - HA icon: home-assistant glyph, white while the device has an
+  #     active API connection to Home Assistant, red while it doesn't.
+  # Driven periodically by the interval below.
+  - id: update_connectivity_icons
     then:
+      # WiFi status
+      - if:
+          condition:
+            wifi.connected:
+          then:
+            - lvgl.widget.update:
+                id: lbl_wifistatus
+                text: "\U000F05A9"
+                text_color: 0xFFFFFF
+            - lvgl.widget.update:
+                id: lbl_wifistatus_2
+                text: "\U000F05A9"
+                text_color: 0xFFFFFF
+          else:
+            - lvgl.widget.update:
+                id: lbl_wifistatus
+                text: "\U000F16B5"
+                text_color: 0xFF0000
+            - lvgl.widget.update:
+                id: lbl_wifistatus_2
+                text: "\U000F16B5"
+                text_color: 0xFF0000
+      # Home Assistant API connectivity status
       - if:
           condition:
             api.connected:
           then:
             - lvgl.widget.update:
                 id: lbl_hastatus
-                hidden: false
+                text_color: 0xFFFFFF
             - lvgl.widget.update:
                 id: lbl_hastatus_2
-                hidden: false
+                text_color: 0xFFFFFF
           else:
             - lvgl.widget.update:
                 id: lbl_hastatus
-                hidden: true
+                text_color: 0xFF0000
             - lvgl.widget.update:
                 id: lbl_hastatus_2
-                hidden: true
+                text_color: 0xFF0000
 
 # =========================
 # INTERVALS
@@ -110,7 +136,7 @@ script:
 interval:
   - interval: 5s
     then:
-      - script.execute: update_ha_connectivity_icon
+      - script.execute: update_connectivity_icons
 
 text_sensor:
   # Weather condition
