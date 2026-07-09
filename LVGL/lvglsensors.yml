@@ -89,29 +89,32 @@ script:
   # Driven periodically by the interval below.
   - id: update_connectivity_icons
     then:
-      # WiFi status
+      # WiFi status - uses lvgl.label.update since `text` (the glyph)
+      # is a label-specific property, not a generic widget style
+      # property that lvgl.widget.update understands.
       - if:
           condition:
             wifi.connected:
           then:
-            - lvgl.widget.update:
+            - lvgl.label.update:
                 id: lbl_wifistatus
                 text: "\U000F05A9"
                 text_color: 0xFFFFFF
-            - lvgl.widget.update:
+            - lvgl.label.update:
                 id: lbl_wifistatus_2
                 text: "\U000F05A9"
                 text_color: 0xFFFFFF
           else:
-            - lvgl.widget.update:
+            - lvgl.label.update:
                 id: lbl_wifistatus
                 text: "\U000F16B5"
                 text_color: 0xFF0000
-            - lvgl.widget.update:
+            - lvgl.label.update:
                 id: lbl_wifistatus_2
                 text: "\U000F16B5"
                 text_color: 0xFF0000
-      # Home Assistant API connectivity status
+      # Home Assistant API connectivity status - only the color changes
+      # here (the glyph stays the same), so lvgl.widget.update is fine.
       - if:
           condition:
             api.connected:
