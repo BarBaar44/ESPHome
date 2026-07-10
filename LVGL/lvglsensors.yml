@@ -3,6 +3,31 @@
 # =========================
 
 # =========================
+# BOOT-TIME UI SYNC
+# =========================
+# Restores the night-mode start/end dropdowns (see LVGL/lvglconfig.yml
+# settings_obj) to reflect the globals restored from flash, since LVGL
+# widgets themselves don't persist state across reboots - only the
+# globals do (restore_value: yes). Runs late (priority -100, after LVGL
+# is set up) and is appended to the on_boot automation defined in the
+# main device YAML (ESPHome concatenates same-shape on_boot dicts from
+# packages). The options lists for both dropdowns are ordered 00:00..23:00,
+# so the selected_index equals the stored hour value directly - no lookup
+# table needed (unlike the screen_timeout_dropdown restoration, which maps
+# through a small array of second values).
+esphome:
+  on_boot:
+    priority: -100
+    then:
+      - delay: 2s
+      - lvgl.dropdown.update:
+          id: night_mode_start_dropdown
+          selected_index: !lambda 'return id(night_mode_start_hour);'
+      - lvgl.dropdown.update:
+          id: night_mode_end_dropdown
+          selected_index: !lambda 'return id(night_mode_end_hour);'
+
+# =========================
 # GUARD GLOBALS
 # =========================
 # Prevents the feedback loop described in esphome/esphome#17161:
@@ -41,17 +66,63 @@ globals:
     restore_value: no
     initial_value: 'false'
 
+  # Night-mode PIR screen lockout window (hour of day, 0-23, local/HA
+  # time). While the current hour falls within [start, end) - wrapping
+  # past midnight when start > end - motion from the PIR sensor
+  # (motion_occupancy) will NOT wake the display backlight. The ceiling
+  # light still wakes/keeps the screen on at any time, and touching the
+  # screen always wakes it (see wake_screen); only the PIR-triggered
+  # auto-wake is suppressed. Configurable via the Night start / Night
+  # end dropdowns on the Settings panel (second_page, see
+  # LVGL/lvglconfig.yml). Persisted across reboots; restored into the
+  # dropdowns' visual selection by the on_boot block above.
+  - id: night_mode_start_hour
+    type: int
+    restore_value: yes
+    initial_value: '22'  # Default: 22:00
+
+  - id: night_mode_end_hour
+    type: int
+    restore_value: yes
+    initial_value: '7'   # Default: 07:00
+
 # =========================
 # SCRIPTS
 # =========================
 script:
   # Turn the display backlight on/off based on motion OR ceiling light.
-  # Screen is on when motion is detected OR the ceiling light is on; otherwise off.
+  # Screen is on when the ceiling light is on, OR motion is detected
+  # outside the configured night-mode PIR lockout window; otherwise off.
   - id: update_screen_state
     then:
       - if:
           condition:
-            lambda: 'return id(motion_occupancy).state || id(ceiling_light_on).state;'
+            lambda: |-
+              // Ceiling light always wakes/keeps the screen on, regardless
+              // of night mode.
+              if (id(ceiling_light_on).state) return true;
+              // No light and no motion -> screen off.
+              if (!id(motion_occupancy).state) return false;
+              // Motion detected: suppress the auto-wake during the
+              // configured night-mode hours. If HA time isn't synced yet,
+              // fail open (allow the wake) rather than leaving the screen
+              // stuck off.
+              auto t = id(time_homeassistant).now();
+              if (!t.is_valid()) return true;
+              int hour = t.hour;
+              int start = id(night_mode_start_hour);
+              int end = id(night_mode_end_hour);
+              bool is_night;
+              if (start == end) {
+                // Same hour for start/end -> no active restriction window.
+                is_night = false;
+              } else if (start < end) {
+                is_night = (hour >= start && hour < end);
+              } else {
+                // Window wraps past midnight, e.g. 22:00 -> 07:00.
+                is_night = (hour >= start || hour < end);
+              }
+              return !is_night;
           then:
             - light.turn_on: back_light
           else:
@@ -60,6 +131,9 @@ script:
   # Wake the screen on touch and keep it awake for the configured timeout.
   # mode restart -> each touch restarts the timer.
   # After the timeout, re-evaluate: if motion/light keep it on, it stays on; otherwise off.
+  # Note: touching the screen always wakes it immediately, even during the
+  # night-mode PIR lockout window - only the PIR-triggered auto-wake in
+  # update_screen_state is suppressed at night.
   - id: wake_screen
     mode: restart
     then:
