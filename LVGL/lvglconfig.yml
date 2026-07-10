@@ -1176,7 +1176,7 @@ lvgl:
                                     action: script.livingroom_light_toggle
 
               # =========================
-              # SCREEN TIMEOUT SETTING
+              # SCREEN TIMEOUT / NIGHT MODE SETTINGS
               # =========================
               - obj:
                   id: settings_obj
@@ -1205,7 +1205,7 @@ lvgl:
                         text: "Screen timeout:"
                         align: LEFT_MID
                         x: 0
-                        y: 0
+                        y: -60
                         text_font: montserrat_16
                         text_color: 0x0B0A0A
 
@@ -1214,7 +1214,7 @@ lvgl:
                         id: screen_timeout_dropdown
                         align: LEFT_MID
                         x: 150
-                        y: 0
+                        y: -60
                         width: 120
                         options:
                           - "30 sec"
@@ -1230,6 +1230,107 @@ lvgl:
                               value: !lambda |-
                                 int secs[] = {30, 60, 120, 300, 600, 1800};
                                 return secs[(int)x];
+
+                    # Night mode: while the current hour falls within
+                    # [Night start, Night end), PIR motion will no longer
+                    # auto-wake the screen (the ceiling light and touching
+                    # the screen still do). See update_screen_state /
+                    # night_mode_start_hour / night_mode_end_hour in
+                    # lvglsensors.yml. Options are index-aligned to the
+                    # hour of day (index 0 = 00:00 ... index 23 = 23:00),
+                    # so the selected index can be used directly as the
+                    # hour value without a lookup table.
+                    - label:
+                        text: "Night start:"
+                        align: LEFT_MID
+                        x: 0
+                        y: 0
+                        text_font: montserrat_16
+                        text_color: 0x0B0A0A
+
+                    - dropdown:
+                        id: night_mode_start_dropdown
+                        align: LEFT_MID
+                        x: 150
+                        y: 0
+                        width: 100
+                        options:
+                          - "00:00"
+                          - "01:00"
+                          - "02:00"
+                          - "03:00"
+                          - "04:00"
+                          - "05:00"
+                          - "06:00"
+                          - "07:00"
+                          - "08:00"
+                          - "09:00"
+                          - "10:00"
+                          - "11:00"
+                          - "12:00"
+                          - "13:00"
+                          - "14:00"
+                          - "15:00"
+                          - "16:00"
+                          - "17:00"
+                          - "18:00"
+                          - "19:00"
+                          - "20:00"
+                          - "21:00"
+                          - "22:00"
+                          - "23:00"
+                        selected_index: 22  # Default: 22:00
+                        on_value:
+                          - globals.set:
+                              id: night_mode_start_hour
+                              value: !lambda 'return (int)x;'
+                          - script.execute: update_screen_state
+
+                    - label:
+                        text: "Night end:"
+                        align: LEFT_MID
+                        x: 0
+                        y: 60
+                        text_font: montserrat_16
+                        text_color: 0x0B0A0A
+
+                    - dropdown:
+                        id: night_mode_end_dropdown
+                        align: LEFT_MID
+                        x: 150
+                        y: 60
+                        width: 100
+                        options:
+                          - "00:00"
+                          - "01:00"
+                          - "02:00"
+                          - "03:00"
+                          - "04:00"
+                          - "05:00"
+                          - "06:00"
+                          - "07:00"
+                          - "08:00"
+                          - "09:00"
+                          - "10:00"
+                          - "11:00"
+                          - "12:00"
+                          - "13:00"
+                          - "14:00"
+                          - "15:00"
+                          - "16:00"
+                          - "17:00"
+                          - "18:00"
+                          - "19:00"
+                          - "20:00"
+                          - "21:00"
+                          - "22:00"
+                          - "23:00"
+                        selected_index: 7  # Default: 07:00
+                        on_value:
+                          - globals.set:
+                              id: night_mode_end_hour
+                              value: !lambda 'return (int)x;'
+                          - script.execute: update_screen_state
   
   # =========================
   # STYLE DEFINITIONS
