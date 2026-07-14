@@ -1,6 +1,17 @@
 esphome:
   name: $device_name
   comment: '${device_description}'
+  on_boot:
+    # Publish an initial fan speed state shortly after boot so consumers
+    # (e.g. the LVGL display) always receive a value to sync against,
+    # even if the fan is never touched after a restart. Without this the
+    # template text_sensor (update_interval: never) would stay empty until
+    # the next on_turn_on/off/speed_set event, leaving the display's fan
+    # buttons stuck at their default color.
+    priority: -100
+    then:
+      - delay: 5s
+      - script.execute: publish_fan_speed_state
 
 esp8266:
   board: esp01_1m
