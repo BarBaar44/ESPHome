@@ -1205,7 +1205,7 @@ lvgl:
                         text: "Screen timeout:"
                         align: LEFT_MID
                         x: 0
-                        y: -60
+                        y: -90
                         text_font: montserrat_16
                         text_color: 0x0B0A0A
 
@@ -1214,7 +1214,7 @@ lvgl:
                         id: screen_timeout_dropdown
                         align: LEFT_MID
                         x: 150
-                        y: -60
+                        y: -90
                         width: 120
                         options:
                           - "30 sec"
@@ -1244,7 +1244,7 @@ lvgl:
                         text: "Night start:"
                         align: LEFT_MID
                         x: 0
-                        y: 0
+                        y: -45
                         text_font: montserrat_16
                         text_color: 0x0B0A0A
 
@@ -1252,7 +1252,7 @@ lvgl:
                         id: night_mode_start_dropdown
                         align: LEFT_MID
                         x: 150
-                        y: 0
+                        y: -45
                         width: 100
                         options:
                           - "00:00"
@@ -1290,7 +1290,7 @@ lvgl:
                         text: "Night end:"
                         align: LEFT_MID
                         x: 0
-                        y: 60
+                        y: 0
                         text_font: montserrat_16
                         text_color: 0x0B0A0A
 
@@ -1298,7 +1298,7 @@ lvgl:
                         id: night_mode_end_dropdown
                         align: LEFT_MID
                         x: 150
-                        y: 60
+                        y: 0
                         width: 100
                         options:
                           - "00:00"
@@ -1331,6 +1331,78 @@ lvgl:
                               id: night_mode_end_hour
                               value: !lambda 'return (int)x;'
                           - script.execute: update_screen_state
+
+                    # Cover pre-open position (%) - writes to the HA helper
+                    # input_number.master_bedroom_cover_preopen_position.
+                    # Value list is index-mapped in the on_value lambda.
+                    - label:
+                        text: "Pre-open %:"
+                        align: LEFT_MID
+                        x: 0
+                        y: 45
+                        text_font: montserrat_16
+                        text_color: 0x0B0A0A
+
+                    - dropdown:
+                        id: preopen_dropdown
+                        align: LEFT_MID
+                        x: 150
+                        y: 45
+                        width: 100
+                        options:
+                          - "0%"
+                          - "5%"
+                          - "10%"
+                          - "15%"
+                          - "20%"
+                          - "25%"
+                          - "30%"
+                          - "40%"
+                          - "50%"
+                        selected_index: 2  # Default: 10%
+                        on_value:
+                          - homeassistant.action:
+                              action: input_number.set_value
+                              data:
+                                entity_id: input_number.master_bedroom_cover_preopen_position
+                                value: !lambda |-
+                                  int vals[] = {0, 5, 10, 15, 20, 25, 30, 40, 50};
+                                  return vals[(int)x];
+
+                    # Cover door-open close position (%) - writes to the HA
+                    # helper input_number.master_bedroom_cover_door_open_position.
+                    - label:
+                        text: "Door-open %:"
+                        align: LEFT_MID
+                        x: 0
+                        y: 90
+                        text_font: montserrat_16
+                        text_color: 0x0B0A0A
+
+                    - dropdown:
+                        id: dooropen_dropdown
+                        align: LEFT_MID
+                        x: 150
+                        y: 90
+                        width: 100
+                        options:
+                          - "0%"
+                          - "20%"
+                          - "40%"
+                          - "50%"
+                          - "60%"
+                          - "70%"
+                          - "80%"
+                          - "100%"
+                        selected_index: 4  # Default: 60%
+                        on_value:
+                          - homeassistant.action:
+                              action: input_number.set_value
+                              data:
+                                entity_id: input_number.master_bedroom_cover_door_open_position
+                                value: !lambda |-
+                                  int vals[] = {0, 20, 40, 50, 60, 70, 80, 100};
+                                  return vals[(int)x];
   
   # =========================
   # STYLE DEFINITIONS
