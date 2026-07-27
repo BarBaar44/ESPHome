@@ -5,20 +5,38 @@
 # =========================
 # BOOT-TIME UI SYNC
 # =========================
-# Restores the night-mode start/end dropdowns (see LVGL/lvglconfig.yml
-# settings_obj) to reflect the globals restored from flash, since LVGL
-# widgets themselves don't persist state across reboots - only the
-# globals do (restore_value: yes). Runs late (priority -100, after LVGL
-# is set up) and is appended to the on_boot automation defined in the
-# main device YAML (ESPHome concatenates same-shape on_boot dicts from
-# packages). The options lists for both dropdowns are ordered 00:00..23:00,
-# so the selected_index equals the stored hour value directly - no lookup
-# table needed (unlike the screen_timeout_dropdown restoration, which maps
-# through a small array of second values).
+# Two jobs on boot:
+#
+# 1. Turn the screen on and start the normal inactivity cycle. The
+#    backlight itself comes up via restore_mode: ALWAYS_ON (see
+#    LVGL/displayconfig.yml), but that alone would leave it lit forever
+#    since update_screen_state only ever runs from a trigger (motion,
+#    ceiling light, or the end of wake_screen) and nothing evaluates it
+#    after a reboot. Running wake_screen here gives boot the same
+#    behaviour as a touch: on now, then after screen_timeout seconds
+#    control returns to update_screen_state and the usual motion /
+#    ceiling-light / night-mode rules apply again.
+#
+# 2. Restore the night-mode start/end dropdowns (see
+#    LVGL/Masterbedroom/lvglconfig.yml settings_obj) to reflect the
+#    globals restored from flash, since LVGL widgets themselves don't
+#    persist state across reboots - only the globals do
+#    (restore_value: yes). The options lists for both dropdowns are
+#    ordered 00:00..23:00, so the selected_index equals the stored hour
+#    value directly - no lookup table needed (unlike the
+#    screen_timeout_dropdown restoration, which maps through a small
+#    array of second values).
+#
+# Runs late (priority -100, after LVGL is set up) and is appended to the
+# on_boot automation defined in the main device YAML (ESPHome
+# concatenates same-shape on_boot dicts from packages).
 esphome:
   on_boot:
     priority: -100
     then:
+      # Screen on + start the screen_timeout countdown. Done before the
+      # delay below so the timeout starts counting right away.
+      - script.execute: wake_screen
       - delay: 2s
       - lvgl.dropdown.update:
           id: night_mode_start_dropdown
@@ -83,6 +101,11 @@ globals:
   # end dropdowns on the Settings panel (second_page, see
   # LVGL/lvglconfig.yml). Persisted across reboots; restored into the
   # dropdowns' visual selection by the on_boot block above.
+  #
+  # Note: this window does not suppress the boot-time wake in the
+  # on_boot block above - a reboot always lights the screen briefly,
+  # the same way a touch does, and it then switches off again after
+  # screen_timeout.
   - id: night_mode_start_hour
     type: int
     restore_value: yes
@@ -141,6 +164,8 @@ script:
   # Note: touching the screen always wakes it immediately, even during the
   # night-mode PIR lockout window - only the PIR-triggered auto-wake in
   # update_screen_state is suppressed at night.
+  # Also executed once from on_boot, so a reboot/power-up lights the screen
+  # and then falls back to the normal rules after screen_timeout.
   - id: wake_screen
     mode: restart
     then:
