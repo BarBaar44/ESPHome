@@ -48,7 +48,13 @@ font:
       "\U000F059E", # windy-variant
       "\U000F14E4", # sunny-off
       ]
-  
+
+  # Extra kleine font voor footers (bv. ESPHome versie in Settings)
+  - file: "gfonts://Montserrat@500"
+    id: montserrat_12
+    size: 12
+    bpp: 4
+
   - file: "gfonts://Montserrat@500"
     id: montserrat_14
     size: 14
@@ -1177,10 +1183,23 @@ lvgl:
 
               # =========================
               # SCREEN TIMEOUT / NIGHT MODE / COVER SETTINGS
-              # Uses a FLEX COLUMN layout: the title sits on top, then each
-              # setting is a FLEX ROW (label + control) that stacks cleanly
-              # underneath with consistent spacing - no manual y offsets, so
-              # nothing clips regardless of how many rows are added.
+              #
+              # Layout: a single 2-column GRID on this card.
+              #   col 0 = CONTENT  -> labels size to their text, so every
+              #                       control starts at the same x and the
+              #                       dropdowns form one straight column.
+              #   col 1 = FR(1)    -> remaining width for the controls.
+              #
+              # Rows 1..5 are FR(1) and every dropdown sits in its cell with
+              # grid_cell_y_align: CENTER. This is what fixes the clipping:
+              # the previous version wrapped each row in an obj with a hard
+              # height: 40 and scrollable: false, which is shorter than a
+              # dropdown's natural height (montserrat_16 + padding + border),
+              # so the bottom of each dropdown was cut off. Grid cells adapt
+              # to the widget instead of cropping it.
+              #
+              # Row 0 (title) and row 6 (ESPHome version footer) are CONTENT
+              # sized so they only take the space they actually need.
               # =========================
               - obj:
                   id: settings_obj
@@ -1196,257 +1215,260 @@ lvgl:
                   grid_cell_y_align: STRETCH
 
                   layout:
-                    type: FLEX
-                    flex_flow: COLUMN
-                    pad_row: 8
+                    type: GRID
+                    pad_row: 6
+                    pad_column: 12
+                    grid_rows:
+                      - CONTENT   # row 0: "Settings" title
+                      - FR(1)     # row 1: Screen timeout
+                      - FR(1)     # row 2: Night start
+                      - FR(1)     # row 3: Night end
+                      - FR(1)     # row 4: Pre-open %
+                      - FR(1)     # row 5: Door-open %
+                      - CONTENT   # row 6: ESPHome version footer
+                    grid_columns:
+                      - CONTENT   # col 0: row labels
+                      - FR(1)     # col 1: controls
 
                   widgets:
 
+                    # ---- Title (row 0, spans both columns) ----
                     - label:
                         text: "Settings"
                         text_font: montserrat_20
                         text_color: 0x0B0A0A
+                        grid_cell_row_pos: 0
+                        grid_cell_column_pos: 0
+                        grid_cell_column_span: 2
+                        grid_cell_x_align: START
+                        grid_cell_y_align: CENTER
 
-                    # ---- Screen timeout row ----
-                    - obj:
-                        width: 100%
-                        height: 40
-                        bg_opa: TRANSP
-                        border_width: 0
-                        pad_all: 0
-                        scrollable: false
-                        scrollbar_mode: "off"
-                        layout:
-                          type: FLEX
-                          flex_flow: ROW
-                          flex_align_cross: CENTER
-                          pad_column: 10
-                        widgets:
-                          - label:
-                              text: "Screen timeout:"
-                              width: 130
-                              text_font: montserrat_16
-                              text_color: 0x0B0A0A
-                          - dropdown:
-                              id: screen_timeout_dropdown
-                              width: 120
-                              options:
-                                - "30 sec"
-                                - "1 min"
-                                - "2 min"
-                                - "5 min"
-                                - "10 min"
-                                - "30 min"
-                              selected_index: 3  # Default: 5 min
-                              on_value:
-                                - globals.set:
-                                    id: screen_timeout
-                                    value: !lambda |-
-                                      int secs[] = {30, 60, 120, 300, 600, 1800};
-                                      return secs[(int)x];
+                    # ---- Screen timeout (row 1) ----
+                    - label:
+                        text: "Screen timeout:"
+                        text_font: montserrat_16
+                        text_color: 0x0B0A0A
+                        grid_cell_row_pos: 1
+                        grid_cell_column_pos: 0
+                        grid_cell_x_align: START
+                        grid_cell_y_align: CENTER
 
-                    # ---- Night start row ----
+                    - dropdown:
+                        id: screen_timeout_dropdown
+                        width: 120
+                        grid_cell_row_pos: 1
+                        grid_cell_column_pos: 1
+                        grid_cell_x_align: START
+                        grid_cell_y_align: CENTER
+                        options:
+                          - "30 sec"
+                          - "1 min"
+                          - "2 min"
+                          - "5 min"
+                          - "10 min"
+                          - "30 min"
+                        selected_index: 3  # Default: 5 min
+                        on_value:
+                          - globals.set:
+                              id: screen_timeout
+                              value: !lambda |-
+                                int secs[] = {30, 60, 120, 300, 600, 1800};
+                                return secs[(int)x];
+
+                    # ---- Night start (row 2) ----
                     # Night mode: while the current hour falls within
                     # [Night start, Night end), PIR motion will no longer
                     # auto-wake the screen (the ceiling light and touching
                     # the screen still do). Options are index-aligned to the
                     # hour of day (index 0 = 00:00 ... index 23 = 23:00), so
                     # the selected index is used directly as the hour value.
-                    - obj:
-                        width: 100%
-                        height: 40
-                        bg_opa: TRANSP
-                        border_width: 0
-                        pad_all: 0
-                        scrollable: false
-                        scrollbar_mode: "off"
-                        layout:
-                          type: FLEX
-                          flex_flow: ROW
-                          flex_align_cross: CENTER
-                          pad_column: 10
-                        widgets:
-                          - label:
-                              text: "Night start:"
-                              width: 130
-                              text_font: montserrat_16
-                              text_color: 0x0B0A0A
-                          - dropdown:
-                              id: night_mode_start_dropdown
-                              width: 100
-                              options:
-                                - "00:00"
-                                - "01:00"
-                                - "02:00"
-                                - "03:00"
-                                - "04:00"
-                                - "05:00"
-                                - "06:00"
-                                - "07:00"
-                                - "08:00"
-                                - "09:00"
-                                - "10:00"
-                                - "11:00"
-                                - "12:00"
-                                - "13:00"
-                                - "14:00"
-                                - "15:00"
-                                - "16:00"
-                                - "17:00"
-                                - "18:00"
-                                - "19:00"
-                                - "20:00"
-                                - "21:00"
-                                - "22:00"
-                                - "23:00"
-                              selected_index: 22  # Default: 22:00
-                              on_value:
-                                - globals.set:
-                                    id: night_mode_start_hour
-                                    value: !lambda 'return (int)x;'
-                                - script.execute: update_screen_state
+                    - label:
+                        text: "Night start:"
+                        text_font: montserrat_16
+                        text_color: 0x0B0A0A
+                        grid_cell_row_pos: 2
+                        grid_cell_column_pos: 0
+                        grid_cell_x_align: START
+                        grid_cell_y_align: CENTER
 
-                    # ---- Night end row ----
-                    - obj:
-                        width: 100%
-                        height: 40
-                        bg_opa: TRANSP
-                        border_width: 0
-                        pad_all: 0
-                        scrollable: false
-                        scrollbar_mode: "off"
-                        layout:
-                          type: FLEX
-                          flex_flow: ROW
-                          flex_align_cross: CENTER
-                          pad_column: 10
-                        widgets:
-                          - label:
-                              text: "Night end:"
-                              width: 130
-                              text_font: montserrat_16
-                              text_color: 0x0B0A0A
-                          - dropdown:
-                              id: night_mode_end_dropdown
-                              width: 100
-                              options:
-                                - "00:00"
-                                - "01:00"
-                                - "02:00"
-                                - "03:00"
-                                - "04:00"
-                                - "05:00"
-                                - "06:00"
-                                - "07:00"
-                                - "08:00"
-                                - "09:00"
-                                - "10:00"
-                                - "11:00"
-                                - "12:00"
-                                - "13:00"
-                                - "14:00"
-                                - "15:00"
-                                - "16:00"
-                                - "17:00"
-                                - "18:00"
-                                - "19:00"
-                                - "20:00"
-                                - "21:00"
-                                - "22:00"
-                                - "23:00"
-                              selected_index: 7  # Default: 07:00
-                              on_value:
-                                - globals.set:
-                                    id: night_mode_end_hour
-                                    value: !lambda 'return (int)x;'
-                                - script.execute: update_screen_state
+                    - dropdown:
+                        id: night_mode_start_dropdown
+                        width: 120
+                        grid_cell_row_pos: 2
+                        grid_cell_column_pos: 1
+                        grid_cell_x_align: START
+                        grid_cell_y_align: CENTER
+                        options:
+                          - "00:00"
+                          - "01:00"
+                          - "02:00"
+                          - "03:00"
+                          - "04:00"
+                          - "05:00"
+                          - "06:00"
+                          - "07:00"
+                          - "08:00"
+                          - "09:00"
+                          - "10:00"
+                          - "11:00"
+                          - "12:00"
+                          - "13:00"
+                          - "14:00"
+                          - "15:00"
+                          - "16:00"
+                          - "17:00"
+                          - "18:00"
+                          - "19:00"
+                          - "20:00"
+                          - "21:00"
+                          - "22:00"
+                          - "23:00"
+                        selected_index: 22  # Default: 22:00
+                        on_value:
+                          - globals.set:
+                              id: night_mode_start_hour
+                              value: !lambda 'return (int)x;'
+                          - script.execute: update_screen_state
 
-                    # ---- Cover pre-open position row ----
+                    # ---- Night end (row 3) ----
+                    - label:
+                        text: "Night end:"
+                        text_font: montserrat_16
+                        text_color: 0x0B0A0A
+                        grid_cell_row_pos: 3
+                        grid_cell_column_pos: 0
+                        grid_cell_x_align: START
+                        grid_cell_y_align: CENTER
+
+                    - dropdown:
+                        id: night_mode_end_dropdown
+                        width: 120
+                        grid_cell_row_pos: 3
+                        grid_cell_column_pos: 1
+                        grid_cell_x_align: START
+                        grid_cell_y_align: CENTER
+                        options:
+                          - "00:00"
+                          - "01:00"
+                          - "02:00"
+                          - "03:00"
+                          - "04:00"
+                          - "05:00"
+                          - "06:00"
+                          - "07:00"
+                          - "08:00"
+                          - "09:00"
+                          - "10:00"
+                          - "11:00"
+                          - "12:00"
+                          - "13:00"
+                          - "14:00"
+                          - "15:00"
+                          - "16:00"
+                          - "17:00"
+                          - "18:00"
+                          - "19:00"
+                          - "20:00"
+                          - "21:00"
+                          - "22:00"
+                          - "23:00"
+                        selected_index: 7  # Default: 07:00
+                        on_value:
+                          - globals.set:
+                              id: night_mode_end_hour
+                              value: !lambda 'return (int)x;'
+                          - script.execute: update_screen_state
+
+                    # ---- Cover pre-open position (row 4) ----
                     # Writes to input_number.master_bedroom_cover_preopen_position.
-                    - obj:
-                        width: 100%
-                        height: 40
-                        bg_opa: TRANSP
-                        border_width: 0
-                        pad_all: 0
-                        scrollable: false
-                        scrollbar_mode: "off"
-                        layout:
-                          type: FLEX
-                          flex_flow: ROW
-                          flex_align_cross: CENTER
-                          pad_column: 10
-                        widgets:
-                          - label:
-                              text: "Pre-open %:"
-                              width: 130
-                              text_font: montserrat_16
-                              text_color: 0x0B0A0A
-                          - dropdown:
-                              id: preopen_dropdown
-                              width: 100
-                              options:
-                                - "0%"
-                                - "5%"
-                                - "10%"
-                                - "15%"
-                                - "20%"
-                                - "25%"
-                                - "30%"
-                                - "40%"
-                                - "50%"
-                              selected_index: 2  # Default: 10%
-                              on_value:
-                                - homeassistant.action:
-                                    action: input_number.set_value
-                                    data:
-                                      entity_id: input_number.master_bedroom_cover_preopen_position
-                                      value: !lambda |-
-                                        int vals[] = {0, 5, 10, 15, 20, 25, 30, 40, 50};
-                                        return vals[(int)x];
+                    - label:
+                        text: "Pre-open %:"
+                        text_font: montserrat_16
+                        text_color: 0x0B0A0A
+                        grid_cell_row_pos: 4
+                        grid_cell_column_pos: 0
+                        grid_cell_x_align: START
+                        grid_cell_y_align: CENTER
 
-                    # ---- Cover door-open close position row ----
+                    - dropdown:
+                        id: preopen_dropdown
+                        width: 120
+                        grid_cell_row_pos: 4
+                        grid_cell_column_pos: 1
+                        grid_cell_x_align: START
+                        grid_cell_y_align: CENTER
+                        options:
+                          - "0%"
+                          - "5%"
+                          - "10%"
+                          - "15%"
+                          - "20%"
+                          - "25%"
+                          - "30%"
+                          - "40%"
+                          - "50%"
+                        selected_index: 2  # Default: 10%
+                        on_value:
+                          - homeassistant.action:
+                              action: input_number.set_value
+                              data:
+                                entity_id: input_number.master_bedroom_cover_preopen_position
+                                value: !lambda |-
+                                  int vals[] = {0, 5, 10, 15, 20, 25, 30, 40, 50};
+                                  return vals[(int)x];
+
+                    # ---- Cover door-open close position (row 5) ----
                     # Writes to input_number.master_bedroom_cover_door_open_position.
-                    - obj:
-                        width: 100%
-                        height: 40
-                        bg_opa: TRANSP
-                        border_width: 0
-                        pad_all: 0
-                        scrollable: false
-                        scrollbar_mode: "off"
-                        layout:
-                          type: FLEX
-                          flex_flow: ROW
-                          flex_align_cross: CENTER
-                          pad_column: 10
-                        widgets:
-                          - label:
-                              text: "Door-open %:"
-                              width: 130
-                              text_font: montserrat_16
-                              text_color: 0x0B0A0A
-                          - dropdown:
-                              id: dooropen_dropdown
-                              width: 100
-                              options:
-                                - "0%"
-                                - "20%"
-                                - "40%"
-                                - "50%"
-                                - "60%"
-                                - "70%"
-                                - "80%"
-                                - "100%"
-                              selected_index: 4  # Default: 60%
-                              on_value:
-                                - homeassistant.action:
-                                    action: input_number.set_value
-                                    data:
-                                      entity_id: input_number.master_bedroom_cover_door_open_position
-                                      value: !lambda |-
-                                        int vals[] = {0, 20, 40, 50, 60, 70, 80, 100};
-                                        return vals[(int)x];
+                    - label:
+                        text: "Door-open %:"
+                        text_font: montserrat_16
+                        text_color: 0x0B0A0A
+                        grid_cell_row_pos: 5
+                        grid_cell_column_pos: 0
+                        grid_cell_x_align: START
+                        grid_cell_y_align: CENTER
+
+                    - dropdown:
+                        id: dooropen_dropdown
+                        width: 120
+                        grid_cell_row_pos: 5
+                        grid_cell_column_pos: 1
+                        grid_cell_x_align: START
+                        grid_cell_y_align: CENTER
+                        options:
+                          - "0%"
+                          - "20%"
+                          - "40%"
+                          - "50%"
+                          - "60%"
+                          - "70%"
+                          - "80%"
+                          - "100%"
+                        selected_index: 4  # Default: 60%
+                        on_value:
+                          - homeassistant.action:
+                              action: input_number.set_value
+                              data:
+                                entity_id: input_number.master_bedroom_cover_door_open_position
+                                value: !lambda |-
+                                  int vals[] = {0, 20, 40, 50, 60, 70, 80, 100};
+                                  return vals[(int)x];
+
+                    # ---- ESPHome version footer (row 6, spans both columns) ----
+                    # ESPHOME_VERSION is a compile-time string from
+                    # esphome/core/defines.h, so this shows the version the
+                    # firmware was actually built with - no HA entity or
+                    # extra text_sensor needed.
+                    - label:
+                        id: lbl_esphome_version
+                        text: !lambda 'return std::string("ESPHome ") + ESPHOME_VERSION;'
+                        text_font: montserrat_12
+                        text_color: 0x999999
+                        grid_cell_row_pos: 6
+                        grid_cell_column_pos: 0
+                        grid_cell_column_span: 2
+                        grid_cell_x_align: START
+                        grid_cell_y_align: END
   
   # =========================
   # STYLE DEFINITIONS
