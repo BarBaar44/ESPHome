@@ -79,6 +79,22 @@ font:
 # LVGL
 # =========================
 lvgl:
+  # Panel is mounted upside down, so the whole UI is rotated 180 degrees.
+  #
+  # This MUST live here and not on the display: LVGL takes over the draw
+  # path when it drives a display, so rpi_dpi_rgb rejects a rotation key
+  # with "use of 'rotation' in the display config is not compatible with
+  # LVGL, please set rotation in the LVGL config instead".
+  #
+  # LVGL applies the same rotation to incoming touchscreen coordinates,
+  # so the gt911 in LVGL/displayconfig.yml needs no transform block - one
+  # would double-apply and mirror touch back the wrong way.
+  #
+  # 180 keeps the 800x480 geometry (only 90/270 swap the axes), so every
+  # layout below - including the manual x/y offsets in the Light,
+  # Ventilator and Climate cards - is unaffected.
+  rotation: 180
+
   pages:
     - id: main_page
       bg_color: 0x0B0A0A
