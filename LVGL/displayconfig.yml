@@ -10,7 +10,13 @@ light:
     output: gpio_backlight_pwm
     name: ${device_name} Display Backlight
     id: back_light
-    restore_mode: ALWAYS_OFF  # Screen off by default; turned on by motion or ceiling light
+    # Screen ON after every boot / power cycle. The on_boot automation in
+    # LVGL/Masterbedroom/lvglsensors.yml then runs wake_screen, which keeps
+    # it on for screen_timeout seconds and afterwards hands control back to
+    # update_screen_state (motion / ceiling light / night-mode rules).
+    # Previously this was ALWAYS_OFF, which left the panel dark after a
+    # reboot until motion or the ceiling light happened to trigger it.
+    restore_mode: ALWAYS_ON
 
 display:
   - platform: rpi_dpi_rgb
