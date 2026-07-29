@@ -940,7 +940,7 @@ lvgl:
                                     id: climate_setpoint_value
                                     value: !lambda |-
                                       float new_value = id(climate_setpoint_value) - 0.5;
-                                      if (new_value < 15.0) new_value = 15.0;
+                                      if (new_value < 10.0) new_value = 10.0;
                                       return new_value;
                                 - lvgl.label.update:
                                     id: climate_setpoint_label
