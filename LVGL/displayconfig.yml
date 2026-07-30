@@ -19,8 +19,19 @@ light:
     restore_mode: ALWAYS_ON
 
 display:
-  - platform: rpi_dpi_rgb
+    # Migrated from the deprecated 'rpi_dpi_rgb' platform.
+    #
+    # 'mipi_rgb' is model-driven, so 'model' is now required. RPI is the
+    # model registered with an empty init sequence, which makes it the
+    # direct equivalent of the old rpi_dpi_rgb component: no SPI bus, no
+    # cs_pin / dc_pin and no init sequence. The other mipi_rgb models
+    # (ST7701S, Guition, Sunton, Waveshare) do need an spi: section - RPI
+    # does not, which is why none is defined here.
+  - platform: mipi_rgb
+    model: RPI
     id: main_display
+    # Default flipped from BGR (rpi_dpi_rgb) to RGB (mipi_rgb), so this is
+    # kept explicit to stay independent of the platform default.
     color_order: RGB
     invert_colors: True
     update_interval: never
@@ -33,6 +44,24 @@ display:
     vsync_pin: 41
     pclk_pin: 0
     pclk_frequency: 12MHz
+    # These six were implicit defaults under rpi_dpi_rgb, which hardcoded
+    # them in its schema. mipi_rgb looks them up on the model instead and
+    # the RPI model defines no defaults, so leaving them out makes them
+    # validate to 0 - resulting in tearing or a rolling / shifted image.
+    # Set explicitly to the previous rpi_dpi_rgb defaults so the pixel
+    # timing is identical to what was running before.
+    hsync_pulse_width: 10
+    hsync_back_porch: 10
+    hsync_front_porch: 20
+    vsync_pulse_width: 10
+    vsync_back_porch: 10
+    vsync_front_porch: 10
+    # Pin order is unchanged on purpose. rpi_dpi_rgb ordered the bus
+    # conditionally on color_order (red->green->blue for BGR,
+    # blue->green->red otherwise); mipi_rgb always uses blue->green->red.
+    # Because color_order is RGB, the old code already took the
+    # blue->green->red branch, so the resulting bus order - and therefore
+    # the colours - stay the same.
     data_pins:
       red:
         - 45 #r1
