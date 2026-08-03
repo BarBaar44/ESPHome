@@ -1,0 +1,19 @@
+# CI validation harness for sonoff/ifan03.yml — see .ci/README.md
+# on_boot_light must be a valid `light` restore_mode enum value.
+# spare_button_light_entity just needs to be a plausible entity_id
+# string for the homeassistant action data — it's not required to
+# exist for `esphome config` to validate successfully.
+substitutions:
+  device_name: "sonoff-ifan03-ci"
+  friendly_name: "iFan03 CI"
+  device_description: "CI validation harness"
+  on_boot_light: "RESTORE_DEFAULT_OFF"
+  spare_button_light_entity: "light.ci_test_light"
+  WIFI_passwd: "ci-dummy-password"
+  fallback_passwd: "ci-dummy-password"
+
+api:
+
+packages:
+  wifi: !include ../generic/wifi.yml
+  device: !include ../sonoff/ifan03.yml
