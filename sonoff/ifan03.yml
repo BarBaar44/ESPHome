@@ -28,6 +28,65 @@ button:
       - delay: 50ms
       - switch.turn_off: buzzer_switch
 
+  # =========================
+  # FAN SPEED BUTTONS
+  #
+  # Named-speed entry points for external controllers (the LVGL panel in
+  # LVGL/Masterbedroom/lvglconfig.yml). These exist so nothing outside
+  # this device has to express a fan speed as a percentage.
+  #
+  # Why: HA's ESPHome fan integration turns a percentage into a speed with
+  #   speed_level = ceil(percentage_to_ranged_value((1, speed_count), pct))
+  # With speed_count: 3 the medium/high boundary is 66.67, so
+  # fan.set_percentage with 67 yields ceil(2.01) = 3 and the fan runs on
+  # HIGH when MID was requested. Sending 66 gives ceil(1.98) = 2 and is
+  # correct, but leaves a one-unit margin to a float boundary in a config
+  # where the value looks arbitrary.
+  #
+  # These buttons take percentages out of the loop: the caller asks for a
+  # speed by name and the fan's on_speed_set lambda below drives the
+  # relays from an integer. This is the same path the RF remote buttons
+  # have always used, which is why the physical remote's MEDIUM button
+  # never showed this bug.
+  #
+  # Deliberately buttons and not a select: buttons are stateless, so they
+  # add no second source of truth alongside the fan_speed_state
+  # text_sensor that the display already uses to colour its fan buttons.
+  # =========================
+  - platform: template
+    name: "$friendly_name Fan Set Off"
+    id: fan_set_off
+    icon: "mdi:fan-off"
+    on_press:
+      - fan.turn_off: ifan03_fan
+
+  - platform: template
+    name: "$friendly_name Fan Set Low"
+    id: fan_set_low
+    icon: "mdi:fan-speed-1"
+    on_press:
+      - fan.turn_on:
+          id: ifan03_fan
+          speed: 1
+
+  - platform: template
+    name: "$friendly_name Fan Set Mid"
+    id: fan_set_mid
+    icon: "mdi:fan-speed-2"
+    on_press:
+      - fan.turn_on:
+          id: ifan03_fan
+          speed: 2
+
+  - platform: template
+    name: "$friendly_name Fan Set High"
+    id: fan_set_high
+    icon: "mdi:fan-speed-3"
+    on_press:
+      - fan.turn_on:
+          id: ifan03_fan
+          speed: 3
+
 output:
   - platform: gpio
     id: light_relay
@@ -204,8 +263,8 @@ binary_sensor:
       code: [-207, 104, -103, 104, -104, 103, -104, 207, -104, 103, -104, 103, -104, 104, -103, 104, -103, 104, -104, 107, -721, 105, -206, 207, -518, 105, -931, 104, -104, 103, -725, 104, -104, 103, -725, 104, -104, 103, -207, 104, -414]
     on_release:
       then:
-        - homeassistant.service:
-            service: light.toggle
+        - homeassistant.action:
+            action: light.toggle
             data:
               entity_id: $spare_button_light_entity
         - button.press: buzzer
