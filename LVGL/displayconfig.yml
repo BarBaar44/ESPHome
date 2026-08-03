@@ -36,6 +36,13 @@ display:
     invert_colors: True
     update_interval: never
     auto_clear_enabled: false # takes 2.8 seconds to clear the display
+    # rpi_dpi_rgb had no draw-rounding concept (effectively 1). mipi_rgb
+    # defaults it to 2, which rounds redraw areas to even pixel boundaries
+    # and shifted the rendered position of the fan buttons relative to
+    # their logical hit boxes - a tap on the visible MID button resolved
+    # to HIGH's overlapping box. Pinning it back to 1 restores the exact
+    # geometry the manual x/width offsets in lvglconfig.yml were tuned for.
+    draw_rounding: 1
     dimensions:
       width: 800
       height: 480
