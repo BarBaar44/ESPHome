@@ -3,10 +3,14 @@
 # it's only missing wifi:.
 substitutions:
   device_name: "shelly-one-ci"
+  friendly_name: "Shelly One CI"
   device_description: "CI validation harness"
   WIFI_passwd: "ci-dummy-password"
   fallback_passwd: "ci-dummy-password"
 
 packages:
+  # wifi.yml's on_time_sync references sensor_uptime_timestamp, which
+  # only exists once generic_sensors.yml is also included.
   wifi: !include ../generic/wifi.yml
+  generic_sensors: !include ../generic/generic_sensors.yml
   device: !include ../shelly/one.yml
