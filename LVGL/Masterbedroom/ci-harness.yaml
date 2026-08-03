@@ -1,0 +1,52 @@
+# CI validation harness for the LVGL Master Bedroom panel.
+#
+# Unlike every other harness (which lives in .ci/), this one lives
+# here, inside LVGL/Masterbedroom/, because ESPHome resolves local
+# font `file:` paths relative to the top-level config file being
+# validated - not relative to whichever packages:-included file
+# actually declares the font. lvglconfig.yml expects
+# fonts/materialdesignicons-webfont.ttf to resolve relative to this
+# directory, so the harness has to sit here too.
+#
+# KNOWN GAP: fonts/materialdesignicons-webfont.ttf does not exist in
+# this repo yet. Until it's added (binary upload via GitHub web UI),
+# `esphome config` will fail on this harness with a missing-file
+# error - that's expected and not a sign anything else is broken.
+substitutions:
+  device_name: "lvgl-panel-ci"
+
+esphome:
+  name: ${device_name}
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+# 800x480 RGB565 framebuffer (plus LVGL's own buffers) is well beyond
+# the ESP32-S3's internal SRAM - external PSRAM is required in
+# practice. Best-effort guess; adjust if CI says otherwise.
+psram:
+  mode: octal
+  speed: 80MHz
+
+api:
+
+# Read via id(...) in lvglsensors.yml / lvglconfig.yml but never
+# declared in any LVGL/** file - these live only in the real local
+# per-device main config, same story as the undeclared substitutions.
+globals:
+  - id: screen_timeout
+    type: int
+    restore_value: yes
+    initial_value: '300'  # 5 min, matches the dropdown's default index
+
+  - id: climate_setpoint_value
+    type: float
+    restore_value: no
+    initial_value: '21.0'
+
+packages:
+  display: !include ../displayconfig.yml
+  panel: !include lvglconfig.yml
+  sensors: !include lvglsensors.yml
