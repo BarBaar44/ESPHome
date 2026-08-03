@@ -155,6 +155,11 @@ script:
               return !is_night;
           then:
             - light.turn_on: back_light
+            # Apply the ambient-light-based brightness now that the
+            # screen is on. Safe to call here: apply_brightness only ever
+            # adjusts brightness while back_light is on, it never turns it
+            # on or off, so it can't override the decision just made.
+            - script.execute: apply_brightness
           else:
             - light.turn_off: back_light
 
@@ -170,8 +175,49 @@ script:
     mode: restart
     then:
       - light.turn_on: back_light
+      # Set brightness to match the current room illuminance as soon as
+      # the screen comes on, rather than waiting for the next lux change.
+      - script.execute: apply_brightness
       - delay: !lambda 'return id(screen_timeout) * 1000;'
       - script.execute: update_screen_state
+
+  # Ambient-light-driven backlight brightness.
+  #
+  # Maps the room illuminance (sensor.multisensor2_room_bart_illuminance,
+  # mirrored into ha_room_illuminance) to a backlight brightness with a
+  # linear ramp between two clamps:
+  #   <= 5 lux   -> 20% (dim floor, comfortable in a dark bedroom)
+  #   >= 200 lux -> 100% (full brightness in a well-lit room)
+  #   in between -> linear interpolation
+  #
+  # IMPORTANT: this only adjusts brightness while back_light is already
+  # ON. It never turns the backlight on or off, so update_screen_state
+  # remains the single owner of the on/off decision (motion / ceiling
+  # light / night-mode). If the screen is off, this is a no-op and the
+  # brightness is instead applied the next time wake_screen /
+  # update_screen_state turns it on.
+  - id: apply_brightness
+    mode: restart
+    then:
+      - if:
+          condition:
+            light.is_on: back_light
+          then:
+            - light.turn_on:
+                id: back_light
+                brightness: !lambda |-
+                  // If the sensor hasn't reported yet (NaN), leave the
+                  // backlight at full brightness rather than guessing.
+                  float lux = id(ha_room_illuminance).state;
+                  if (isnan(lux)) return 1.0f;
+                  const float lux_min = 5.0f;    // at/below this -> floor
+                  const float lux_max = 200.0f;  // at/above this -> ceiling
+                  const float b_min = 0.20f;     // dim floor (20%)
+                  const float b_max = 1.00f;     // full (100%)
+                  if (lux <= lux_min) return b_min;
+                  if (lux >= lux_max) return b_max;
+                  float frac = (lux - lux_min) / (lux_max - lux_min);
+                  return b_min + frac * (b_max - b_min);
 
   # Failsafe for the cover position slider: if the cover never reports a
   # current_position matching the requested target (e.g. it stalls, gets
@@ -628,6 +674,16 @@ binary_sensor:
 # SENSORS FROM HOME ASSISTANT
 # =========================
 sensor:
+  # Room illuminance (lux) from the HA multisensor. Drives the
+  # ambient-light backlight brightness via apply_brightness. See that
+  # script for the lux -> brightness mapping and the on/off-safety note.
+  - platform: homeassistant
+    id: ha_room_illuminance
+    entity_id: sensor.multisensor2_room_bart_illuminance
+    on_value:
+      then:
+        - script.execute: apply_brightness
+
   # Current temperature (Now)
   - platform: homeassistant
     id: ha_weather_temp_now
