@@ -18,5 +18,8 @@ esp8266:
 api:
 
 packages:
+  # wifi.yml's on_time_sync references sensor_uptime_timestamp, which
+  # only exists once generic_sensors.yml is also included.
   wifi: !include ../generic/wifi.yml
+  generic_sensors: !include ../generic/generic_sensors.yml
   device: !include ../DBE/DBEmain.yml
