@@ -92,5 +92,7 @@ touchscreen:
   platform: gt911
   on_touch:
     - lambda: |-
-        ESP_LOGI("touch", "x=%d y=%d", touch.x, touch.y);
+        ESP_LOGI("touch", "raw=(%d,%d) calc=(%d,%d) disp=%dx%d",
+                 touch.x_raw, touch.y_raw, touch.x, touch.y,
+                 id(main_display).get_width(), id(main_display).get_height());
     - script.execute: wake_screen
