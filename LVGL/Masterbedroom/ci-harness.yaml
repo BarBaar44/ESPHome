@@ -1,0 +1,56 @@
+# CI validation harness for the LVGL Master Bedroom panel.
+#
+# Unlike every other harness (which lives in .ci/), this one lives
+# here, inside LVGL/Masterbedroom/, because ESPHome resolves local
+# font `file:` paths relative to the top-level config file being
+# validated - not relative to whichever packages:-included file
+# actually declares the font. lvglconfig.yml expects
+# fonts/materialdesignicons-webfont.ttf to resolve relative to this
+# directory, so the harness has to sit here too.
+substitutions:
+  device_name: "lvgl-panel-ci"
+  friendly_name: "LVGL Panel CI"
+  WIFI_passwd: "ci-dummy-password"
+  fallback_passwd: "ci-dummy-password"
+
+esphome:
+  name: ${device_name}
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+# 800x480 RGB565 framebuffer (plus LVGL's own buffers) is well beyond
+# the ESP32-S3's internal SRAM - external PSRAM is required in
+# practice. Best-effort guess; adjust if CI says otherwise.
+psram:
+  mode: octal
+  speed: 80MHz
+
+api:
+
+# Read via id(...) in lvglsensors.yml / lvglconfig.yml but never
+# declared in any LVGL/** file - these live only in the real local
+# per-device main config, same story as the undeclared substitutions.
+globals:
+  - id: screen_timeout
+    type: int
+    restore_value: yes
+    initial_value: '300'  # 5 min, matches the dropdown's default index
+
+  - id: climate_setpoint_value
+    type: float
+    restore_value: no
+    initial_value: '21.0'
+
+packages:
+  # Provides wifi.connected (used by update_connectivity_icons) and
+  # time_homeassistant (used by update_screen_state). Its own
+  # on_time_sync trigger references sensor_uptime_timestamp, which
+  # only exists once generic_sensors.yml is also included below.
+  wifi: !include ../../generic/wifi.yml
+  generic_sensors: !include ../../generic/generic_sensors.yml
+  display: !include ../displayconfig.yml
+  panel: !include lvglconfig.yml
+  sensors: !include lvglsensors.yml

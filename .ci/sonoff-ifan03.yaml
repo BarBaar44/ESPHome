@@ -1,0 +1,26 @@
+# CI validation harness for sonoff/ifan03.yml — see .ci/README.md
+# on_boot_light must be a valid `light` restore_mode enum value.
+# spare_button_light_entity just needs to be a plausible entity_id
+# string for the homeassistant action data — it's not required to
+# exist for `esphome config` to validate successfully.
+substitutions:
+  # Kept short: wifi.yml builds the fallback AP SSID as
+  # "${device_name} Fallback Hotspot" (17 extra chars), and WiFi SSIDs
+  # are capped at 32 chars. "sonoff-ifan03-ci" (16 chars) pushed the
+  # combined SSID to 33 and failed validation.
+  device_name: "ifan03-ci"
+  friendly_name: "iFan03 CI"
+  device_description: "CI validation harness"
+  on_boot_light: "RESTORE_DEFAULT_OFF"
+  spare_button_light_entity: "light.ci_test_light"
+  WIFI_passwd: "ci-dummy-password"
+  fallback_passwd: "ci-dummy-password"
+
+api:
+
+packages:
+  # wifi.yml's on_time_sync references sensor_uptime_timestamp, which
+  # only exists once generic_sensors.yml is also included.
+  wifi: !include ../generic/wifi.yml
+  generic_sensors: !include ../generic/generic_sensors.yml
+  device: !include ../sonoff/ifan03.yml
