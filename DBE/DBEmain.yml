@@ -105,6 +105,7 @@ number:
     step: 1
     optimistic: true
     restore_value: true
+    initial_value: 0
 
 ######################################################
 # Interval trigger
@@ -127,7 +128,11 @@ script:
           // ==============================
           if (strcmp(id(fan_mode).current_option().c_str(), "MANUAL") == 0) {
             float manual = id(manual_fanspeed).state;
-            id(fanspeed) = (manual < 1.0f) ? 0.0f : manual;
+            if (!isfinite(manual)) {
+              id(fanspeed) = 0.0f;
+            } else {
+              id(fanspeed) = (manual < 1.0f) ? 0.0f : manual;
+            }
             return;
           }
 
