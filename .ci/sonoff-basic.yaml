@@ -1,0 +1,12 @@
+# CI validation harness for sonoff/basic.yml — see .ci/README.md
+substitutions:
+  device_name: "sonoff-basic-ci"
+  device_description: "CI validation harness"
+  WIFI_passwd: "ci-dummy-password"
+  fallback_passwd: "ci-dummy-password"
+
+api:
+
+packages:
+  wifi: !include ../generic/wifi.yml
+  device: !include ../sonoff/basic.yml
