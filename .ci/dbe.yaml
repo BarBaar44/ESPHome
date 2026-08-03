@@ -1,0 +1,25 @@
+# CI validation harness for DBE/DBEmain.yml — see .ci/README.md
+substitutions:
+  device_name: "dbe-ci"
+  friendly_name: "DBE CI"
+  device_description: "CI validation harness"
+  dallas_1_ID: "0x1234567890ABCDEF"
+  dallas_2_ID: "0xFEDCBA0987654321"
+  WIFI_passwd: "ci-dummy-password"
+  fallback_passwd: "ci-dummy-password"
+
+esphome:
+  name: ${device_name}
+  comment: '${device_description}'
+
+esp8266:
+  board: d1_mini
+
+api:
+
+packages:
+  # wifi.yml's on_time_sync references sensor_uptime_timestamp, which
+  # only exists once generic_sensors.yml is also included.
+  wifi: !include ../generic/wifi.yml
+  generic_sensors: !include ../generic/generic_sensors.yml
+  device: !include ../DBE/DBEmain.yml

@@ -9,22 +9,25 @@ This repository contains ESPHome configuration files for various devices integra
 ```
 ESPHome/
 ├── DBE/
-│   └── DBEmain.yml             # Main config for the DBE device
+│   └── DBEmain.yml               # Temp-differential fan controller (dual Dallas sensors + hard-off relay)
 ├── LVGL/
-│   └── display.yaml            # LVGL touchscreen display (ESP32-S3, 800x480)
+│   ├── displayconfig.yml         # Shared display/touch driver config (ESP32-S3, 800x480 mipi_rgb, GT911)
+│   └── Masterbedroom/
+│       ├── lvglconfig.yml        # Master Bedroom control panel UI (widgets, pages, actions)
+│       └── lvglsensors.yml       # Sensors/scripts backing the panel (brightness, screen state, etc.)
 ├── bluetooth-proxy/
-│   └── proxy.yml               # Bluetooth proxy config
+│   └── proxy.yml                 # Bluetooth proxy config
 ├── generic/
-│   ├── generic_sensors.yml     # Generic reusable sensor definitions
-│   ├── mqtt.yml                # MQTT configuration
-│   ├── restartbutton.yml       # Restart button component
-│   └── wifi.yml                # WiFi configuration (incl. fallback AP)
+│   ├── generic_sensors.yml       # Generic reusable sensor definitions
+│   ├── mqtt.yml                  # MQTT configuration
+│   ├── restartbutton.yml         # Restart button component
+│   └── wifi.yml                  # WiFi configuration (incl. fallback AP)
 ├── shelly/
-│   ├── one.yml                 # Shelly 1 switch config
-│   └── plug_s.yml              # Shelly Plug S config with power monitoring
+│   ├── one.yml                   # Shelly 1 switch config
+│   └── plug_s.yml                # Shelly Plug S config with power monitoring + safety cutoffs
 └── sonoff/
-    ├── basic.yml               # Sonoff Basic switch config
-    └── ifan03.yml              # Sonoff iFan03 fan + light controller
+    ├── basic.yml                 # Sonoff Basic switch config
+    └── ifan03.yml                # Sonoff iFan03 fan + light controller
 ```
 
 ---
@@ -34,14 +37,16 @@ ESPHome/
 ### 🔵 `DBE/`
 | File | Description |
 |------|-------------|
-| `DBEmain.yml` | Main ESPHome configuration for the DBE (custom) device, integrated with Home Assistant. |
+| `DBEmain.yml` | Temperature-differential fan controller for the DBE (custom) device. Two Dallas temp sensors feed a hysteresis + exponential PWM curve that drives the fan speed, backed by a physical relay as a hard power cutoff (tied to the fan's on/off state) rather than relying on PWM duty alone. Supports AUTO and MANUAL (HA-driven) modes. |
 
 ---
 
 ### 🖥️ `LVGL/`
 | File | Description |
 |------|-------------|
-| `display.yaml` | Full LVGL-based touchscreen UI for a **Master Bedroom Control Panel** running on an **ESP32-S3** with an 800×480 RGB display. Features: lighting control (main + left/right bed lights), fan speed (OFF/LOW/MID/HIGH), cover/blind control with open/close scheduling, weather widget (OpenWeatherMap), and climate control (thermostat setpoint, Eco/Warm/Off modes). Syncs all states bidirectionally with Home Assistant. |
+| `displayconfig.yml` | Shared display + touch driver config for the **Master Bedroom Control Panel**: **ESP32-S3**, 800×480 RGB panel via `mipi_rgb`, GT911 touch controller (I2C). |
+| `Masterbedroom/lvglconfig.yml` | Full LVGL UI: lighting control (main + left/right bed lights), fan speed (OFF/LOW/MID/HIGH), cover/blind control with open/close scheduling, weather widget (OpenWeatherMap), and climate control (thermostat setpoint, Eco/Warm/Off modes). Syncs all states bidirectionally with Home Assistant. |
+| `Masterbedroom/lvglsensors.yml` | Supporting sensors and scripts for the panel: screen wake/timeout logic, backlight brightness control, and related state tracking. |
 
 ---
 
@@ -69,8 +74,8 @@ Configurations for Shelly devices flashed with ESPHome.
 
 | File | Description |
 |------|-------------|
-| `one.yml` | ESPHome config for the **Shelly 1** — a single-channel relay switch. |
-| `plug_s.yml` | ESPHome config for the **Shelly Plug S** — a smart plug with power/voltage/current monitoring. |
+| `one.yml` | ESPHome config for the **Shelly 1** — a single-channel relay switch with multi-click (single/double/long press) detached button handling and a wifi/API-down fallback. |
+| `plug_s.yml` | ESPHome config for the **Shelly Plug S** — a smart plug with power/voltage/current monitoring, NTC temperature sensing, and automatic relay cutoff (with a one-shot HA notification) if temperature, current, or power exceed configured limits. |
 
 ---
 
@@ -80,7 +85,7 @@ Configurations for Sonoff devices flashed with ESPHome.
 | File | Description |
 |------|-------------|
 | `basic.yml` | ESPHome config for the **Sonoff Basic** — a simple single-channel relay switch. |
-| `ifan03.yml` | ESPHome config for the **Sonoff iFan03** — controls both a ceiling fan (multi-speed) and a light, integrated with Home Assistant. |
+| `ifan03.yml` | ESPHome config for the **Sonoff iFan03** — controls both a ceiling fan (3-speed) and a light, integrated with Home Assistant and the original RF remote. Publishes an explicit off/low/mid/high fan state for consumers like the LVGL panel. |
 
 ---
 

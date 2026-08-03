@@ -12,6 +12,20 @@ logger:
 web_server:
   port: 80
 
+globals:
+  - id: temp_alert_sent
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  - id: current_alert_sent
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  - id: power_alert_sent
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+
 binary_sensor:
   - platform: gpio
     pin:
@@ -36,6 +50,7 @@ switch:
   - platform: gpio
     pin: GPIO15
     id: relay
+    restore_mode: ALWAYS_OFF
     icon: "mdi:power-plug"
     name: "${channel_1} switch"
     on_turn_on:
@@ -59,12 +74,23 @@ sensor:
       - above: ${max_temp}
         then:
           - switch.turn_off: relay
-          - homeassistant.service:
-              service: persistent_notification.create
-              data:
-                title: Message from ${device_name}
-              data_template:
-                message: Switch turned off because temperature exceeded ${max_temp}°C
+          - if:
+              condition:
+                lambda: 'return !id(temp_alert_sent);'
+              then:
+                - globals.set:
+                    id: temp_alert_sent
+                    value: 'true'
+                - homeassistant.action:
+                    action: persistent_notification.create
+                    data:
+                      title: Message from ${device_name}
+                      message: Switch turned off because temperature exceeded ${max_temp}°C
+      - below: ${max_temp}
+        then:
+          - globals.set:
+              id: temp_alert_sent
+              value: 'false'
   - platform: resistance
     id: temp_resistance_reading
     sensor: temp_analog_reading
@@ -92,12 +118,23 @@ sensor:
         - above: ${max_current}
           then:
             - switch.turn_off: relay
-            - homeassistant.service:
-                service: persistent_notification.create
-                data:
-                  title: Message from ${device_name}
-                data_template:
-                  message: Switch turned off because current exceeded ${max_current}A
+            - if:
+                condition:
+                  lambda: 'return !id(current_alert_sent);'
+                then:
+                  - globals.set:
+                      id: current_alert_sent
+                      value: 'true'
+                  - homeassistant.action:
+                      action: persistent_notification.create
+                      data:
+                        title: Message from ${device_name}
+                        message: Switch turned off because current exceeded ${max_current}A
+        - below: ${max_current}
+          then:
+            - globals.set:
+                id: current_alert_sent
+                value: 'false'
     voltage:
       name: "${channel_1} voltage"
       unit_of_measurement: "V"
@@ -115,12 +152,23 @@ sensor:
         - above: ${max_power}
           then:
             - switch.turn_off: relay
-            - homeassistant.service:
-                service: persistent_notification.create
-                data:
-                  title: Message from ${device_name}
-                data_template:
-                  message: Switch turned off because power exceeded ${max_power}W
+            - if:
+                condition:
+                  lambda: 'return !id(power_alert_sent);'
+                then:
+                  - globals.set:
+                      id: power_alert_sent
+                      value: 'true'
+                  - homeassistant.action:
+                      action: persistent_notification.create
+                      data:
+                        title: Message from ${device_name}
+                        message: Switch turned off because power exceeded ${max_power}W
+        - below: ${max_power}
+          then:
+            - globals.set:
+                id: power_alert_sent
+                value: 'false'
     update_interval: 10s
 
   - platform: total_daily_energy
@@ -130,4 +178,3 @@ sensor:
       # Multiplication factor from W to kW is 0.001
       - multiply: 0.001
     unit_of_measurement: kWh
-    
