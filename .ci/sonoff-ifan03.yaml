@@ -4,7 +4,11 @@
 # string for the homeassistant action data — it's not required to
 # exist for `esphome config` to validate successfully.
 substitutions:
-  device_name: "sonoff-ifan03-ci"
+  # Kept short: wifi.yml builds the fallback AP SSID as
+  # "${device_name} Fallback Hotspot" (17 extra chars), and WiFi SSIDs
+  # are capped at 32 chars. "sonoff-ifan03-ci" (16 chars) pushed the
+  # combined SSID to 33 and failed validation.
+  device_name: "ifan03-ci"
   friendly_name: "iFan03 CI"
   device_description: "CI validation harness"
   on_boot_light: "RESTORE_DEFAULT_OFF"
