@@ -18,6 +18,40 @@ light:
     # reboot until motion or the ceiling light happened to trigger it.
     restore_mode: ALWAYS_ON
 
+# =========================
+# TEMPORARY - red power LED test
+#
+# Goal: find out whether the red power/status LED on this panel is wired
+# to a GPIO (software-controllable) or hardwired to the 3V3 rail (not
+# controllable at all). GPIO38 is the candidate pin from the Elecrow
+# CrowPanel pinout, but this is UNVERIFIED for this board revision.
+#
+# GPIO38 is safe to poke on ESP32-S3: it is not a strapping pin (0, 3,
+# 45, 46 are) and sits outside the GPIO33-37 range consumed by octal
+# PSRAM, which this board needs for the 800x480 framebuffer. It is also
+# unused everywhere else in this repo - note the gt911 block below
+# declares no interrupt_pin/reset_pin, so nothing else claims it.
+#
+# HOW TO TEST: flash, then toggle "Panel LED test" from Home Assistant.
+#   - LED changes state  -> it IS on GPIO38. Keep this, add
+#                           inverted: true if ALWAYS_OFF leaves it lit,
+#                           and set internal: true to hide it from HA.
+#   - Nothing happens    -> hardwired to the rail. No software fix
+#                           exists; delete this block and use tape or
+#                           desolder the LED.
+#
+# Either way ALWAYS_OFF cannot suppress a brief flash during boot, since
+# the pin floats until ESPHome initialises the switch.
+#
+# DELETE THIS BLOCK once the question is settled.
+# =========================
+switch:
+  - platform: gpio
+    pin: GPIO38
+    name: "Panel LED test"
+    id: panel_led_test
+    restore_mode: ALWAYS_OFF
+
 display:
     # Migrated from the deprecated 'rpi_dpi_rgb' platform.
     #
@@ -36,12 +70,19 @@ display:
     invert_colors: True
     update_interval: never
     auto_clear_enabled: false # takes 2.8 seconds to clear the display
-    # rpi_dpi_rgb had no draw-rounding concept (effectively 1). mipi_rgb
-    # defaults it to 2, which rounds redraw areas to even pixel boundaries
-    # and shifted the rendered position of the fan buttons relative to
-    # their logical hit boxes - a tap on the visible MID button resolved
-    # to HIGH's overlapping box. Pinning it back to 1 restores the exact
-    # geometry the manual x/width offsets in lvglconfig.yml were tuned for.
+    # Kept at 1 purely for parity with the old rpi_dpi_rgb behaviour,
+    # which had no draw-rounding concept (effectively 1). mipi_rgb
+    # defaults it to 2, which rounds redraw areas to even pixel
+    # boundaries and can produce 1px artifacts on a layout tuned with
+    # manual odd x/width offsets like the one in lvglconfig.yml.
+    #
+    # NOTE: an earlier version of this comment claimed draw_rounding was
+    # the cause of the fan MID button triggering HIGH. That was wrong.
+    # The real cause was percentage: "67" in fan_mid_button - HA's
+    # percentage_to_ordered_list_item uses upper bounds 33.33/66.67/100
+    # for a 3-speed fan, so 67 exceeds medium's bound and falls through
+    # to high. Fixed by sending 66. Touch coordinates and widget
+    # geometry were never at fault; do not revisit that theory.
     draw_rounding: 1
     dimensions:
       width: 800
@@ -98,8 +139,4 @@ i2c:
 touchscreen:
   platform: gt911
   on_touch:
-    - lambda: |-
-        ESP_LOGI("touch", "raw=(%d,%d) calc=(%d,%d) disp=%dx%d",
-                 touch.x_raw, touch.y_raw, touch.x, touch.y,
-                 id(main_display).get_width(), id(main_display).get_height());
     - script.execute: wake_screen
