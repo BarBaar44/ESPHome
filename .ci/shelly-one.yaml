@@ -1,0 +1,12 @@
+# CI validation harness for shelly/one.yml — see .ci/README.md
+# one.yml already declares esphome:/esp8266:/logger:/api:/web_server:,
+# it's only missing wifi:.
+substitutions:
+  device_name: "shelly-one-ci"
+  device_description: "CI validation harness"
+  WIFI_passwd: "ci-dummy-password"
+  fallback_passwd: "ci-dummy-password"
+
+packages:
+  wifi: !include ../generic/wifi.yml
+  device: !include ../shelly/one.yml
