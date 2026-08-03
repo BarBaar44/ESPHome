@@ -1,0 +1,24 @@
+# CI validation harness for the generic/ package suite — see .ci/README.md
+# Bundles wifi.yml + mqtt.yml + restartbutton.yml + generic_sensors.yml
+# together since generic_sensors.yml's uptime sensor depends on the
+# time_homeassistant id that wifi.yml declares.
+substitutions:
+  device_name: "generic-ci"
+  friendly_name: "Generic CI"
+  WIFI_passwd: "ci-dummy-password"
+  fallback_passwd: "ci-dummy-password"
+  MQTT_passwd: "ci-dummy-password"
+
+esphome:
+  name: ${device_name}
+
+esp8266:
+  board: d1_mini
+
+api:
+
+packages:
+  wifi: !include ../generic/wifi.yml
+  mqtt: !include ../generic/mqtt.yml
+  restart_button: !include ../generic/restartbutton.yml
+  generic_sensors: !include ../generic/generic_sensors.yml
