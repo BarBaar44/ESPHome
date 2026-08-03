@@ -431,7 +431,7 @@ lvgl:
                                       entity_id: fan.sonoff_ifan_ifan03_masterbedroom_fan
                                       percentage: "33"
 
-                          # MID button (speed 2 -> 67%)
+                          # MID button (speed 2 -> 66%)
                           - button:
                               id: fan_mid_button
                               width: 75
@@ -449,7 +449,7 @@ lvgl:
                                     action: fan.set_percentage
                                     data:
                                       entity_id: fan.sonoff_ifan_ifan03_masterbedroom_fan
-                                      percentage: "67"
+                                      percentage: "66"
 
                           # HIGH button (speed 3 -> 100%)
                           - button:
