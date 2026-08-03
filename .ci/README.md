@@ -39,3 +39,5 @@ safety net, not a correctness proof.
 
 If you add a new package/device file outside `LVGL/`, add a matching
 harness here and list it in the workflow's matrix.
+
+<!-- CI trigger check: this comment can be removed once the workflow is confirmed working. -->
