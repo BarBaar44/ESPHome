@@ -10,6 +10,7 @@ on:
       - 'shelly/**'
       - 'sonoff/**'
       - '.ci/**'
+      - 'LVGL/**'
       - '.github/workflows/validate.yml'
   pull_request:
     paths:
@@ -19,6 +20,7 @@ on:
       - 'shelly/**'
       - 'sonoff/**'
       - '.ci/**'
+      - 'LVGL/**'
       - '.github/workflows/validate.yml'
 
 jobs:
@@ -35,6 +37,7 @@ jobs:
           - .ci/sonoff-basic.yaml
           - .ci/sonoff-ifan03.yaml
           - .ci/generic-sensors.yaml
+          - LVGL/Masterbedroom/ci-harness.yaml
     steps:
       - name: Checkout
         uses: actions/checkout@v4
