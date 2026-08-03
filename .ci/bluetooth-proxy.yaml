@@ -1,0 +1,17 @@
+# CI validation harness for bluetooth-proxy/proxy.yml — see .ci/README.md
+# Note: proxy.yml uses ethernet:, not wifi:, so no wifi.yml package here.
+substitutions:
+  device_name: "btproxy-ci"
+
+esphome:
+  name: ${device_name}
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+api:
+
+packages:
+  device: !include ../bluetooth-proxy/proxy.yml
