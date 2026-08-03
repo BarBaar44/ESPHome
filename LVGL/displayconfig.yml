@@ -91,5 +91,6 @@ i2c:
 touchscreen:
   platform: gt911
   on_touch:
-    # Wake the screen on any touch (keeps it awake for a while via the wake_screen script)
+    - lambda: |-
+        ESP_LOGI("touch", "x=%d y=%d", touch.x, touch.y);
     - script.execute: wake_screen
