@@ -86,7 +86,7 @@ font:
 # meant to be recolored at runtime via image_recolor).
 image:
   - platform: file
-    file: Masterbedroom/icons/bed-king.png
+    file: icons/bed-king.png
     id: img_bed_king
     type: RGB
     transparency: alpha_channel
