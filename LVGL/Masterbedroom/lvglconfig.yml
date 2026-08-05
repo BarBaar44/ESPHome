@@ -83,7 +83,7 @@ font:
 # pressure sensor state - see update_bed_occupancy_icons in
 # lvglsensors.yml.
 #
-# platform: esphome is required from ESPHome 2027.1 onward, which split
+# platform: file is required from ESPHome 2027.1 onward, which split
 # the image: component into multiple platforms (esphome = classic local
 # file/gfonts-style image, as opposed to e.g. an SD-card-backed image
 # platform). Earlier versions accepted a bare `file:` key with no
