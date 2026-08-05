@@ -76,6 +76,29 @@ font:
     bpp: 4
 
 # =========================
+# IMAGES
+# =========================
+# Bed occupancy icon (mdi:bed-king), rendered once and reused on both
+# header bars, split into left/right clipped halves and recolored per
+# pressure sensor state - see update_bed_occupancy_icons in
+# lvglsensors.yml.
+#
+# platform: esphome is required from ESPHome 2027.1 onward, which split
+# the image: component into multiple platforms (esphome = classic local
+# file/gfonts-style image, as opposed to e.g. an SD-card-backed image
+# platform). Earlier versions accepted a bare `file:` key with no
+# platform; 2027.1+ requires the platform to be explicit.
+# type/transparency: PNG with alpha channel, single source colour meant
+# to be recolored at runtime via image_recolor.
+image:
+  - platform: esphome
+    file: icons/bed-king.png
+    id: img_bed_king
+    type: RGB
+    transparency: alpha_channel
+    resize: 24x24
+
+# =========================
 # LVGL
 # =========================
 lvgl:
@@ -121,6 +144,62 @@ lvgl:
                   align: CENTER
                   text_font: montserrat_22
                   text_color: 0xFFFFFF
+
+              # Bed occupancy icon - mdi:bed-king split into left/right
+              # clipped halves, one per pressure sensor. Fixed at the same
+              # LEFT_MID x:50 position on both pages (see second_page
+              # header below), clear of the page-nav chevron on page 2
+              # (which sits at x:5, width 40). White = unoccupied, green =
+              # occupied. Colors driven by update_bed_occupancy_icons (see
+              # lvglsensors.yml).
+              - obj:
+                  id: bed_icon_container
+                  align: LEFT_MID
+                  x: 50
+                  width: 24
+                  height: 24
+                  bg_opa: TRANSP
+                  border_width: 0
+                  pad_all: 0
+                  scrollable: false
+                  scrollbar_mode: "off"
+                  widgets:
+                    - obj:
+                        width: 12
+                        height: 24
+                        align: LEFT_MID
+                        x: 0
+                        bg_opa: TRANSP
+                        border_width: 0
+                        pad_all: 0
+                        scrollable: false
+                        scrollbar_mode: "off"
+                        widgets:
+                          - image:
+                              id: img_bed_left
+                              src: img_bed_king
+                              align: LEFT_MID
+                              x: 0
+                              image_recolor: 0xFFFFFF
+                              image_recolor_opa: COVER
+                    - obj:
+                        width: 12
+                        height: 24
+                        align: LEFT_MID
+                        x: 12
+                        bg_opa: TRANSP
+                        border_width: 0
+                        pad_all: 0
+                        scrollable: false
+                        scrollbar_mode: "off"
+                        widgets:
+                          - image:
+                              id: img_bed_right
+                              src: img_bed_king
+                              align: LEFT_MID
+                              x: -12
+                              image_recolor: 0xFFFFFF
+                              image_recolor_opa: COVER
 
               # WiFi connectivity icon - white wifi glyph while connected,
               # red wifi-alert glyph while disconnected. Driven by
@@ -1115,6 +1194,64 @@ lvgl:
                         text_color: 0xFFFFFF
                   on_click:
                     - lvgl.page.show: main_page
+
+              # Bed occupancy icon (page 2) - same LEFT_MID x:50 position
+              # as on main_page, so it never moves when switching pages.
+              # Sits clear of the back-chevron button above (x:5, width
+              # 40, i.e. spans roughly x=5..45), with a 5px gap before
+              # this icon starts at x:50. Separate widget ids (_2 suffix,
+              # same per-page-id pattern as lbl_wifistatus_2 /
+              # lbl_hastatus_2 above), kept in sync with the main_page
+              # copies by update_bed_occupancy_icons (see
+              # lvglsensors.yml).
+              - obj:
+                  id: bed_icon_container_2
+                  align: LEFT_MID
+                  x: 50
+                  width: 24
+                  height: 24
+                  bg_opa: TRANSP
+                  border_width: 0
+                  pad_all: 0
+                  scrollable: false
+                  scrollbar_mode: "off"
+                  widgets:
+                    - obj:
+                        width: 12
+                        height: 24
+                        align: LEFT_MID
+                        x: 0
+                        bg_opa: TRANSP
+                        border_width: 0
+                        pad_all: 0
+                        scrollable: false
+                        scrollbar_mode: "off"
+                        widgets:
+                          - image:
+                              id: img_bed_left_2
+                              src: img_bed_king
+                              align: LEFT_MID
+                              x: 0
+                              image_recolor: 0xFFFFFF
+                              image_recolor_opa: COVER
+                    - obj:
+                        width: 12
+                        height: 24
+                        align: LEFT_MID
+                        x: 12
+                        bg_opa: TRANSP
+                        border_width: 0
+                        pad_all: 0
+                        scrollable: false
+                        scrollbar_mode: "off"
+                        widgets:
+                          - image:
+                              id: img_bed_right_2
+                              src: img_bed_king
+                              align: LEFT_MID
+                              x: -12
+                              image_recolor: 0xFFFFFF
+                              image_recolor_opa: COVER
 
         # =========================
         # MAIN GRID (second page)
