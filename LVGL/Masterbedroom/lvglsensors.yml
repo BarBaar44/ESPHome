@@ -285,6 +285,26 @@ script:
                 id: lbl_hastatus_2
                 text_color: 0xFF0000
 
+  # Drives the two-half bed occupancy icon (mdi:bed-king, see img_bed_king
+  # in lvglconfig.yml) on both pages' headers: left half tracks the left
+  # pressure sensor, right half tracks the right pressure sensor. White =
+  # unoccupied, green = occupied. Runs on every state change of either
+  # sensor (see binary_sensor: block below).
+  - id: update_bed_occupancy_icons
+    then:
+      - lvgl.image.update:
+          id: img_bed_left
+          image_recolor: !lambda 'return lv_color_hex(id(bed_left_occupied).state ? 0x4CAF50 : 0xFFFFFF);'
+      - lvgl.image.update:
+          id: img_bed_left_2
+          image_recolor: !lambda 'return lv_color_hex(id(bed_left_occupied).state ? 0x4CAF50 : 0xFFFFFF);'
+      - lvgl.image.update:
+          id: img_bed_right
+          image_recolor: !lambda 'return lv_color_hex(id(bed_right_occupied).state ? 0x4CAF50 : 0xFFFFFF);'
+      - lvgl.image.update:
+          id: img_bed_right_2
+          image_recolor: !lambda 'return lv_color_hex(id(bed_right_occupied).state ? 0x4CAF50 : 0xFFFFFF);'
+
 # =========================
 # INTERVALS
 # =========================
@@ -669,6 +689,26 @@ binary_sensor:
                   data:
                     entity_id: input_select.master_bedroom_cover_close_time
                     option: "22:00"
+
+  # Bed occupancy - left side (pressure sensor). Drives img_bed_left /
+  # img_bed_left_2 (mdi:bed-king, left half) in lvglconfig.yml via
+  # update_bed_occupancy_icons above.
+  - platform: homeassistant
+    id: bed_left_occupied
+    entity_id: binary_sensor.pressure_mayo_occupancy
+    on_state:
+      then:
+        - script.execute: update_bed_occupancy_icons
+
+  # Bed occupancy - right side (pressure sensor). Entity was reported
+  # unavailable in HA at time of writing; harmless here - the right icon
+  # half simply stays white (unoccupied) until it starts reporting.
+  - platform: homeassistant
+    id: bed_right_occupied
+    entity_id: binary_sensor.pressure_bart_occupancy
+    on_state:
+      then:
+        - script.execute: update_bed_occupancy_icons
 
 # =========================
 # SENSORS FROM HOME ASSISTANT
