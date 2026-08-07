@@ -1,0 +1,50 @@
+# Blue LED
+status_led:
+  pin:
+    number: GPIO16
+
+# Relay
+switch:
+  - platform: gpio
+    id: switch_relay
+    pin: GPIO5
+
+  # Green LED
+  - platform: gpio
+    pin: GPIO14
+    id: green_led
+ #   inverted: true # start on
+
+  # Switch template to link relay and green LED states
+  # LED is on when relay is off
+  - platform: template
+    id: relay
+    name: "${friendly_name}"
+    icon: mdi:usb-port
+    lambda: |-
+      if (id(switch_relay).state) {
+        return true;
+      } else {
+        return false;
+      }
+    turn_on_action:
+        - switch.turn_on:
+            id: green_led
+        - switch.turn_on:
+            id: switch_relay
+    turn_off_action:
+        - switch.turn_off:
+            id: green_led
+        - switch.turn_off:
+            id: switch_relay
+
+# Button
+binary_sensor:
+  - platform: gpio
+    id: hardware_button
+    pin:
+      number: GPIO04
+      mode: INPUT_PULLUP
+      inverted: True
+    on_press:
+      - switch.toggle: relay
