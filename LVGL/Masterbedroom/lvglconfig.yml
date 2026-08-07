@@ -386,8 +386,22 @@ lvgl:
                     # RF remote has always used - which is why the
                     # physical remote's MEDIUM button never had this bug.
                     #
-                    # The button.* entities must exist before this
-                    # firmware runs, so flash the iFan03 first.
+                    # Entity IDs below (button.master_bedroom_fan_set_*)
+                    # match the short, non-redundant button names now set
+                    # in sonoff/ifan03.yml. Confirmed against a live HA
+                    # instance (Developer Tools > States showed
+                    # button.master_bedroom_sonoff_ifan_ifan03_masterbedroom_fan_set_high
+                    # under the old $friendly_name-based names).
+                    #
+                    # IMPORTANT: HA does NOT rename an entity_id when the
+                    # upstream button `name:` changes - only the displayed
+                    # friendly name updates. After reflashing the iFan03
+                    # with the shortened names, check Developer Tools >
+                    # States for the actual button.* entity_ids. If they
+                    # still show the old long form, either fix the Entity
+                    # ID field per button in Settings > Devices & Services
+                    # > Entities, or delete the old entities so they
+                    # re-register fresh under the new short entity_ids.
                     # =========================
                     - obj:
                         id: ventilator_obj
@@ -430,7 +444,7 @@ lvgl:
                                 - homeassistant.action:
                                     action: button.press
                                     data:
-                                      entity_id: button.sonoff_ifan_ifan03_masterbedroom_fan_set_off
+                                      entity_id: button.master_bedroom_fan_set_off
 
                           # LOW button (speed 1)
                           - button:
@@ -449,7 +463,7 @@ lvgl:
                                 - homeassistant.action:
                                     action: button.press
                                     data:
-                                      entity_id: button.sonoff_ifan_ifan03_masterbedroom_fan_set_low
+                                      entity_id: button.master_bedroom_fan_set_low
 
                           # MID button (speed 2)
                           - button:
@@ -468,7 +482,7 @@ lvgl:
                                 - homeassistant.action:
                                     action: button.press
                                     data:
-                                      entity_id: button.sonoff_ifan_ifan03_masterbedroom_fan_set_mid
+                                      entity_id: button.master_bedroom_fan_set_mid
 
                           # HIGH button (speed 3)
                           - button:
@@ -487,7 +501,7 @@ lvgl:
                                 - homeassistant.action:
                                     action: button.press
                                     data:
-                                      entity_id: button.sonoff_ifan_ifan03_masterbedroom_fan_set_high
+                                      entity_id: button.master_bedroom_fan_set_high
 
 
                     # =========================

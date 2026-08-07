@@ -52,16 +52,32 @@ button:
   # Deliberately buttons and not a select: buttons are stateless, so they
   # add no second source of truth alongside the fan_speed_state
   # text_sensor that the display already uses to colour its fan buttons.
+  #
+  # Names are hardcoded here (not built from $friendly_name) on purpose:
+  # $friendly_name expands to something like "Master Bedroom Sonoff-Ifan
+  # iFan03 Masterbedroom", which produced entity_ids like
+  # button.master_bedroom_sonoff_ifan_ifan03_masterbedroom_fan_set_high -
+  # "Master Bedroom" and "Masterbedroom" both appear, redundantly. Hard-
+  # coding "Master Bedroom Fan Set ..." gives short, non-repeating
+  # entity_ids (button.master_bedroom_fan_set_high, etc.) and matches
+  # what LVGL/Masterbedroom/lvglconfig.yml expects.
+  #
+  # NOTE: renaming an existing button does NOT change its entity_id in
+  # HA's registry - only the displayed friendly name updates. If these
+  # buttons were flashed before under the old $friendly_name-based
+  # names, fix the Entity ID field manually per button in Settings >
+  # Devices & Services > Entities, or delete the old entities so they
+  # re-register fresh under the new name.
   # =========================
   - platform: template
-    name: "$friendly_name Fan Set Off"
+    name: "Master Bedroom Fan Set Off"
     id: fan_set_off
     icon: "mdi:fan-off"
     on_press:
       - fan.turn_off: ifan03_fan
 
   - platform: template
-    name: "$friendly_name Fan Set Low"
+    name: "Master Bedroom Fan Set Low"
     id: fan_set_low
     icon: "mdi:fan-speed-1"
     on_press:
@@ -70,7 +86,7 @@ button:
           speed: 1
 
   - platform: template
-    name: "$friendly_name Fan Set Mid"
+    name: "Master Bedroom Fan Set Mid"
     id: fan_set_mid
     icon: "mdi:fan-speed-2"
     on_press:
@@ -79,7 +95,7 @@ button:
           speed: 2
 
   - platform: template
-    name: "$friendly_name Fan Set High"
+    name: "Master Bedroom Fan Set High"
     id: fan_set_high
     icon: "mdi:fan-speed-3"
     on_press:
