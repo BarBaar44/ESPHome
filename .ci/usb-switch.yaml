@@ -1,0 +1,29 @@
+# CI validation harness for USB-Switch/usbswitch.yaml — see .ci/README.md
+# usbswitch.yaml doesn't declare esphome:/esp8266:/api: itself, so this
+# harness supplies that boilerplate the same way a real device config
+# would, plus the wifi + generic_sensors packages (wifi.yml's
+# on_time_sync references sensor_uptime_timestamp, which only exists
+# once generic_sensors.yml is also included).
+substitutions:
+  device_name: "usb-switch-ci"
+  friendly_name: "USB Switch CI"
+  device_description: "CI validation harness"
+  WIFI_passwd: "ci-dummy-password"
+  fallback_passwd: "ci-dummy-password"
+
+esphome:
+  name: ${device_name}
+  comment: '${device_description}'
+
+esp8266:
+  board: esp01_1m
+
+logger:
+  level: DEBUG
+
+api:
+
+packages:
+  wifi: !include ../generic/wifi.yml
+  generic_sensors: !include ../generic/generic_sensors.yml
+  device: !include ../USB-Switch/usbswitch.yaml
