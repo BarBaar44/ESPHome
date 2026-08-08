@@ -55,7 +55,7 @@ ESPHome/
 ### 🔌 `USB-Switch/`
 | File | Description |
 |------|-------------|
-| `usbswitch.yaml` | Controls a relay-switched USB port. A template switch (exposed to HA as `${friendly_name}`) drives both the relay and a green status LED (LED on = relay on), a separate blue status LED is tied to `status_led:`, and a physical front-panel button toggles the switch via a debounced `binary_sensor` on `GPIO04`. |
+| `usbswitch.yaml` | Controls a [Sinilink XY-WFUSB USB Switch Relay](https://devices.esphome.io/devices/sinilink-xy-wfusb-usb-switch-relay/). A template switch (exposed to HA as `${friendly_name}`) drives both the relay and a green status LED (LED on = relay on), a separate blue status LED is tied to `status_led:`, and a physical front-panel button toggles the switch via a debounced `binary_sensor` on `GPIO04`. |
 
 ---
 
