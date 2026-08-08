@@ -62,7 +62,7 @@ ESPHome/
 ### 📡 `bluetooth-proxy/`
 | File | Description |
 |------|-------------|
-| `proxy.yml` | Configures an ESP device as a **Bluetooth proxy** for Home Assistant, extending BLE range throughout the home. |
+| `proxy.yml` | Configures a [GL-iNet GL-S10](https://devices.esphome.io/devices/gl-inet-gl-s10/) as a **Bluetooth proxy** for Home Assistant, extending BLE range throughout the home. |
 
 ---
 
