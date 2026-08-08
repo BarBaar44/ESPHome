@@ -15,6 +15,8 @@ ESPHome/
 │   └── Masterbedroom/
 │       ├── lvglconfig.yml        # Master Bedroom control panel UI (widgets, pages, actions)
 │       └── lvglsensors.yml       # Sensors/scripts backing the panel (brightness, screen state, etc.)
+├── USB-Switch/
+│   └── usbswitch.yaml             # USB switch config (relay + status/green LEDs + physical button)
 ├── bluetooth-proxy/
 │   └── proxy.yml                 # Bluetooth proxy config
 ├── generic/
@@ -47,6 +49,13 @@ ESPHome/
 | `displayconfig.yml` | Shared display + touch driver config for the **Master Bedroom Control Panel**: **ESP32-S3**, 800×480 RGB panel via `mipi_rgb`, GT911 touch controller (I2C). |
 | `Masterbedroom/lvglconfig.yml` | Full LVGL UI: lighting control (main + left/right bed lights), fan speed (OFF/LOW/MID/HIGH), cover/blind control with open/close scheduling, weather widget (OpenWeatherMap), and climate control (thermostat setpoint, Eco/Warm/Off modes). Syncs all states bidirectionally with Home Assistant. |
 | `Masterbedroom/lvglsensors.yml` | Supporting sensors and scripts for the panel: screen wake/timeout logic, backlight brightness control, and related state tracking. |
+
+---
+
+### 🔌 `USB-Switch/`
+| File | Description |
+|------|-------------|
+| `usbswitch.yaml` | ESPHome config for a **USB power switch**: GPIO relay switching USB power, a blue status LED, a green LED that mirrors the relay state (on when the relay is on), a template switch tying the relay + green LED together as a single controllable entity, and a physical button (`GPIO04`, pull-up, inverted) that toggles the relay locally. |
 
 ---
 
@@ -85,7 +94,7 @@ Configurations for Sonoff devices flashed with ESPHome.
 | File | Description |
 |------|-------------|
 | `basic.yml` | ESPHome config for the **Sonoff Basic** — a simple single-channel relay switch. |
-| `ifan03.yml` | ESPHome config for the **Sonoff iFan03** — controls both a ceiling fan (3-speed) and a light, integrated with Home Assistant and the original RF remote. Publishes an explicit off/low/mid/high fan state for consumers like the LVGL panel. |
+| `ifan03.yml` | ESPHome config for the **Sonoff iFan03** — controls both a ceiling fan (3-speed) and a light, integrated with Home Assistant and the original RF remote. Publishes an explicit off/low/mid/high fan state for consumers like the LVGL panel, and exposes four named-speed template buttons (Off/Low/Mid/High) driven by integer `speed:` values rather than percentage, so the panel and remote can't disagree on which speed is active. |
 
 ---
 
@@ -102,3 +111,4 @@ WiFi network: `BarBaar_IoT`
 ## 📋 Notes
 - Secrets (passwords, API keys) are stored in `secrets.yaml` and not committed to this repository.
 - The ESPHome Fleet add-on is used for scheduled OTA updates on supported devices.
+- CI validation (`.github/workflows/validate.yml`) runs `esphome config` against a set of harness files in `.ci/` (and `LVGL/Masterbedroom/ci-harness.yaml`) on pushes/PRs touching the relevant paths.
