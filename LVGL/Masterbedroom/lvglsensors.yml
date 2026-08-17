@@ -315,13 +315,25 @@ script:
   # caches and re-applying it to the widget needs no round-trip, cannot
   # silently no-op, and works even while HA is briefly unreachable.
   #
+  # ORDERING MATTERS, AND IS THE OTHER REASON THIS SCRIPT EXISTS:
+  # at boot the helpers arrive independently and their handlers fight.
+  # If ha_cover_default lands first it forces the dropdowns to the fixed
+  # 8:30/22:00 defaults, and a later-arriving ha_cover_open_time then
+  # overwrites that with the helper's own value even though Default is
+  # on. Whichever message happens to land last wins. Here the order is
+  # fixed - times first, then the Default override - so the result is
+  # deterministic.
+  #
   # Every write is wrapped in the same mirroring_* guards the normal
   # HA->widget handlers use, so re-applying HA state is not echoed back
   # to HA as a fresh user action (esphome/esphome#17161).
   #
   # Each entity is has_state()-gated: a helper that has never reported
   # (fresh boot, renamed entity, HA restarting) leaves its widget alone
-  # rather than stamping a default over a possibly-correct value.
+  # rather than stamping a default over a possibly-correct value. The
+  # button is also greyed out entirely while the API is down (see
+  # update_connectivity_icons), so in practice this script should never
+  # run with nothing cached - the gating is a second line of defence.
   #
   # NOTE ON SCOPE: only the five HA-backed cover/curtain helpers are
   # synced. Screen timeout and night-mode start/end are device-local
@@ -370,7 +382,9 @@ script:
       # The Default checkbox also controls whether the two time dropdowns
       # are selectable, so restore both the checked state and the
       # enabled/disabled state together - exactly as the ha_cover_default
-      # handler does.
+      # handler does. Applied AFTER the times above so the Default
+      # override wins, which is the deterministic ordering this script
+      # exists to provide.
       - if:
           condition:
             lambda: 'return id(ha_cover_default).has_state();'
@@ -504,11 +518,13 @@ script:
           id: cover_position_pending
           value: 'false'
 
-  # Drives the two header status icons on both pages:
+  # Drives the two header status icons on both pages, and the enabled
+  # state of the Sync button on the Settings page:
   #   - WiFi icon: white wifi glyph while connected to the WiFi network,
   #     red wifi-alert glyph while disconnected.
   #   - HA icon: home-assistant glyph, white while the device has an
   #     active API connection to Home Assistant, red while it doesn't.
+  #   - Sync button: enabled only while the API is connected.
   # Driven periodically by the interval below.
   - id: update_connectivity_icons
     then:
@@ -538,6 +554,19 @@ script:
                 text_color: 0xFF0000
       # Home Assistant API connectivity status - only the color changes
       # here (the glyph stays the same), so lvgl.widget.update is fine.
+      #
+      # The Sync button's enabled state is driven from the same condition
+      # so it can never disagree with the HA status icon sitting a few
+      # centimetres away in the header. sync_settings_from_ha works
+      # entirely from state cached by the homeassistant sensors and is
+      # has_state()-gated throughout, so with the API down it would do
+      # nothing at all - silently, with no feedback. Greying the button
+      # out makes that visible rather than leaving a button that looks
+      # live but isn't.
+      #
+      # The Reboot button is deliberately NOT gated this way: rebooting
+      # needs nothing from HA, and is arguably most useful precisely when
+      # the API connection has gone bad.
       - if:
           condition:
             api.connected:
@@ -548,6 +577,10 @@ script:
             - lvgl.widget.update:
                 id: lbl_hastatus_2
                 text_color: 0xFFFFFF
+            - lvgl.widget.update:
+                id: btn_sync_settings
+                state:
+                  disabled: false
           else:
             - lvgl.widget.update:
                 id: lbl_hastatus
@@ -555,6 +588,10 @@ script:
             - lvgl.widget.update:
                 id: lbl_hastatus_2
                 text_color: 0xFF0000
+            - lvgl.widget.update:
+                id: btn_sync_settings
+                state:
+                  disabled: true
 
   # Drives the two-half bed occupancy icon (mdi:bed-king, see img_bed_king
   # in lvglconfig.yml) on both pages' headers: left half tracks the left
