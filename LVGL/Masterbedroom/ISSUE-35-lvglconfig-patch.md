@@ -8,9 +8,15 @@ and the left-column split.
 **This is a temporary file. Apply the edit below locally and delete this file
 in the same commit.**
 
+> ⚠️ **This patch is REQUIRED, not optional.** `lvglsensors.yml` on this branch
+> now references `btn_sync_settings` (to grey the button out while the HA API
+> is disconnected), so **the config will not compile until these widgets
+> exist**. An earlier version of this doc described the patch as independent
+> follow-up work; that is no longer true.
+
 ## Why it isn't applied directly
 
-The change is roughly 40 inserted lines inside a 70 KB file. The tooling used
+The change is roughly 50 inserted lines inside a 70 KB file. The tooling used
 to open this PR can only write whole files, so applying it would have meant
 re-emitting the other ~69 KB of a working panel config from scratch — a
 silent typo in the fan card or the weather grid would be far more expensive
@@ -51,18 +57,10 @@ Find this block (in the `MAIN GRID (second page)` section):
                     ...
 ```
 
-Replace the four `grid_cell_*` lines on `livingroom_light_obj` with the two
-below, so it becomes row 0 of the new inner grid instead of the cell itself.
-Everything inside its `widgets:` list stays exactly as it is:
-
-```yaml
-                  grid_cell_row_pos: 0
-                  grid_cell_column_pos: 0
-                  grid_cell_x_align: STRETCH
-                  grid_cell_y_align: STRETCH
-```
-
-...and wrap it in this new container, which takes over the outer grid cell:
+`livingroom_light_obj` keeps its `grid_cell_*` keys exactly as they are (it
+becomes row 0 of the new inner grid, which is also `grid_cell_row_pos: 0`).
+Everything inside its `widgets:` list stays untouched. Wrap it in this new
+container, which takes over the outer grid cell:
 
 ```yaml
               # =========================
@@ -99,7 +97,7 @@ Everything inside its `widgets:` list stays exactly as it is:
                   widgets:
 
                     # ---- row 0: the existing living room light card ----
-                    # (unchanged apart from its grid_cell_* keys)
+                    # (unchanged, including its grid_cell_* keys)
                     - obj:
                         id: livingroom_light_obj
                         ...
@@ -139,6 +137,19 @@ This goes in row 1 of `left_col_2`, immediately after `livingroom_light_obj`:
                           # Re-applies HA's curtain time / position helpers
                           # to the Settings widgets; HA always wins. See
                           # sync_settings_from_ha in lvglsensors.yml.
+                          #
+                          # Starts DISABLED: at boot the API is not yet
+                          # connected and there is no cached HA state to
+                          # apply, so the button would do nothing. The 5s
+                          # update_connectivity_icons interval enables it
+                          # as soon as the API comes up (and disables it
+                          # again if the connection drops).
+                          #
+                          # The disabled style is set explicitly because
+                          # LVGL's default disabled appearance on a themed
+                          # button is subtle enough to be easy to miss -
+                          # grey bg + grey text reads clearly as "not
+                          # available yet" from across the room.
                           - button:
                               id: btn_sync_settings
                               width: 130
@@ -146,6 +157,10 @@ This goes in row 1 of `left_col_2`, immediately after `livingroom_light_obj`:
                               x: -75
                               y: 20
                               align: CENTER
+                              state:
+                                disabled: true
+                              bg_color: 0x2F8CD8
+                              bg_opa: COVER
                               widgets:
                                 - label:
                                     text: "Sync HA"
@@ -158,6 +173,10 @@ This goes in row 1 of `left_col_2`, immediately after `livingroom_light_obj`:
                           # placed away from the sync button - the restart
                           # platform reboots immediately, with no
                           # confirmation step.
+                          #
+                          # NOT gated on api.connected: rebooting needs
+                          # nothing from HA, and is arguably most useful
+                          # when the API connection has gone bad.
                           - button:
                               id: btn_reboot_display
                               width: 130
@@ -176,6 +195,20 @@ This goes in row 1 of `left_col_2`, immediately after `livingroom_light_obj`:
                                 - button.press: btn_restart
 ```
 
+If the greyed-out state isn't visually obvious enough once flashed, add a
+disabled-state style block to `btn_sync_settings`:
+
+```yaml
+                              # optional, if the default disabled look is
+                              # too subtle on this theme
+                              bg_color: 0x9E9E9E
+                              text_color: 0xE0E0E0
+```
+
+...applied under a `disabled:` state style. LVGL state-style syntax in ESPHome
+varies a little by version, so check what your version accepts rather than
+pasting this blind.
+
 ## Notes
 
 - **`on_click: button.press: btn_restart`** reuses the `restart` button already
@@ -183,15 +216,14 @@ This goes in row 1 of `left_col_2`, immediately after `livingroom_light_obj`:
   from HA. `- lambda: 'App.safe_reboot();'` would work too but wouldn't give
   you the HA-side entity.
 
-- **No confirmation dialog.** The issue didn't ask for one, so this doesn't add
-  one — hence the red styling and the gap between the two buttons. If a stray
-  tap rebooting the panel turns out to be annoying in practice, the usual fix
-  is a `checkable:` arm-then-confirm button or an LVGL msgbox; say the word and
-  I'll add it.
+- **No confirmation dialog** on Reboot. The issue didn't ask for one, so this
+  doesn't add one — hence the red styling and the deliberate gap between the
+  two buttons. If a stray tap rebooting the panel turns out to be annoying, the
+  usual fix is a `checkable:` arm-then-confirm button or an LVGL msgbox.
 
 - **`x: -75` / `x: 75`** centres two 130px-wide buttons with a 20px gap in the
-  ~400px-wide left column. If the card ends up looking cramped once flashed,
-  the numbers to adjust are those two and the `FR(2)`/`FR(1)` row weights.
+  ~400px-wide left column. If the card looks cramped once flashed, the numbers
+  to adjust are those two and the `FR(2)`/`FR(1)` row weights.
 
 - **Scope of "resync everything".** `sync_settings_from_ha` covers the five
   HA-backed cover helpers (open time, close time, default-times boolean,
