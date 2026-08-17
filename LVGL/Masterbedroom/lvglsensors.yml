@@ -5,7 +5,7 @@
 # =========================
 # BOOT-TIME UI SYNC
 # =========================
-# Two jobs on boot:
+# Three jobs on boot:
 #
 # 1. Turn the screen on and start the normal inactivity cycle. The
 #    backlight itself comes up via restore_mode: ALWAYS_ON (see
@@ -27,6 +27,11 @@
 #    screen_timeout_dropdown restoration, which maps through a small
 #    array of second values).
 #
+# 3. Evaluate whether the HA-backed settings helpers actually exist
+#    (see evaluate_helper_health). Delayed well past the API handshake
+#    so the helpers have had a chance to report before we judge them
+#    missing; the 60s interval re-checks from then on.
+#
 # Runs late (priority -100, after LVGL is set up) and is appended to the
 # on_boot automation defined in the main device YAML (ESPHome
 # concatenates same-shape on_boot dicts from packages).
@@ -44,6 +49,12 @@ esphome:
       - lvgl.dropdown.update:
           id: night_mode_end_dropdown
           selected_index: !lambda 'return id(night_mode_end_hour);'
+      # First health check. The extra delay is deliberate: at 2s the API
+      # may not have finished sending initial states, and flagging every
+      # helper as missing during a normal boot would train people to
+      # ignore the warning.
+      - delay: 20s
+      - script.execute: evaluate_helper_health
 
 # =========================
 # GUARD GLOBALS
@@ -91,6 +102,51 @@ globals:
     restore_value: no
     initial_value: 'false'
 
+  # Whether the backlight was OFF at the moment the current touch
+  # arrived, sampled by wake_screen BEFORE it turns the backlight on.
+  # This is what distinguishes a "wake touch" (screen was dark, the
+  # touch only served to light it up) from a normal touch on an
+  # already-lit screen. A wake touch returns the UI to the main page;
+  # a normal touch does not, so the Settings page doesn't jump away
+  # from under your finger while you're using it.
+  #
+  # Must be sampled before light.turn_on, otherwise the state has
+  # already flipped and every touch would look like a wake touch.
+  - id: screen_was_off
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+  # How many of the five HA-backed settings helpers currently have no
+  # state at all (see evaluate_helper_health). Zero means every helper
+  # is present and reporting.
+  #
+  # Exists because of a real incident: an HA database corruption removed
+  # several input_* helpers, and the panel gave no sign of it. Each
+  # dropdown quietly fell back to the YAML default in its widget
+  # definition - cover_morning_dropdown has selected_index: 4, so it
+  # displayed a confident "8:00" for a helper that no longer existed.
+  # Users changed settings that went nowhere, and nothing on screen or
+  # in HA indicated why.
+  #
+  # Starts at -1 rather than 0 to mean "not evaluated yet", so the
+  # status label and the HA problem sensor can distinguish "we haven't
+  # looked" from "we looked and everything is fine".
+  - id: helpers_missing_count
+    type: int
+    restore_value: no
+    initial_value: '-1'
+
+  # Human-readable result of the last evaluate_helper_health run, shown
+  # in lbl_settings_status on the Settings page. Held in a global rather
+  # than built inline so the label's text and colour can both be driven
+  # from lvgl.label.update actions (the same pattern the bulb icons use)
+  # instead of raw lv_* calls.
+  - id: helpers_status_text
+    type: std::string
+    restore_value: no
+    initial_value: '"Checking HA settings..."'
+
   # Night-mode PIR screen lockout window (hour of day, 0-23, local/HA
   # time). While the current hour falls within [start, end) - wrapping
   # past midnight when start > end - motion from the PIR sensor
@@ -115,6 +171,23 @@ globals:
     type: int
     restore_value: yes
     initial_value: '7'   # Default: 07:00
+
+# =========================
+# BUTTONS
+# =========================
+button:
+  # Reboots the panel. Driven by the Reboot button on the Settings page
+  # (see btn_reboot_display in lvglconfig.yml), and also exposed to Home
+  # Assistant as a normal button entity so the panel can be restarted
+  # remotely without walking to it.
+  #
+  # The restart platform reboots immediately when pressed; there is no
+  # confirmation step, so keep this button visually distinct from and
+  # not adjacent to anything routinely tapped.
+  - platform: restart
+    name: "${friendly_name} Restart"
+    id: btn_restart
+    entity_category: "diagnostic"
 
 # =========================
 # SCRIPTS
@@ -174,12 +247,352 @@ script:
   - id: wake_screen
     mode: restart
     then:
+      # STEP 1 - sample the backlight state BEFORE touching it. Once
+      # light.turn_on below has run the "was the screen off?" question
+      # can no longer be answered, and every touch would look like a
+      # wake touch. Order matters here.
+      - if:
+          condition:
+            light.is_on: back_light
+          then:
+            - globals.set:
+                id: screen_was_off
+                value: 'false'
+          else:
+            - globals.set:
+                id: screen_was_off
+                value: 'true'
+
       - light.turn_on: back_light
       # Set brightness to match the current room illuminance as soon as
       # the screen comes on, rather than waiting for the next lux change.
       - script.execute: apply_brightness
+
+      # STEP 2 - a touch that woke the screen from off also brings the UI
+      # back to the main page, so the panel is always found in a known
+      # state instead of on whatever page it was last left on. A touch on
+      # an already-lit screen is deliberately left alone: the user is
+      # actively working, and pulling the page out from under them
+      # mid-interaction would be worse than doing nothing.
+      - if:
+          condition:
+            lambda: 'return id(screen_was_off);'
+          then:
+            - script.execute: return_to_main_page_now
+
+      # STEP 3 - (re)start the idle countdown that returns the UI to the
+      # main page. wake_screen is mode: restart and runs on every touch,
+      # so this restarts the idle timer on the LAST touch, exactly like
+      # the screen_timeout delay below.
+      - script.execute: return_to_main_page
+
       - delay: !lambda 'return id(screen_timeout) * 1000;'
       - script.execute: update_screen_state
+
+  # Idle auto-return: 30s after the last touch, switch the UI back from
+  # the Settings page to the main page.
+  #
+  # mode: restart, and wake_screen executes it on every touch, so the
+  # countdown always measures time since the LAST touch.
+  #
+  # The 30s is a literal rather than a global on purpose. screen_timeout
+  # is a global only because a dropdown on the Settings page edits it at
+  # runtime; that global is declared in the un-versioned per-device main
+  # config (see the note in ci-harness.yaml), so adding another one there
+  # would mean a change that isn't visible in this repo. Nothing edits
+  # this value at runtime, so a literal keeps the feature self-contained.
+  # Promote it to a global if a dropdown for it is ever added.
+  #
+  # Deliberately independent of screen_timeout: the page returns to main
+  # after 30s idle, while the backlight may well stay on much longer
+  # (default 5 min, or indefinitely while the ceiling light is on).
+  # Returning the page is cheap and invisible when nobody is looking;
+  # switching the backlight off is not.
+  - id: return_to_main_page
+    mode: restart
+    then:
+      - delay: 30s
+      # Only act when the main page is NOT already showing. Without this
+      # guard the timer would call lvgl.page.show on the already-active
+      # main page 30s after every touch, forcing a pointless full 800x480
+      # screen load and a possible visible flicker.
+      #
+      # lv_scr_act() returns the currently active LVGL screen object; each
+      # page declared under lvgl.pages is created as one, so comparing it
+      # against id(main_page) is the direct "which page am I on?" test and
+      # needs no separate bookkeeping global that could fall out of sync
+      # with reality.
+      - if:
+          condition:
+            lambda: 'return lv_scr_act() != id(main_page);'
+          then:
+            - script.execute: return_to_main_page_now
+
+  # Immediate, unconditional switch back to the main page. Factored out
+  # so the idle timer (return_to_main_page) and the wake-touch path in
+  # wake_screen share a single implementation and can't drift apart.
+  - id: return_to_main_page_now
+    then:
+      - lvgl.page.show: main_page
+
+  # =========================
+  # HA SETTINGS HEALTH CHECK
+  # =========================
+  # Counts how many of the five HA-backed settings helpers have no state,
+  # and writes a plain-language result to the status label on the
+  # Settings page (lbl_settings_status in lvglconfig.yml).
+  #
+  # WHY THIS EXISTS. An HA database corruption once removed several
+  # input_* helpers. The panel showed no sign of it: each dropdown fell
+  # back to the YAML default baked into its widget definition, so the
+  # screen displayed confident, plausible values - "8:00", "60%" - for
+  # entities that no longer existed. People changed settings, nothing
+  # happened, and there was no way to tell why from the display. The API
+  # was connected the whole time, so the header HA icon stayed white and
+  # every existing indicator said "healthy".
+  #
+  # WHY A RE-SYNC BUTTON DOES NOT SOLVE THAT. Re-copying HA's value onto
+  # the display assumes there IS a value. When the helper is gone there
+  # is nothing to copy, and a button that silently succeeds is worse than
+  # no button at all - it manufactures confidence that the problem was
+  # just fixed. Hence reporting, not copying, is the primary job here.
+  #
+  # This script only reads state and writes one label. It deliberately
+  # touches no settings widgets, so it is safe to run on a timer without
+  # fighting the user or the normal HA->widget handlers.
+  #
+  # LIMITATION, and it is a real one: has_state() only catches helpers
+  # that have NEVER reported - a missing helper at boot, or one that
+  # vanished before the panel connected. It does NOT catch a helper
+  # deleted while the panel is running, because the homeassistant sensor
+  # keeps its last received value and has_state() stays true. That case
+  # needs staleness tracking (time since last update per helper) and is
+  # tracked as an open question in issue #40. The boot case is the one
+  # that actually occurred.
+  - id: evaluate_helper_health
+    mode: restart
+    then:
+      - lambda: |-
+          // Names are the Settings-page row labels, not entity_ids, so
+          // the warning points at the row the user can actually see.
+          struct HelperCheck {
+            const char *label;
+            bool present;
+          };
+          const HelperCheck checks[] = {
+            {"Open",      id(ha_cover_open_time).has_state()},
+            {"Close",     id(ha_cover_close_time).has_state()},
+            {"Default",   id(ha_cover_default).has_state()},
+            {"Pre-open",  id(ha_cover_preopen_position).has_state()},
+            {"Door-open", id(ha_cover_dooropen_position).has_state()},
+          };
+          const int total = sizeof(checks) / sizeof(checks[0]);
+
+          int missing = 0;
+          std::string names;
+          for (int i = 0; i < total; i++) {
+            if (!checks[i].present) {
+              missing++;
+              if (!names.empty()) names += ", ";
+              names += checks[i].label;
+            }
+          }
+          id(helpers_missing_count) = missing;
+
+          char buf[48];
+          if (missing == 0) {
+            snprintf(buf, sizeof(buf), "Settings OK (%d/%d)", total, total);
+            id(helpers_status_text) = buf;
+          } else {
+            snprintf(buf, sizeof(buf), "%d/%d missing: ", missing, total);
+            id(helpers_status_text) = std::string(buf) + names;
+            ESP_LOGW("ha_helpers", "%d of %d HA settings helpers missing: %s",
+                     missing, total, names.c_str());
+          }
+      # Text and colour are applied with lvgl.label.update rather than raw
+      # lv_* calls, matching the pattern used by the bulb icons and the
+      # connectivity glyphs elsewhere in this file.
+      - lvgl.label.update:
+          id: lbl_settings_status
+          text: !lambda 'return id(helpers_status_text);'
+          text_color: !lambda 'return lv_color_hex(id(helpers_missing_count) > 0 ? 0xC62828 : 0x4CAF50);'
+
+  # What the Settings-page button runs: report first, then re-apply.
+  #
+  # The ordering is the point. evaluate_helper_health decides and
+  # displays what is actually wrong; sync_settings_from_ha then does the
+  # best it can with whatever state exists. If helpers are missing the
+  # user now sees WHICH ones, instead of a button that appears to work
+  # and changes nothing.
+  - id: check_ha_settings
+    mode: restart
+    then:
+      - script.execute: evaluate_helper_health
+      - script.execute: sync_settings_from_ha
+
+  # Re-apply Home Assistant's cached state to the settings widgets.
+  #
+  # HOME ASSISTANT WINS, ALWAYS. This only ever writes HA state into the
+  # widgets; it never pushes a widget value back to HA.
+  #
+  # WHY IT READS CACHED STATE INSTEAD OF ASKING HA TO RE-SEND:
+  # the obvious implementation is to call homeassistant.update_entity on
+  # each helper and let the existing on_value handlers do the work. That
+  # is unreliable here. ESPHome's homeassistant sensors only fire
+  # on_value when the received value DIFFERS from the one they already
+  # hold, so re-pushing an identical state fires nothing at all - and an
+  # identical-state-but-wrong-widget is exactly the case where a manual
+  # re-apply would be wanted. Reading the state each homeassistant sensor
+  # already caches needs no round-trip and cannot silently no-op.
+  #
+  # ORDERING MATTERS, AND IS THE MAIN REASON THIS SCRIPT EXISTS:
+  # at boot the helpers arrive independently and their handlers fight.
+  # If ha_cover_default lands first it forces the dropdowns to the fixed
+  # 8:30/22:00 defaults, and a later-arriving ha_cover_open_time then
+  # overwrites that with the helper's own value even though Default is
+  # on. Whichever message happens to land last wins. Here the order is
+  # fixed - times first, then the Default override - so the result is
+  # deterministic.
+  #
+  # Every write is wrapped in the same mirroring_* guards the normal
+  # HA->widget handlers use, so re-applying HA state is not echoed back
+  # to HA as a fresh user action (esphome/esphome#17161).
+  #
+  # Each entity is has_state()-gated: a helper that has never reported
+  # leaves its widget alone rather than stamping a default over a
+  # possibly-correct value. evaluate_helper_health is what makes that
+  # silence visible.
+  #
+  # NOTE ON SCOPE: only the five HA-backed cover/curtain helpers are
+  # re-applied. Screen timeout and night-mode start/end are device-local
+  # ESPHome globals with no HA counterpart, so there is nothing to sync
+  # them against - they are already authoritative and are left untouched.
+  - id: sync_settings_from_ha
+    mode: restart
+    then:
+      # ---- Cover open/close times + the Default flag ----
+      - lambda: 'id(mirroring_cover_settings) = true;'
+
+      - if:
+          condition:
+            lambda: 'return id(ha_cover_open_time).has_state();'
+          then:
+            - lvgl.dropdown.update:
+                id: cover_morning_dropdown
+                selected_index: !lambda |-
+                  std::vector<std::string> options = {
+                    "6:00", "6:30", "7:00", "7:30", "8:00",
+                    "8:30", "9:00", "9:30", "10:00"
+                  };
+                  std::string cur = id(ha_cover_open_time).state;
+                  for (size_t i = 0; i < options.size(); i++) {
+                    if (options[i] == cur) return (int)i;
+                  }
+                  return 4;  // Default 8:00
+
+      - if:
+          condition:
+            lambda: 'return id(ha_cover_close_time).has_state();'
+          then:
+            - lvgl.dropdown.update:
+                id: cover_evening_dropdown
+                selected_index: !lambda |-
+                  std::vector<std::string> options = {
+                    "19:00", "19:30", "20:00", "20:30", "21:00",
+                    "21:30", "22:00", "22:30", "23:00"
+                  };
+                  std::string cur = id(ha_cover_close_time).state;
+                  for (size_t i = 0; i < options.size(); i++) {
+                    if (options[i] == cur) return (int)i;
+                  }
+                  return 4;  // Default 21:00
+
+      # The Default checkbox also controls whether the two time dropdowns
+      # are selectable, so restore both the checked state and the
+      # enabled/disabled state together - exactly as the ha_cover_default
+      # handler does. Applied AFTER the times above so the Default
+      # override wins, which is the deterministic ordering this script
+      # exists to provide.
+      - if:
+          condition:
+            lambda: 'return id(ha_cover_default).has_state();'
+          then:
+            - lvgl.widget.update:
+                id: cover_default_checkbox
+                state:
+                  checked: !lambda 'return id(ha_cover_default).state;'
+            - lvgl.widget.update:
+                id: cover_morning_dropdown
+                state:
+                  disabled: !lambda 'return id(ha_cover_default).state;'
+            - lvgl.widget.update:
+                id: cover_evening_dropdown
+                state:
+                  disabled: !lambda 'return id(ha_cover_default).state;'
+            # When Default is active the fixed default times win over
+            # whatever the input_select helpers hold, matching the
+            # ha_cover_default handler's behaviour.
+            - if:
+                condition:
+                  lambda: 'return id(ha_cover_default).state;'
+                then:
+                  - lvgl.dropdown.update:
+                      id: cover_morning_dropdown
+                      selected_index: 5  # 8:30
+                  - lvgl.dropdown.update:
+                      id: cover_evening_dropdown
+                      selected_index: 6  # 22:00
+
+      - lambda: 'id(mirroring_cover_settings) = false;'
+
+      # ---- Cover pre-open / door-open positions ----
+      - lambda: 'id(mirroring_cover_positions) = true;'
+
+      - if:
+          condition:
+            lambda: 'return id(ha_cover_preopen_position).has_state();'
+          then:
+            - lvgl.dropdown.update:
+                id: preopen_dropdown
+                selected_index: !lambda |-
+                  int vals[] = {0, 5, 10, 15, 20, 25, 30, 40, 50};
+                  int cur = (int) id(ha_cover_preopen_position).state;
+                  for (int i = 0; i < 9; i++) {
+                    if (vals[i] == cur) return i;
+                  }
+                  return 2;  // Default 10%
+
+      - if:
+          condition:
+            lambda: 'return id(ha_cover_dooropen_position).has_state();'
+          then:
+            - lvgl.dropdown.update:
+                id: dooropen_dropdown
+                selected_index: !lambda |-
+                  int vals[] = {0, 20, 40, 50, 60, 70, 80, 100};
+                  int cur = (int) id(ha_cover_dooropen_position).state;
+                  for (int i = 0; i < 8; i++) {
+                    if (vals[i] == cur) return i;
+                  }
+                  return 4;  // Default 60%
+
+      - lambda: 'id(mirroring_cover_positions) = false;'
+
+      # Also refresh the cover slider from HA's current position, and
+      # clear any stale in-flight target. If a set_cover_position command
+      # was lost, cover_position_pending can otherwise keep ignoring
+      # incoming positions until its 20s failsafe expires; a manual check
+      # should not have to wait that out.
+      - globals.set:
+          id: cover_position_pending
+          value: 'false'
+      - if:
+          condition:
+            lambda: 'return id(ha_cover_position).has_state();'
+          then:
+            - lvgl.slider.update:
+                id: cover_slider
+                value: !lambda 'return 100 - (int) id(ha_cover_position).state;'
 
   # Ambient-light-driven backlight brightness.
   #
@@ -233,11 +646,13 @@ script:
           id: cover_position_pending
           value: 'false'
 
-  # Drives the two header status icons on both pages:
+  # Drives the two header status icons on both pages, and the enabled
+  # state of the Check button on the Settings page:
   #   - WiFi icon: white wifi glyph while connected to the WiFi network,
   #     red wifi-alert glyph while disconnected.
   #   - HA icon: home-assistant glyph, white while the device has an
   #     active API connection to Home Assistant, red while it doesn't.
+  #   - Check button: enabled only while the API is connected.
   # Driven periodically by the interval below.
   - id: update_connectivity_icons
     then:
@@ -267,6 +682,22 @@ script:
                 text_color: 0xFF0000
       # Home Assistant API connectivity status - only the color changes
       # here (the glyph stays the same), so lvgl.widget.update is fine.
+      #
+      # The Check button's enabled state is driven from the same
+      # condition so it can never disagree with the HA status icon
+      # sitting a few centimetres away in the header. With the API down
+      # there is no cached state to evaluate and nothing to re-apply, so
+      # a live-looking button would just be a lie.
+      #
+      # NOTE this is a different failure from the one the health check
+      # addresses. api.connected proves the TRANSPORT is up; it says
+      # nothing about whether the entities behind it still exist. During
+      # the incident that motivated the health check, HA was connected
+      # and this button would have been enabled.
+      #
+      # The Reboot button is deliberately NOT gated this way: rebooting
+      # needs nothing from HA, and is arguably most useful precisely when
+      # the API connection has gone bad.
       - if:
           condition:
             api.connected:
@@ -277,6 +708,10 @@ script:
             - lvgl.widget.update:
                 id: lbl_hastatus_2
                 text_color: 0xFFFFFF
+            - lvgl.widget.update:
+                id: btn_check_settings
+                state:
+                  disabled: false
           else:
             - lvgl.widget.update:
                 id: lbl_hastatus
@@ -284,6 +719,10 @@ script:
             - lvgl.widget.update:
                 id: lbl_hastatus_2
                 text_color: 0xFF0000
+            - lvgl.widget.update:
+                id: btn_check_settings
+                state:
+                  disabled: true
 
   # Drives the two-half bed occupancy icon (mdi:bed-king, see img_bed_king
   # in lvglconfig.yml) on both pages' headers: left half tracks the left
@@ -312,6 +751,19 @@ interval:
   - interval: 5s
     then:
       - script.execute: update_connectivity_icons
+
+  # Proactive helper health check. The whole point is that nobody should
+  # have to press a button to discover a helper has gone missing, so this
+  # runs on its own.
+  #
+  # 60s is deliberately unhurried: helpers do not vanish often, the
+  # check is pure state-reading with no HA round-trip, and re-running it
+  # is what keeps the warning on screen rather than latching it. Once a
+  # helper comes back the label returns to "Settings OK" within a minute
+  # without any user action.
+  - interval: 60s
+    then:
+      - script.execute: evaluate_helper_health
 
 text_sensor:
   # Weather condition
@@ -533,6 +985,25 @@ text_sensor:
 binary_sensor:
   - platform: status
     name: Status sensor
+
+  # Surfaces the helper health check to Home Assistant, so a missing
+  # settings helper can raise a notification instead of waiting to be
+  # noticed on the panel. device_class: problem means HA renders it as
+  # OK / Problem rather than off / on.
+  #
+  # This is the half that does not depend on anyone looking at the
+  # display. During the incident that motivated it, the panel was showing
+  # plausible defaults and nothing anywhere flagged a fault.
+  #
+  # Reports false (no problem) until the first evaluation completes -
+  # helpers_missing_count starts at -1 - so a normal boot doesn't fire
+  # a spurious alert before the API has even sent initial states.
+  - platform: template
+    name: "${friendly_name} HA Settings Helpers Missing"
+    id: ha_helpers_missing
+    device_class: problem
+    entity_category: "diagnostic"
+    lambda: 'return id(helpers_missing_count) > 0;'
 
   # Motion / occupancy sensor - drives the screen backlight
   - platform: homeassistant
