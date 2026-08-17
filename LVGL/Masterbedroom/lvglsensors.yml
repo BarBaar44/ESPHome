@@ -91,31 +91,13 @@ globals:
     restore_value: no
     initial_value: 'false'
 
-  # Which LVGL page is currently showing: false = main_page,
-  # true = second_page (Living Room / Settings).
-  #
-  # Maintained by the two header navigation buttons in lvglconfig.yml
-  # and by return_to_main_page below. It exists because the auto-return
-  # needs to know whether a page change is actually necessary: calling
-  # lvgl.page.show on the page that's already active would force a full
-  # 800x480 redraw every time the idle timer expires, which is both
-  # wasteful and visible as a flicker. With this flag the timer is a
-  # no-op while the main page is already showing.
-  #
-  # Not restored across reboots on purpose - LVGL always starts on the
-  # first page (main_page), so 'false' is correct after every boot.
-  - id: on_second_page
-    type: bool
-    restore_value: no
-    initial_value: 'false'
-
   # Whether the backlight was OFF at the moment the current touch
   # arrived, sampled by wake_screen BEFORE it turns the backlight on.
   # This is what distinguishes a "wake touch" (screen was dark, the
   # touch only served to light it up) from a normal touch on an
   # already-lit screen. A wake touch returns the UI to the main page;
-  # a normal touch does not, so you can keep working on the Settings
-  # page without it jumping away under your finger.
+  # a normal touch does not, so the Settings page doesn't jump away
+  # from under your finger while you're using it.
   #
   # Must be sampled before light.turn_on, otherwise the state has
   # already flipped and every touch would look like a wake touch.
@@ -208,7 +190,7 @@ script:
     mode: restart
     then:
       # STEP 1 - sample the backlight state BEFORE touching it. Once
-      # light.turn_on below has run, the "was the screen off?" question
+      # light.turn_on below has run the "was the screen off?" question
       # can no longer be answered, and every touch would look like a
       # wake touch. Order matters here.
       - if:
@@ -228,12 +210,12 @@ script:
       # the screen comes on, rather than waiting for the next lux change.
       - script.execute: apply_brightness
 
-      # STEP 2 - a touch that woke the screen from off should also bring
-      # the UI back to the main page, so the panel is always found in a
-      # known state rather than on whatever page it happened to be left
-      # on. A touch on an already-lit screen is left alone: the user is
-      # actively working, and yanking the page away mid-interaction
-      # would be worse than useless on the Settings page.
+      # STEP 2 - a touch that woke the screen from off also brings the UI
+      # back to the main page, so the panel is always found in a known
+      # state instead of on whatever page it was last left on. A touch on
+      # an already-lit screen is deliberately left alone: the user is
+      # actively working, and pulling the page out from under them
+      # mid-interaction would be worse than doing nothing.
       - if:
           condition:
             lambda: 'return id(screen_was_off);'
@@ -249,42 +231,51 @@ script:
       - delay: !lambda 'return id(screen_timeout) * 1000;'
       - script.execute: update_screen_state
 
-  # Idle auto-return: after page_return_timeout seconds without a touch,
-  # switch the UI back from the Settings page to the main page.
+  # Idle auto-return: 30s after the last touch, switch the UI back from
+  # the Settings page to the main page.
   #
   # mode: restart, and wake_screen executes it on every touch, so the
   # countdown always measures time since the LAST touch.
   #
-  # The on_second_page guard means this is a no-op when the main page is
-  # already showing - without it, every expiry would call
-  # lvgl.page.show on the active page and force a pointless full-screen
-  # redraw.
+  # The 30s is a literal rather than a global on purpose. screen_timeout
+  # is a global only because a dropdown on the Settings page edits it at
+  # runtime; that global is declared in the un-versioned per-device main
+  # config (see the note in ci-harness.yaml), so adding another one there
+  # would mean a change that isn't visible in this repo. Nothing edits
+  # this value at runtime, so a literal keeps the feature self-contained.
+  # Promote it to a global if a dropdown for it is ever added.
   #
-  # Note this is deliberately independent of screen_timeout: the page
-  # returns to main after 30s of inactivity, while the backlight may
-  # well stay on far longer (default 5 min, or indefinitely while the
-  # ceiling light is on). Returning the page is cheap and invisible
-  # when nobody is looking; switching the backlight off is not.
+  # Deliberately independent of screen_timeout: the page returns to main
+  # after 30s idle, while the backlight may well stay on much longer
+  # (default 5 min, or indefinitely while the ceiling light is on).
+  # Returning the page is cheap and invisible when nobody is looking;
+  # switching the backlight off is not.
   - id: return_to_main_page
     mode: restart
     then:
-      - delay: !lambda 'return id(page_return_timeout) * 1000;'
+      - delay: 30s
+      # Only act when the main page is NOT already showing. Without this
+      # guard the timer would call lvgl.page.show on the already-active
+      # main page 30s after every touch, forcing a pointless full 800x480
+      # screen load and a possible visible flicker.
+      #
+      # lv_scr_act() returns the currently active LVGL screen object; each
+      # page declared under lvgl.pages is created as one, so comparing it
+      # against id(main_page) is the direct "which page am I on?" test and
+      # needs no separate bookkeeping global that could fall out of sync
+      # with reality.
       - if:
           condition:
-            lambda: 'return id(on_second_page);'
+            lambda: 'return lv_scr_act() != id(main_page);'
           then:
             - script.execute: return_to_main_page_now
 
-  # Immediate, unconditional switch back to the main page, plus the
-  # bookkeeping that keeps on_second_page truthful. Factored out so the
-  # idle timer and the wake-touch path can't drift apart, and so the
-  # global is never updated in one place but forgotten in the other.
+  # Immediate, unconditional switch back to the main page. Factored out
+  # so the idle timer (return_to_main_page) and the wake-touch path in
+  # wake_screen share a single implementation and can't drift apart.
   - id: return_to_main_page_now
     then:
       - lvgl.page.show: main_page
-      - globals.set:
-          id: on_second_page
-          value: 'false'
 
   # Ambient-light-driven backlight brightness.
   #
