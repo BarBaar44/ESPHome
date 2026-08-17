@@ -5,7 +5,7 @@
 # =========================
 # BOOT-TIME UI SYNC
 # =========================
-# Two jobs on boot:
+# Three jobs on boot:
 #
 # 1. Turn the screen on and start the normal inactivity cycle. The
 #    backlight itself comes up via restore_mode: ALWAYS_ON (see
@@ -27,6 +27,11 @@
 #    screen_timeout_dropdown restoration, which maps through a small
 #    array of second values).
 #
+# 3. Evaluate whether the HA-backed settings helpers actually exist
+#    (see evaluate_helper_health). Delayed well past the API handshake
+#    so the helpers have had a chance to report before we judge them
+#    missing; the 60s interval re-checks from then on.
+#
 # Runs late (priority -100, after LVGL is set up) and is appended to the
 # on_boot automation defined in the main device YAML (ESPHome
 # concatenates same-shape on_boot dicts from packages).
@@ -44,6 +49,12 @@ esphome:
       - lvgl.dropdown.update:
           id: night_mode_end_dropdown
           selected_index: !lambda 'return id(night_mode_end_hour);'
+      # First health check. The extra delay is deliberate: at 2s the API
+      # may not have finished sending initial states, and flagging every
+      # helper as missing during a normal boot would train people to
+      # ignore the warning.
+      - delay: 20s
+      - script.execute: evaluate_helper_health
 
 # =========================
 # GUARD GLOBALS
@@ -105,6 +116,26 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'false'
+
+  # How many of the five HA-backed settings helpers currently have no
+  # state at all (see evaluate_helper_health). Zero means every helper
+  # is present and reporting.
+  #
+  # Exists because of a real incident: an HA database corruption removed
+  # several input_* helpers, and the panel gave no sign of it. Each
+  # dropdown quietly fell back to the YAML default in its widget
+  # definition - cover_morning_dropdown has selected_index: 4, so it
+  # displayed a confident "8:00" for a helper that no longer existed.
+  # Users changed settings that went nowhere, and nothing on screen or
+  # in HA indicated why.
+  #
+  # Starts at -1 rather than 0 to mean "not evaluated yet", so the
+  # status label and the HA problem sensor can distinguish "we haven't
+  # looked" from "we looked and everything is fine".
+  - id: helpers_missing_count
+    type: int
+    restore_value: no
+    initial_value: '-1'
 
   # Night-mode PIR screen lockout window (hour of day, 0-23, local/HA
   # time). While the current hour falls within [start, end) - wrapping
@@ -294,15 +325,113 @@ script:
     then:
       - lvgl.page.show: main_page
 
-  # Force the display's settings widgets back into agreement with Home
-  # Assistant. Driven by the Sync button on the Settings page (see
-  # btn_sync_settings in lvglconfig.yml).
+  # =========================
+  # HA SETTINGS HEALTH CHECK
+  # =========================
+  # Counts how many of the five HA-backed settings helpers have no state,
+  # and writes a plain-language result to the status label on the
+  # Settings page (lbl_settings_status in lvglconfig.yml).
+  #
+  # WHY THIS EXISTS. An HA database corruption once removed several
+  # input_* helpers. The panel showed no sign of it: each dropdown fell
+  # back to the YAML default baked into its widget definition, so the
+  # screen displayed confident, plausible values - "8:00", "60%" - for
+  # entities that no longer existed. People changed settings, nothing
+  # happened, and there was no way to tell why from the display. The API
+  # was connected the whole time, so the header HA icon stayed white and
+  # every existing indicator said "healthy".
+  #
+  # WHY A RE-SYNC BUTTON DOES NOT SOLVE THAT. Re-copying HA's value onto
+  # the display assumes there IS a value. When the helper is gone there
+  # is nothing to copy, and a button that silently succeeds is worse than
+  # no button at all - it manufactures confidence that the problem was
+  # just fixed. Hence reporting, not copying, is the primary job here.
+  #
+  # This script only reads state and writes one label. It deliberately
+  # touches no settings widgets, so it is safe to run on a timer without
+  # fighting the user or the normal HA->widget handlers.
+  #
+  # LIMITATION, and it is a real one: has_state() only catches helpers
+  # that have NEVER reported - a missing helper at boot, or one that
+  # vanished before the panel connected. It does NOT catch a helper
+  # deleted while the panel is running, because the homeassistant sensor
+  # keeps its last received value and has_state() stays true. That case
+  # needs staleness tracking (time since last update per helper) and is
+  # tracked as an open question in issue #40. The boot case is the one
+  # that actually occurred.
+  - id: evaluate_helper_health
+    mode: restart
+    then:
+      - lambda: |-
+          // Names are the Settings-page labels, not entity_ids, so the
+          // warning points at the row the user can actually see.
+          struct HelperCheck {
+            const char *label;
+            bool present;
+          };
+          const HelperCheck checks[] = {
+            {"Open time",   id(ha_cover_open_time).has_state()},
+            {"Close time",  id(ha_cover_close_time).has_state()},
+            {"Default",     id(ha_cover_default).has_state()},
+            {"Pre-open %",  id(ha_cover_preopen_position).has_state()},
+            {"Door-open %", id(ha_cover_dooropen_position).has_state()},
+          };
+          const int total = sizeof(checks) / sizeof(checks[0]);
+
+          int missing = 0;
+          std::string names;
+          for (int i = 0; i < total; i++) {
+            if (!checks[i].present) {
+              missing++;
+              if (!names.empty()) names += ", ";
+              names += checks[i].label;
+            }
+          }
+          id(helpers_missing_count) = missing;
+
+          // static so the string outlives this lambda - lv_label_set_text
+          // copies, but the c_str() below must still be valid when it is
+          // called, and a stack local would already be gone.
+          static std::string msg;
+          if (missing == 0) {
+            char buf[32];
+            snprintf(buf, sizeof(buf), "Settings OK (%d/%d)", total, total);
+            msg = buf;
+          } else {
+            char buf[48];
+            snprintf(buf, sizeof(buf), "%d of %d helpers missing: ",
+                     missing, total);
+            msg = std::string(buf) + names;
+          }
+
+          lv_label_set_text(id(lbl_settings_status), msg.c_str());
+          lv_obj_set_style_text_color(
+              id(lbl_settings_status),
+              lv_color_hex(missing == 0 ? 0x4CAF50 : 0xC62828),
+              LV_PART_MAIN | LV_STATE_DEFAULT);
+
+          if (missing > 0) {
+            ESP_LOGW("ha_helpers", "%d of %d HA settings helpers missing: %s",
+                     missing, total, names.c_str());
+          }
+
+  # What the Settings-page button runs: report first, then re-apply.
+  #
+  # The ordering is the point. evaluate_helper_health decides and
+  # displays what is actually wrong; sync_settings_from_ha then does the
+  # best it can with whatever state exists. If helpers are missing the
+  # user now sees WHICH ones, instead of a button that appears to work
+  # and changes nothing.
+  - id: check_ha_settings
+    mode: restart
+    then:
+      - script.execute: evaluate_helper_health
+      - script.execute: sync_settings_from_ha
+
+  # Re-apply Home Assistant's cached state to the settings widgets.
   #
   # HOME ASSISTANT WINS, ALWAYS. This only ever writes HA state into the
-  # widgets; it never pushes a widget value back to HA. That is the whole
-  # point - when the two have drifted apart, HA's helpers are the source
-  # of truth for the curtain times and positions, and the display is the
-  # copy that needs correcting.
+  # widgets; it never pushes a widget value back to HA.
   #
   # WHY IT READS CACHED STATE INSTEAD OF ASKING HA TO RE-SEND:
   # the obvious implementation is to call homeassistant.update_entity on
@@ -310,33 +439,30 @@ script:
   # is unreliable here. ESPHome's homeassistant sensors only fire
   # on_value when the received value DIFFERS from the one they already
   # hold, so re-pushing an identical state fires nothing at all - and an
-  # identical-state-but-wrong-widget is exactly the drift this button
-  # exists to repair. Reading the state each homeassistant sensor already
-  # caches and re-applying it to the widget needs no round-trip, cannot
-  # silently no-op, and works even while HA is briefly unreachable.
+  # identical-state-but-wrong-widget is exactly the case where a manual
+  # re-apply would be wanted. Reading the state each homeassistant sensor
+  # already caches needs no round-trip and cannot silently no-op.
   #
-  # ORDERING MATTERS, AND IS THE OTHER REASON THIS SCRIPT EXISTS:
-  # at boot the helpers arrive independently and their handlers fight.
-  # If ha_cover_default lands first it forces the dropdowns to the fixed
-  # 8:30/22:00 defaults, and a later-arriving ha_cover_open_time then
-  # overwrites that with the helper's own value even though Default is
-  # on. Whichever message happens to land last wins. Here the order is
-  # fixed - times first, then the Default override - so the result is
-  # deterministic.
+  # ORDERING MATTERS, AND IS THE MAIN REASON THIS SCRIPT SURVIVED THE
+  # RE-SCOPE IN #40: at boot the helpers arrive independently and their
+  # handlers fight. If ha_cover_default lands first it forces the
+  # dropdowns to the fixed 8:30/22:00 defaults, and a later-arriving
+  # ha_cover_open_time then overwrites that with the helper's own value
+  # even though Default is on. Whichever message happens to land last
+  # wins. Here the order is fixed - times first, then the Default
+  # override - so the result is deterministic.
   #
   # Every write is wrapped in the same mirroring_* guards the normal
   # HA->widget handlers use, so re-applying HA state is not echoed back
   # to HA as a fresh user action (esphome/esphome#17161).
   #
   # Each entity is has_state()-gated: a helper that has never reported
-  # (fresh boot, renamed entity, HA restarting) leaves its widget alone
-  # rather than stamping a default over a possibly-correct value. The
-  # button is also greyed out entirely while the API is down (see
-  # update_connectivity_icons), so in practice this script should never
-  # run with nothing cached - the gating is a second line of defence.
+  # leaves its widget alone rather than stamping a default over a
+  # possibly-correct value. evaluate_helper_health is what makes that
+  # silence visible.
   #
   # NOTE ON SCOPE: only the five HA-backed cover/curtain helpers are
-  # synced. Screen timeout and night-mode start/end are device-local
+  # re-applied. Screen timeout and night-mode start/end are device-local
   # ESPHome globals with no HA counterpart, so there is nothing to sync
   # them against - they are already authoritative and are left untouched.
   - id: sync_settings_from_ha
@@ -453,7 +579,7 @@ script:
       # Also refresh the cover slider from HA's current position, and
       # clear any stale in-flight target. If a set_cover_position command
       # was lost, cover_position_pending can otherwise keep ignoring
-      # incoming positions until its 20s failsafe expires; a manual sync
+      # incoming positions until its 20s failsafe expires; a manual check
       # should not have to wait that out.
       - globals.set:
           id: cover_position_pending
@@ -519,12 +645,12 @@ script:
           value: 'false'
 
   # Drives the two header status icons on both pages, and the enabled
-  # state of the Sync button on the Settings page:
+  # state of the Check button on the Settings page:
   #   - WiFi icon: white wifi glyph while connected to the WiFi network,
   #     red wifi-alert glyph while disconnected.
   #   - HA icon: home-assistant glyph, white while the device has an
   #     active API connection to Home Assistant, red while it doesn't.
-  #   - Sync button: enabled only while the API is connected.
+  #   - Check button: enabled only while the API is connected.
   # Driven periodically by the interval below.
   - id: update_connectivity_icons
     then:
@@ -555,14 +681,17 @@ script:
       # Home Assistant API connectivity status - only the color changes
       # here (the glyph stays the same), so lvgl.widget.update is fine.
       #
-      # The Sync button's enabled state is driven from the same condition
-      # so it can never disagree with the HA status icon sitting a few
-      # centimetres away in the header. sync_settings_from_ha works
-      # entirely from state cached by the homeassistant sensors and is
-      # has_state()-gated throughout, so with the API down it would do
-      # nothing at all - silently, with no feedback. Greying the button
-      # out makes that visible rather than leaving a button that looks
-      # live but isn't.
+      # The Check button's enabled state is driven from the same
+      # condition so it can never disagree with the HA status icon
+      # sitting a few centimetres away in the header. With the API down
+      # there is no cached state to evaluate and nothing to re-apply, so
+      # a live-looking button would just be a lie.
+      #
+      # NOTE this is a different failure from the one the health check
+      # addresses. api.connected proves the TRANSPORT is up; it says
+      # nothing about whether the entities behind it still exist. During
+      # the incident that motivated #40, HA was connected and this
+      # button would have been enabled.
       #
       # The Reboot button is deliberately NOT gated this way: rebooting
       # needs nothing from HA, and is arguably most useful precisely when
@@ -578,7 +707,7 @@ script:
                 id: lbl_hastatus_2
                 text_color: 0xFFFFFF
             - lvgl.widget.update:
-                id: btn_sync_settings
+                id: btn_check_settings
                 state:
                   disabled: false
           else:
@@ -589,7 +718,7 @@ script:
                 id: lbl_hastatus_2
                 text_color: 0xFF0000
             - lvgl.widget.update:
-                id: btn_sync_settings
+                id: btn_check_settings
                 state:
                   disabled: true
 
@@ -620,6 +749,19 @@ interval:
   - interval: 5s
     then:
       - script.execute: update_connectivity_icons
+
+  # Proactive helper health check. The whole point of #40 is that nobody
+  # should have to press a button to discover a helper has gone missing,
+  # so this runs on its own.
+  #
+  # 60s is deliberately unhurried: helpers do not vanish often, the
+  # check is pure state-reading with no HA round-trip, and re-running it
+  # is what keeps the warning on screen rather than latching it. Once a
+  # helper comes back the label returns to "Settings OK" within a minute
+  # without any user action.
+  - interval: 60s
+    then:
+      - script.execute: evaluate_helper_health
 
 text_sensor:
   # Weather condition
@@ -841,6 +983,25 @@ text_sensor:
 binary_sensor:
   - platform: status
     name: Status sensor
+
+  # Surfaces the helper health check to Home Assistant, so a missing
+  # settings helper can raise a notification instead of waiting to be
+  # noticed on the panel. device_class: problem means HA renders it as
+  # OK / Problem rather than off / on.
+  #
+  # This is the half of #40 that does not depend on anyone looking at
+  # the display. During the incident that motivated it, the panel was
+  # showing plausible defaults and nothing anywhere flagged a fault.
+  #
+  # Reports false (no problem) until the first evaluation completes -
+  # helpers_missing_count starts at -1 - so a normal boot doesn't fire
+  # a spurious alert before the API has even sent initial states.
+  - platform: template
+    name: "${friendly_name} HA Settings Helpers Missing"
+    id: ha_helpers_missing
+    device_class: problem
+    entity_category: "diagnostic"
+    lambda: 'return id(helpers_missing_count) > 0;'
 
   # Motion / occupancy sensor - drives the screen backlight
   - platform: homeassistant
