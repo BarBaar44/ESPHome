@@ -132,6 +132,23 @@ globals:
     initial_value: '7'   # Default: 07:00
 
 # =========================
+# BUTTONS
+# =========================
+button:
+  # Reboots the panel. Driven by the Reboot button on the Settings page
+  # (see btn_reboot_display in lvglconfig.yml), and also exposed to Home
+  # Assistant as a normal button entity so the panel can be restarted
+  # remotely without walking to it.
+  #
+  # The restart platform reboots immediately when pressed; there is no
+  # confirmation step, so keep this button visually distinct from and
+  # not adjacent to anything routinely tapped.
+  - platform: restart
+    name: "${friendly_name} Restart"
+    id: btn_restart
+    entity_category: "diagnostic"
+
+# =========================
 # SCRIPTS
 # =========================
 script:
@@ -276,6 +293,164 @@ script:
   - id: return_to_main_page_now
     then:
       - lvgl.page.show: main_page
+
+  # Force the display's settings widgets back into agreement with Home
+  # Assistant. Driven by the Sync button on the Settings page (see
+  # btn_sync_settings in lvglconfig.yml).
+  #
+  # HOME ASSISTANT WINS, ALWAYS. This only ever writes HA state into the
+  # widgets; it never pushes a widget value back to HA. That is the whole
+  # point - when the two have drifted apart, HA's helpers are the source
+  # of truth for the curtain times and positions, and the display is the
+  # copy that needs correcting.
+  #
+  # WHY IT READS CACHED STATE INSTEAD OF ASKING HA TO RE-SEND:
+  # the obvious implementation is to call homeassistant.update_entity on
+  # each helper and let the existing on_value handlers do the work. That
+  # is unreliable here. ESPHome's homeassistant sensors only fire
+  # on_value when the received value DIFFERS from the one they already
+  # hold, so re-pushing an identical state fires nothing at all - and an
+  # identical-state-but-wrong-widget is exactly the drift this button
+  # exists to repair. Reading the state each homeassistant sensor already
+  # caches and re-applying it to the widget needs no round-trip, cannot
+  # silently no-op, and works even while HA is briefly unreachable.
+  #
+  # Every write is wrapped in the same mirroring_* guards the normal
+  # HA->widget handlers use, so re-applying HA state is not echoed back
+  # to HA as a fresh user action (esphome/esphome#17161).
+  #
+  # Each entity is has_state()-gated: a helper that has never reported
+  # (fresh boot, renamed entity, HA restarting) leaves its widget alone
+  # rather than stamping a default over a possibly-correct value.
+  #
+  # NOTE ON SCOPE: only the five HA-backed cover/curtain helpers are
+  # synced. Screen timeout and night-mode start/end are device-local
+  # ESPHome globals with no HA counterpart, so there is nothing to sync
+  # them against - they are already authoritative and are left untouched.
+  - id: sync_settings_from_ha
+    mode: restart
+    then:
+      # ---- Cover open/close times + the Default flag ----
+      - lambda: 'id(mirroring_cover_settings) = true;'
+
+      - if:
+          condition:
+            lambda: 'return id(ha_cover_open_time).has_state();'
+          then:
+            - lvgl.dropdown.update:
+                id: cover_morning_dropdown
+                selected_index: !lambda |-
+                  std::vector<std::string> options = {
+                    "6:00", "6:30", "7:00", "7:30", "8:00",
+                    "8:30", "9:00", "9:30", "10:00"
+                  };
+                  std::string cur = id(ha_cover_open_time).state;
+                  for (size_t i = 0; i < options.size(); i++) {
+                    if (options[i] == cur) return (int)i;
+                  }
+                  return 4;  // Default 8:00
+
+      - if:
+          condition:
+            lambda: 'return id(ha_cover_close_time).has_state();'
+          then:
+            - lvgl.dropdown.update:
+                id: cover_evening_dropdown
+                selected_index: !lambda |-
+                  std::vector<std::string> options = {
+                    "19:00", "19:30", "20:00", "20:30", "21:00",
+                    "21:30", "22:00", "22:30", "23:00"
+                  };
+                  std::string cur = id(ha_cover_close_time).state;
+                  for (size_t i = 0; i < options.size(); i++) {
+                    if (options[i] == cur) return (int)i;
+                  }
+                  return 4;  // Default 21:00
+
+      # The Default checkbox also controls whether the two time dropdowns
+      # are selectable, so restore both the checked state and the
+      # enabled/disabled state together - exactly as the ha_cover_default
+      # handler does.
+      - if:
+          condition:
+            lambda: 'return id(ha_cover_default).has_state();'
+          then:
+            - lvgl.widget.update:
+                id: cover_default_checkbox
+                state:
+                  checked: !lambda 'return id(ha_cover_default).state;'
+            - lvgl.widget.update:
+                id: cover_morning_dropdown
+                state:
+                  disabled: !lambda 'return id(ha_cover_default).state;'
+            - lvgl.widget.update:
+                id: cover_evening_dropdown
+                state:
+                  disabled: !lambda 'return id(ha_cover_default).state;'
+            # When Default is active the fixed default times win over
+            # whatever the input_select helpers hold, matching the
+            # ha_cover_default handler's behaviour.
+            - if:
+                condition:
+                  lambda: 'return id(ha_cover_default).state;'
+                then:
+                  - lvgl.dropdown.update:
+                      id: cover_morning_dropdown
+                      selected_index: 5  # 8:30
+                  - lvgl.dropdown.update:
+                      id: cover_evening_dropdown
+                      selected_index: 6  # 22:00
+
+      - lambda: 'id(mirroring_cover_settings) = false;'
+
+      # ---- Cover pre-open / door-open positions ----
+      - lambda: 'id(mirroring_cover_positions) = true;'
+
+      - if:
+          condition:
+            lambda: 'return id(ha_cover_preopen_position).has_state();'
+          then:
+            - lvgl.dropdown.update:
+                id: preopen_dropdown
+                selected_index: !lambda |-
+                  int vals[] = {0, 5, 10, 15, 20, 25, 30, 40, 50};
+                  int cur = (int) id(ha_cover_preopen_position).state;
+                  for (int i = 0; i < 9; i++) {
+                    if (vals[i] == cur) return i;
+                  }
+                  return 2;  // Default 10%
+
+      - if:
+          condition:
+            lambda: 'return id(ha_cover_dooropen_position).has_state();'
+          then:
+            - lvgl.dropdown.update:
+                id: dooropen_dropdown
+                selected_index: !lambda |-
+                  int vals[] = {0, 20, 40, 50, 60, 70, 80, 100};
+                  int cur = (int) id(ha_cover_dooropen_position).state;
+                  for (int i = 0; i < 8; i++) {
+                    if (vals[i] == cur) return i;
+                  }
+                  return 4;  // Default 60%
+
+      - lambda: 'id(mirroring_cover_positions) = false;'
+
+      # Also refresh the cover slider from HA's current position, and
+      # clear any stale in-flight target. If a set_cover_position command
+      # was lost, cover_position_pending can otherwise keep ignoring
+      # incoming positions until its 20s failsafe expires; a manual sync
+      # should not have to wait that out.
+      - globals.set:
+          id: cover_position_pending
+          value: 'false'
+      - if:
+          condition:
+            lambda: 'return id(ha_cover_position).has_state();'
+          then:
+            - lvgl.slider.update:
+                id: cover_slider
+                value: !lambda 'return 100 - (int) id(ha_cover_position).state;'
 
   # Ambient-light-driven backlight brightness.
   #
