@@ -318,18 +318,19 @@ script:
       # screen load and a possible visible flicker.
       #
       # is_showing() is LvPageType's own accessor for exactly this
-      # question (see esphome/components/lvgl/lvgl_esphome.h), so no
-      # bookkeeping global is needed that could fall out of sync with
-      # reality.
+      # question (declared in esphome/components/lvgl/lvgl_esphome.h and
+      # used in ESPHome's own tests/components/lvgl/lvgl-package.yaml),
+      # so no bookkeeping global is needed that could fall out of sync
+      # with reality.
       #
       # NOTE: an earlier version of this compared lv_scr_act() against
-      # id(main_page) directly. That does not compile - id(main_page) is
-      # an esphome::lvgl::LvPageType*, an ESPHome wrapper, not the raw
-      # lv_obj_t* that lv_scr_act() returns:
+      # id(main_page) directly. That does NOT compile - id(main_page) is
+      # an esphome::lvgl::LvPageType*, ESPHome's wrapper around the page,
+      # not the raw lv_obj_t* that lv_scr_act() returns:
       #   error: comparison between distinct pointer types 'lv_obj_t*'
       #   and 'esphome::lvgl::LvPageType*' lacks a cast
-      # Comparing against id(main_page)->obj would work too, but relies
-      # on the wrapper's internal layout; is_showing() states the intent.
+      # id(main_page)->obj would also work, but reaches into the
+      # wrapper's internals; is_showing() states the intent.
       - if:
           condition:
             lambda: 'return !id(main_page)->is_showing();'
