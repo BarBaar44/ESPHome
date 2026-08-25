@@ -28,9 +28,35 @@
 #    array of second values).
 #
 # 3. Evaluate whether the HA-backed settings helpers actually exist
-#    (see evaluate_helper_health). Delayed well past the API handshake
-#    so the helpers have had a chance to report before we judge them
-#    missing; the 60s interval re-checks from then on.
+#    (see evaluate_helper_health), then re-apply their values to the
+#    widgets (see sync_settings_from_ha). Both run via
+#    check_ha_settings, the same script the "Check HA" button uses.
+#    Delayed well past the API handshake so the helpers have had a
+#    chance to report before we judge them missing; the 60s interval
+#    re-checks the health half from then on.
+#
+#    WHY THE RE-APPLY IS NEEDED (issue #45). LVGL widget state does not
+#    survive a reboot: after a restart or an OTA update the Default
+#    checkbox came up unchecked no matter what
+#    input_boolean.master_bedroom_cover_default_times actually held, and
+#    the same applies to the four cover dropdowns. The only thing that
+#    ever wrote those widgets was each homeassistant sensor's on_value /
+#    on_state handler, so the panel was relying on catching that single
+#    event as it arrived during the API handshake - with LVGL still
+#    coming up and no second chance if it was missed.
+#
+#    Re-applying from cached state closes that window: whatever HA has
+#    sent by this point is stamped onto the widgets, in a fixed order,
+#    regardless of when (or whether) the individual handlers fired.
+#
+#    NOTE ON THE ALTERNATIVE the issue also suggested - persisting the
+#    checkbox locally with restore_value: yes. Deliberately not done.
+#    These five settings are owned by Home Assistant, and a value
+#    restored from flash would be a second, competing source of truth
+#    that wins the race on every boot and shows a stale setting as if it
+#    were live. The night-mode dropdowns in job 2 above are persisted
+#    exactly because the opposite is true of them: they are device-local
+#    globals with no HA counterpart.
 #
 # Runs late (priority -100, after LVGL is set up) and is appended to the
 # on_boot automation defined in the main device YAML (ESPHome
@@ -49,12 +75,15 @@ esphome:
       - lvgl.dropdown.update:
           id: night_mode_end_dropdown
           selected_index: !lambda 'return id(night_mode_end_hour);'
-      # First health check. The extra delay is deliberate: at 2s the API
-      # may not have finished sending initial states, and flagging every
-      # helper as missing during a normal boot would train people to
-      # ignore the warning.
+      # First health check + the boot re-sync described above. The extra
+      # delay is deliberate: at 2s the API may not have finished sending
+      # initial states, and flagging every helper as missing during a
+      # normal boot would train people to ignore the warning. It also
+      # gives the re-sync something to work with - sync_settings_from_ha
+      # is has_state()-gated, so running it too early would simply skip
+      # every widget.
       - delay: 20s
-      - script.execute: evaluate_helper_health
+      - script.execute: check_ha_settings
 
 # =========================
 # GUARD GLOBALS
@@ -433,6 +462,13 @@ script:
   # best it can with whatever state exists. If helpers are missing the
   # user now sees WHICH ones, instead of a button that appears to work
   # and changes nothing.
+  #
+  # Also executed once from on_boot (see the BOOT-TIME UI SYNC block at
+  # the top of this file). LVGL widget state does not survive a reboot,
+  # so without that call the settings widgets came up showing their YAML
+  # defaults - most visibly the Default checkbox, which was always
+  # unchecked after a restart or OTA regardless of the helper's real
+  # value (issue #45).
   - id: check_ha_settings
     mode: restart
     then:
@@ -453,6 +489,10 @@ script:
   # identical-state-but-wrong-widget is exactly the case where a manual
   # re-apply would be wanted. Reading the state each homeassistant sensor
   # already caches needs no round-trip and cannot silently no-op.
+  #
+  # That property is also what makes this safe to run at boot: it does
+  # not depend on catching each helper's arrival event as it lands
+  # during the API handshake, only on the state having arrived at all.
   #
   # ORDERING MATTERS, AND IS THE MAIN REASON THIS SCRIPT EXISTS:
   # at boot the helpers arrive independently and their handlers fight.
@@ -476,6 +516,8 @@ script:
   # re-applied. Screen timeout and night-mode start/end are device-local
   # ESPHome globals with no HA counterpart, so there is nothing to sync
   # them against - they are already authoritative and are left untouched.
+  # (Night start/end are restored into their dropdowns separately by the
+  # on_boot block at the top of this file.)
   - id: sync_settings_from_ha
     mode: restart
     then:
@@ -770,6 +812,11 @@ interval:
   # is what keeps the warning on screen rather than latching it. Once a
   # helper comes back the label returns to "Settings OK" within a minute
   # without any user action.
+  #
+  # Deliberately evaluate_helper_health and NOT check_ha_settings: this
+  # must not write to the settings widgets. Re-applying HA state every
+  # 60s would fight the user mid-edit - the boot-time re-sync is a
+  # one-shot at a moment when nobody can be interacting yet.
   - interval: 60s
     then:
       - script.execute: evaluate_helper_health
@@ -1326,6 +1373,11 @@ sensor:
 
   # Cover door-open close position helper sync (Settings dropdown).
   # Guarded so the programmatic dropdown update doesn't echo back to HA.
+  #
+  # NOTE the entity_id: ..._cover_door_open_position. The HA-side
+  # automations must read the SAME helper - one of them previously read
+  # ..._cover_door_open_close_position, which does not exist, so the
+  # door-open gap configured here was ignored (BarBaar44/ESPHome#44).
   - platform: homeassistant
     id: ha_cover_dooropen_position
     entity_id: input_number.master_bedroom_cover_door_open_position
