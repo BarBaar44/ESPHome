@@ -8,6 +8,7 @@ This repository contains ESPHome configuration files for various devices integra
 
 ```
 ESPHome/
+├── base/                          # Primary per-device configs (reference shared files via packages:)
 ├── DBE/
 │   └── DBEmain.yml               # Temp-differential fan controller (dual Dallas sensors + hard-off relay)
 ├── LVGL/
@@ -35,6 +36,21 @@ ESPHome/
 ---
 
 ## 📂 Folder Details
+
+## 📂 `base/` (WIP)
+
+Contains the primary ESPHome config file for each device. These reference the shared files in the other folders (`generic/`, `shelly/`, `sonoff/`, etc.) via `packages:` statements pointing back at this repo, rather than duplicating that config locally.
+
+Example:
+```yaml
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [generic/generic_sensors.yml, generic/wifi.yml, shelly/plug_s.yml]
+    refresh: 1min
+```
+
+---
 
 ### 🔵 `DBE/`
 | File | Description |
