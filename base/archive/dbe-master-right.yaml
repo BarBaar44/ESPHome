@@ -1,0 +1,38 @@
+substitutions:
+  device_name: dbemasright
+  device_description: "DBE Master Right"
+  dallas_1_ID: "0x5400000094412128"
+  dallas_2_ID: "0xb900000093b9f028"
+  WIFI_passwd: !secret wifi_password
+  fallback_passwd: "!paniek!"
+  friendly_name: "DBE Master Right"
+  device_key: "VZiDEPw21cjrZGZDYsRRylZ6fU/1d+DOG8UQgrQFotw="
+
+esphome:
+  name: dbe-mas-right
+  friendly_name: '${device_description}'
+
+esp8266:
+  board: d1_mini
+
+# Enable logging
+logger:
+  level: DEBUG
+
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: '${device_key}'
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [generic/wifi.yml, generic/generic_sensors.yml, DBE/DBEmain.yml]
+    refresh: 1min
+
+sensor:
+  - platform: homeassistant
+    name: '${device_name} Heating Setting'
+    id: heating_setting
+    entity_id: sensor.room_bart_heating

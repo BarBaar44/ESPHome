@@ -1,0 +1,61 @@
+# Read by the Fleet for ESPHome add-on. Do not remove.
+# esphome-fleet:
+#   schedule: 0 10 */7 * *
+#   schedule_enabled: true
+#   schedule_tz: Europe/Amsterdam
+#   schedule_last_run: '2026-08-22T08:00:00.713731+00:00'
+
+substitutions:
+  device_name: airqualitymeter
+  friendly_name: "Air Quality Meter"
+  device_description: Co2 meter Livingroom
+  WIFI_passwd: !secret wifi_password
+  fallback_passwd: !secret wifi_bck
+  area: "Living Room"
+  
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+esphome:
+  name: '${device_name}'
+  comment: '${device_description}'
+  friendly_name: '${friendly_name}'
+  area: "Livingroom"
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [generic/wifi.yml, generic/generic_sensors.yml, generic/restartbutton.yml]
+    refresh: 0d
+
+api:
+  encryption:
+    key: !secret airqualitymeter_key
+  services:
+    - service: mhz19_calibrate_zero
+      then:
+         - mhz19.calibrate_zero: airqualitymeter
+
+logger:
+  level: INFO
+
+uart:
+ rx_pin: 18
+ tx_pin: 19
+ baud_rate: 9600
+
+sensor:
+ - platform: mhz19
+   co2:
+    name: "MH-Z19 CO2"
+    device_class: "carbon_dioxide"
+    state_class: "measurement"
+   temperature:
+    name: "MH-Z19 Temperature"
+    device_class: "temperature"
+    state_class: "measurement"
+   update_interval: 60s
+   automatic_baseline_calibration: false
+   id: airqualitymeter

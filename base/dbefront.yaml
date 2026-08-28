@@ -1,0 +1,35 @@
+# Read by the Fleet for ESPHome add-on. Do not remove.
+# esphome-fleet:
+#   schedule: 0 10 */7 * *
+#   schedule_enabled: true
+#   schedule_tz: Europe/Amsterdam
+#   schedule_last_run: '2026-08-22T08:00:00.973603+00:00'
+
+substitutions:
+  device_name: "dbefront"
+  device_description: DBE Livingroom Front
+  dallas_1_ID: "0x1b00000069e9d528"
+  dallas_2_ID: "0xb900000093b9f028"
+  WIFI_passwd: !secret wifi_password
+  fallback_passwd: !secret wifi_bck
+  device_key: !secret dbefront_key
+  friendly_name: "DBE Front"
+  area: "Living Room"
+
+esphome:
+  name: '${device_name}'
+  friendly_name: '${friendly_name}'
+  comment: '${device_description}'
+
+esp8266:
+  board: d1_mini
+
+# Enable logging
+logger:
+  level: DEBUG
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [generic/wifi.yml, generic/generic_sensors.yml, DBE/DBEmain.yml]
+    refresh: 1min

@@ -1,0 +1,202 @@
+# distributed-esphome:
+#   schedule: 0 10 * * 2
+#   schedule_enabled: true
+#   schedule_tz: Europe/Amsterdam
+#   schedule_last_run: '2026-04-22T08:00:00.164288+00:00'
+
+substitutions:
+  device_name: dbetest
+  device_description: DBE test
+  dallas_1_ID: "0x1b00000069e9d528"
+  dallas_2_ID: "0xb900000093b9f028"
+  MQTT_passwd: !secret mqttpass
+  WIFI_passwd: !secret wifi_password
+  fallback_passwd: "!paniek!"
+  friendly_name: DBE Test
+  device_key: "LB++lM+ih5bVH7IVQU/PpURE+lFNg6Cvum3yYeV77ec="
+
+esphome:
+  name: dbe-test
+  friendly_name: DBE Test
+
+esp8266:
+  board: d1_mini
+
+# Enable logging
+logger:
+  level: DEBUG
+
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: '${device_key}'
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [generic/wifi.yml, generic/generic_sensors.yml, generic/mqtt.yml]
+    refresh: 1min
+
+    ######################################################
+#
+# Main DBE configuration.
+# Two Dallas temperature sensors calculate the difference between the incoming
+# and outcoming water temperature. The aim is to have 20 degrees is a difference
+# (But this will never be reached). The smaller the difference, the faster the fans go.
+#
+# There is a required sensor outside this config:
+# sensor:
+#  - platform: homeassistant
+#    name: '${device_name} Heating Setting'
+#    id: heating_setting
+#    entity_id: sensor.living_room_heating
+#
+# This sensor indicates how 'open' the temperature valve is (I use Tado). When the valve
+# is open (!= 0), the fans spin up. 120 seconds after the valve closes, all fans come to a full stop. 
+# The boolean 'heating_off' is used to monitor this
+#
+####################################################################
+
+#Set some global vars to prevent initial division by zeros
+globals:
+  - id: fanspeed
+    type: float
+    restore_value: no
+    initial_value: '1'
+  - id: heating_off
+    type: bool
+    initial_value: 'true'
+
+one_wire:
+  - platform: gpio
+    pin: D1
+    id: dallas_1
+  
+sensor:
+# Sensor for Dallas 1
+  - platform: dallas_temp
+    address: '${dallas_1_ID}'
+    name: '${device_name} Dallas 1'
+    id: temp_1
+    update_interval: 30s
+    accuracy_decimals: 1
+    unit_of_measurement: "°C"
+    device_class: "temperature"
+    state_class: "measurement"
+    filters:
+      - filter_out: nan
+    on_value:
+      then:
+        - if:
+            condition:
+              - lambda: 'return id(heating_setting).state < 1;'
+              - lambda: 'return id(heating_off) == false;'
+            then:
+              - logger.log: "Spinning down..."
+              - logger.log:
+                  format: "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f\x1b[0m"
+                  args: ['id(temp_1).state', 'id(temp_2).state', 'id(fanspeed)', 'id(heating_setting).state'] 
+              - fan.turn_on:
+                  id: fancontrol
+                  speed: 15
+              - logger.log: "wait 120"
+              - delay: 120s
+              - fan.turn_off: 
+                  id: fancontrol 
+              - globals.set:
+                  id: heating_off
+                  value: 'true'
+              - logger.log: "Fans off"
+            else:
+              - if:
+                  condition:
+                    - lambda: 'return id(heating_setting).state > 1 && id(heating_setting).state < 10;'
+                  then:
+                    - logger.log: "Stale tempo"
+                    - logger.log:
+                        format: "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f\x1b[0m"
+                        args: ['id(temp_1).state', 'id(temp_2).state', 'id(fanspeed)', 'id(heating_setting).state'] 
+                    - fan.turn_on:
+                        id: fancontrol
+                        speed: 15
+                  else:
+                    - if:
+                        condition:
+                          - lambda: 'return id(heating_setting).state > 10;'
+                        then:
+                          - lambda: |-
+                             float t1 = id(temp_1).state;
+                             float t2 = id(temp_2).state;
+                             float diff = abs(t1 - t2);
+                             id(fanspeed) = max(0.0, min(100.0, (20.0 - diff) * 5.0));
+                          - logger.log: "Cooling!"
+                          - logger.log:
+                               format: "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f\x1b[0m"
+                               args: ['id(temp_1).state', 'id(temp_2).state', 'id(fanspeed)', 'id(heating_setting).state']
+                          - fan.turn_on:
+                              id: fancontrol
+                              speed: !lambda 'return id(fanspeed);'
+                          - globals.set:
+                              id: heating_off
+                              value: 'false'
+                        else:
+                          - globals.set:
+                              id: heating_off
+                              value: 'true'
+                          - logger.log: "Done cooling..."
+                          - logger.log:
+                              format: "\x1b[35mT1: %.2f, T2: %.2f, Fan Speed: %.2f, Heating Setting: %.2f\x1b[0m"
+                              args: ['id(temp_1).state', 'id(temp_2).state', 'id(fanspeed)', 'id(heating_setting).state'] 
+
+  - platform: pulse_counter
+    pin:
+      number: D5
+    name: '${device_name} Fan Speed'
+    unit_of_measurement: 'RPM'
+    filters:
+      - multiply: 0.5
+
+  - platform: dallas_temp
+# Sensor for Dallas 2
+    address: '${dallas_2_ID}'
+    name: '${device_name} Dallas 2'
+    id: temp_2
+    update_interval: 30s
+    accuracy_decimals: 1
+    unit_of_measurement: "°C"
+    device_class: "temperature"
+    state_class: "measurement"
+    filters:
+      - filter_out: nan
+
+  - platform: homeassistant
+    name: '${device_name} Heating Setting'
+    id: heating_setting
+    entity_id: sensor.living_room_heating
+
+switch:
+  - platform: gpio
+    pin: D0
+    id: "powerswitch"
+    internal: true
+
+output:
+  - platform: esp8266_pwm
+    pin:
+      number: D6
+    frequency: 1000 Hz
+    id: pwm_output
+    max_power: 90%
+
+fan:
+  - platform: speed
+    output: pwm_output
+    id: fancontrol
+    name: "${device_name} Fan"
+    on_turn_on:
+     - switch.turn_on: powerswitch
+     - logger.log: "Fan Turned On!"
+    on_turn_off:
+     - switch.turn_off: powerswitch
+     - logger.log: "Fan Turned Off!"

@@ -1,0 +1,171 @@
+esphome:
+  name: coffee-wizard
+  platform: ESP32
+  board: esp32dev
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "DDFmb8Tqc4WfYsvI55BTa3tQZC82cSaLfSvTZDIByDo="
+
+ota:
+  - platform: esphome
+    password: "0124dc73da9a0d5bbea34da4dda66e37"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Coffee-Wizard Fallback Hotspot"
+    password: "OxFjwkF0LbO1"
+
+captive_portal:
+    
+# Enable LVGL for GUI
+external_components:
+  - source: github://esphome/esphome
+    components: [lvgl]
+
+# Define Crowpanel LCD and Touchscreen
+display:
+  - platform: ili9xxx
+    model: ili9341
+    id: display1
+    cs_pin: 15
+    reset_pin: 16
+    dc_pin: 17
+    rotation: 270  # Adjust based on your display rotation
+    lambda: |
+      it.fill(COLOR_BLACK);
+    invert_colors: no
+    
+spi:
+
+# Step 1: Define the touch panel (Crowpanel uses a touch screen for interactivity)
+touchscreen:
+  - platform: xpt2046
+    calibration:
+      x_min: 281
+      x_max: 3848
+      y_min: 347
+      y_max: 3878
+    cs_pin: 5
+    update_interval: 50ms
+    on_touch:
+      - lambda: |-
+          if (id(select_bean_ui).is_pressed()) {
+            id(select_bean_ui).set_value();
+          }
+          if (id(grinder_size_ui).is_pressed()) {
+            id(grinder_size_ui).set_value();
+          }
+          if (id(grind_time_ui).is_pressed()) {
+            id(grind_time_ui).set_value();
+          }
+          if (id(confirm_button).is_pressed()) {
+            id(confirm_button).set_value();
+          }
+
+# Fetching and Displaying Home Assistant Values for Grinder Size and Grind Time
+sensor:
+  - platform: homeassistant
+    id: grinder_size_sensor
+    entity_id: input_number.espresso_grinder_size
+    on_value:
+      then:
+        - lambda: |-
+            if (id(select_bean_ui).value == "Espresso") {
+              id(grinder_size_ui).set_value(x);
+            } else if (id(select_bean_ui).value == "Medium Roast") {
+              id(grinder_size_ui).set_value(x);
+            } else if (id(select_bean_ui).value == "Light Roast") {
+              id(grinder_size_ui).set_value(x);
+            }
+
+  - platform: homeassistant
+    id: grind_time_sensor
+    entity_id: input_number.espresso_grind_time
+    on_value:
+      then:
+        - lambda: |-
+            if (id(select_bean_ui).value == "Espresso") {
+              id(grind_time_ui).set_value(x);
+            } else if (id(select_bean_ui).value == "Medium Roast") {
+              id(grind_time_ui).set_value(x);
+            } else if (id(select_bean_ui).value == "Light Roast") {
+              id(grind_time_ui).set_value(x);
+            }
+
+# LVGL Configuration for Dropdowns and Sliders (Direct usage of LVGL components)
+lvgl:
+  widgets: 
+  - dropdown:
+      id: select_bean_ui
+#      name: "Coffee Bean"
+      options:
+        - "Espresso"
+        - "Medium Roast"
+        - "Light Roast"
+      width: 160
+      height: 40
+      x: 40
+      y: 20
+#      label: "Select Coffee Bean"
+      on_value:
+        - homeassistant.service:
+            service: input_select.select_option
+            data:
+              entity_id: input_select.coffee_bean
+              option: !lambda "return id(select_bean_ui).value;"
+
+  - id: grinder_size_ui
+    type: lvgl:slider
+    name: "Grinder Size"
+    min_value: 1
+    max_value: 10
+    width: 160
+    height: 40
+    x: 40
+    y: 80
+    label: "Grinder Size"
+    set_value_action:
+      - homeassistant.service:
+          service: input_number.set_value
+          data:
+            entity_id: !lambda "return 'input_number.' + id(select_bean_ui).value + '_grinder_size';"
+            value: !lambda "return id(grinder_size_ui).value;"
+
+  - id: grind_time_ui
+    type: lvgl:slider
+    name: "Grind Time"
+    min_value: 1
+    max_value: 60
+    width: 160
+    height: 40
+    x: 40
+    y: 120
+    label: "Grind Time"
+    set_value_action:
+      - homeassistant.service:
+          service: input_number.set_value
+          data:
+            entity_id: !lambda "return 'input_number.' + id(select_bean_ui).value + '_grind_time';"
+            value: !lambda "return id(grind_time_ui).value;"
+
+  - id: confirm_button
+    type: lvgl:button
+    label: "Confirm Settings"
+    width: 160
+    height: 40
+    x: 40
+    y: 180
+    action:
+      - homeassistant.service:
+          service: notify.notify
+          data:
+            message: "Grinder settings confirmed for { { states.input_select.coffee_bean.state } }."

@@ -1,0 +1,32 @@
+esphome:
+  name: cccccccc
+  friendly_name: cccccccc
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "Rd2LQ8lJdnMyYHFuJMknuB0TFwIghWrmCC9ft7U6XsQ="
+
+ota:
+  - platform: esphome
+    password: "763b115b3dabc7bd4bf20be3fcd953e8"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Cccccccc Fallback Hotspot"
+    password: "rqzgx2wtgUu7"
+
+captive_portal:
+    

@@ -1,0 +1,24 @@
+# Read by the Fleet for ESPHome add-on. Do not remove.
+# esphome-fleet:
+#   schedule: 0 10 */7 * *
+#   schedule_enabled: true
+#   schedule_tz: Europe/Amsterdam
+#   schedule_last_run: '2026-08-22T08:00:01.406270+00:00'
+
+substitutions:
+  device_name: sonoff-ifan
+  device_description: Sonoff iFan03 Masterbedroom
+  channel_1: sonoff-ifan
+  WIFI_passwd: !secret wifi_password
+  fallback_passwd: !secret wifi_bck
+  device_key: !secret sonoff-ifan_key
+  friendly_name: "iFan03 Masterbedroom"
+  on_boot_light: ALWAYS_OFF
+  spare_button_light_entity: "light.buro"
+  area: "Master Bedroom"
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [generic/generic_sensors.yml, generic/wifi.yml, sonoff/ifan03.yml]
+    refresh: 1min

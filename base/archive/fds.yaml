@@ -1,0 +1,31 @@
+esphome:
+  name: fds
+  friendly_name: fds
+
+esp32:
+  board: fm-devkit
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "ViL9akxfZStPs5K1toj0alsHUY3+aXTTDWdUT30Uu3c="
+
+ota:
+  password: "05706fd29f201b8def469b9770d8a9ac"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Fds Fallback Hotspot"
+    password: "OXX1GDngwo9B"
+
+captive_portal:
+    

@@ -1,0 +1,48 @@
+# Read by the Fleet for ESPHome add-on. Do not remove.
+# esphome-fleet:
+#   schedule: 0 10 */7 * *
+#   schedule_enabled: true
+#   schedule_tz: Europe/Amsterdam
+#   schedule_last_run: '2026-08-22T08:00:00.589954+00:00'
+
+substitutions:
+  device_name: "bluetooth-proxy-garden"
+  device_description: Bluetooth Proxy Garden
+  area: "Rear Garden"
+
+esphome:
+  name: "bluetooth-proxy-garden"
+  comment: '${device_description}'
+  friendly_name: "bluetooth-proxy-garden"
+  on_boot:
+    then:
+      - output.turn_on: power_led
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret bluetooth-proxy-garden_key
+  on_client_connected:
+    then:
+      - output.turn_on: ha_led
+  on_client_disconnected:
+    then:
+      - output.turn_off: ha_led
+
+ota:
+  password: !secret bluetooth-proxy-garden_ota
+  platform: esphome
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [bluetooth-proxy/proxy.yml]
+    refresh: 1min

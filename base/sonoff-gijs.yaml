@@ -1,0 +1,22 @@
+# Read by the Fleet for ESPHome add-on. Do not remove.
+# esphome-fleet:
+#   schedule: 0 10 */7 * *
+#   schedule_enabled: true
+#   schedule_tz: Europe/Amsterdam
+#   schedule_last_run: '2026-08-22T08:00:01.385178+00:00'
+
+substitutions:
+  device_name: sonoff-gijs
+  device_description: Nachtlamp Gijs
+  channel_1: sonoff-gijs
+  WIFI_passwd: !secret wifi_password
+  fallback_passwd: !secret wifi_bck
+  device_key: !secret sonoff-gijs_key
+  friendly_name: "Nachtlamp Gijs"
+  area: "Room Gijs"
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [generic/generic_sensors.yml, generic/wifi.yml, sonoff/basic.yml]
+    refresh: 1min

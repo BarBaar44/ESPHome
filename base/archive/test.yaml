@@ -1,0 +1,90 @@
+esphome:
+  name: human
+  comment: Screek Human Sensor
+  friendly_name: Human Sensor
+  name_add_mac_suffix: True
+  platformio_options:
+    board_build.flash_mode: dio
+  project: 
+    name: Screek.Human_Presence_Sensor
+    version: 2A
+  on_boot:
+    - priority: 900
+      then:
+        lambda: |-
+          id(cpu_speed) = ESP.getCpuFreqMHz();
+
+esp32:
+  board: lolin_s2_mini
+  framework:
+    type: arduino
+    version: 2.0.9
+    platform_version: 6.3.0
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "HDwlYfRsQIS3Esgq4YWK9sBBhHUrh7XM7S5gLkDXVkE="
+
+ota:
+  - platform: esphome
+    password: "bb08572ea49b06ef024f1e242b912e08"
+   
+    # This is a custom firmware for Human Presence Sensor 2A
+# https://screek.io/2a
+  
+globals:
+  - id: cpu_speed
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: last_update_ld2450
+    type: unsigned long
+    restore_value: no
+    initial_value: '0'
+
+improv_serial:
+  
+# Enable logging
+logger:
+  # level: VERY_VERBOSE
+
+debug:
+  update_interval: 30s
+
+text_sensor:
+  - platform: debug
+    reset_reason:
+      name: "Reset Reason"
+      disabled_by_default: True
+  - platform: wifi_info
+    mac_address:
+      name: ESP MAC
+      entity_category: "diagnostic"
+      disabled_by_default: True
+
+wifi:
+  power_save_mode: NONE
+  reboot_timeout: 10min
+  ssid: "BarBaar_IoT"
+  password: !secret wifipass
+  fast_connect: on
+  ap:
+   ssid: 'Livingroom Fallback Hotspot'
+   password: '!paniek!'
+
+captive_portal:
+
+web_server:
+  port: 80
+
+binary_sensor:
+  - platform: status
+    name: Online
+    id: ink_ha_connected
+
+i2c:
+  sda: GPIO7
+  scl: GPIO11
+  scan: true
+  id: bus_a

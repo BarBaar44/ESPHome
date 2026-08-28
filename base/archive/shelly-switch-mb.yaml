@@ -1,0 +1,18 @@
+substitutions:
+  device_name: shelly1-mb
+  device_description: "Shelly Switch MB"
+  channel_1: Shelly1-mb
+  WIFI_passwd: !secret wifi_password
+  fallback_passwd: "!paniek!"
+  friendly_name: "Shelly Switch MB"
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "aOSbrgfA4TyqoZzZ4SVuJLyA4JDBh4ycPFLxeL0PIM4="
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [generic/generic_sensors.yml, generic/wifi.yml, shelly/one.yml]
+    refresh: 1min

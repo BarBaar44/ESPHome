@@ -1,0 +1,22 @@
+# Read by the Fleet for ESPHome add-on. Do not remove.
+# esphome-fleet:
+#   schedule: 0 10 */7 * *
+#   schedule_enabled: true
+#   schedule_tz: Europe/Amsterdam
+#   schedule_last_run: '2026-08-22T08:00:01.270909+00:00'
+
+substitutions:
+  device_name: shelly1-gijs
+  device_description: Shelly Switch Gijs
+  channel_1: Shelly1-gijs
+  WIFI_passwd: !secret wifi_password
+  fallback_passwd: !secret wifi_bck
+  device_key: !secret shelly1-gijs_key
+  friendly_name: "Shelly Switch Gijs"
+  area: "Room Gijs"
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [generic/generic_sensors.yml, generic/wifi.yml, shelly/one.yml]
+    refresh: 1min

@@ -1,0 +1,31 @@
+substitutions:
+  device_name: shelly-kodi
+  device_description: "Shelly Plug Kodi"
+  channel_1: "Kodi"
+  WIFI_passwd: !secret wifi_password
+  fallback_passwd: "!paniek!"
+  friendly_name: "Shelly Plug Kodi"
+  area: "Living Room"
+
+  # Higher value gives lower watt readout
+  current_res: "0.000943"
+  # Lower value gives lower voltage readout
+  voltage_div: "2066"
+  # measure a relatively strong load and enter values measured by the device vs the values your reference measurement provided here
+  power_cal_meas: "1710.0"
+  power_cal_real: "1685.0"
+
+  max_current: "10"
+  max_power: "2400"
+  max_temp: "70.0"
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "1AoYpG9/DtaIQWoSIAmuxAaLQJX+aU7hIO8+kGbe9Ak="
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [generic/generic_sensors.yml, generic/wifi.yml, shelly/plug_s.yml]
+    refresh: 1min

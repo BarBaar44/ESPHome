@@ -1,0 +1,203 @@
+# Read by the Fleet for ESPHome add-on. Do not remove.
+# esphome-fleet:
+#   schedule: 0 10 */7 * *
+#   schedule_enabled: true
+#   schedule_tz: Europe/Amsterdam
+#   schedule_last_run: '2026-08-22T08:00:01.010154+00:00'
+
+substitutions:
+  device_name: "p1-meter-kit"
+  friendly_name: "P1-Meter-Kit"
+  device_description: P1 Meter
+  WIFI_passwd: !secret wifi_password
+  fallback_passwd: !secret wifi_bck
+  device_key: !secret p1-meter-kit_key
+  area: "Hallway"
+
+esphome:
+  name: ${device_name}
+  comment: '${device_description}'
+  friendly_name: '${friendly_name}'
+
+esp8266:
+  board: d1_mini
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [generic/wifi.yml, generic/generic_sensors.yml, generic/restartbutton.yml]
+    refresh: 0d
+
+# Enable logging
+logger:
+  baud_rate: 0
+  level: DEBUG
+
+ota:
+  platform: esphome
+
+captive_portal:
+    
+#custom
+web_server:
+  port: 80
+
+# Status LED of ESP
+status_led:
+  pin: GPIO16
+  
+# I²C Bus
+#
+# This component sets up the I²C bus for the ESP8266.
+#
+# https://esphome.io/components/i2c.html
+#
+i2c:
+  sda: GPIO4
+  scl: GPIO5
+  scan: true
+  frequency: 400kHz
+
+#DSMR part
+uart:
+  rx_pin:
+    number: D7
+    inverted: true
+  baud_rate: 115200
+  rx_buffer_size: 1700
+  # data_bits: 7
+  # parity: EVEN
+  # stop_bits: 1
+  #debug:
+  #  direction: RX
+  #  after:
+  #    delimiter: "\r\n"
+  #  sequence:
+  #    - lambda: UARTDebug::log_string(direction, bytes);
+  
+dsmr:
+  gas_mbus_id: 1
+  crc_check: false
+  request_pin: D5
+  max_telegram_length: 1700
+  #request_interval: 5000ms
+#DSMR part end
+
+sensor:
+  - platform: dsmr
+    energy_delivered_tariff1:
+      id: dsmr_electricity_delivered_1
+      name: "Energy Consumed Tariff 1"
+      state_class: total_increasing
+    energy_returned_tariff1:
+      id: dsmr_electricity_returned_1
+      name: "Energy Produced Tariff 1"
+      state_class: total_increasing
+    energy_delivered_tariff2:
+      id: dsmr_electricity_delivered_2
+      name: "Energy Consumed Tariff 2"
+      state_class: total_increasing
+    energy_returned_tariff2:
+      id: dsmr_electricity_returned_2
+      name: "Energy Produced Tariff 2"
+      state_class: total_increasing
+    power_delivered:
+      accuracy_decimals: 3
+      id: dsmr_electricity_currently_delivered
+      name: "Power Consumed"
+    power_returned:
+      accuracy_decimals: 3
+      id: dsmr_electricity_currently_returned
+      name: "Power Produced"
+    voltage_l1:
+      id: dsmr_phase_voltage_l1
+      name: "Voltage Phase 1"
+    voltage_l2:
+      id: dsmr_phase_voltage_l2
+      name: "Voltage Phase 2"
+    voltage_l3:
+      id: dsmr_phase_voltage_l3
+      name: "Voltage Phase 3"
+    current_l1:
+      id: dsmr_phase_power_current_l1
+      name: "Current Phase 1"
+    current_l2:
+      id: dsmr_phase_power_current_l2
+      name: "Current Phase 2"
+    current_l3:
+      id: dsmr_phase_power_current_l3
+      name: "Current Phase 3"
+    power_delivered_l1:
+      accuracy_decimals: 3
+      id: dsmr_phase_currently_delivered_l1
+      name: "Power Consumed Phase 1"
+    power_delivered_l2:
+      accuracy_decimals: 3
+      id: dsmr_phase_currently_delivered_l2
+      name: "Power Consumed Phase 2"
+    power_delivered_l3:
+      accuracy_decimals: 3
+      id: dsmr_phase_currently_delivered_l3
+      name: "Power Consumed Phase 3"
+    power_returned_l1:
+      accuracy_decimals: 3
+      id: dsmr_phase_currently_returned_l1
+      name: "Power Produced Phase 1"
+    power_returned_l2:
+      accuracy_decimals: 3
+      id: dsmr_phase_currently_returned_l2
+      name: "Power Produced Phase 2"
+    power_returned_l3:
+      accuracy_decimals: 3
+      id: dsmr_phase_currently_returned_l3
+      name: "Power Produced Phase 3"
+    gas_delivered:
+      id: dsmr_extra_device_delivered
+      name: "Gas Consumed"
+      state_class: total_increasing
+    
+    # Belgium
+    #gas_delivered_be:
+    #  name: ${friendly_name} Gas Delivered BE
+    
+    # Luxembourg
+    #energy_delivered_lux:
+    #  name: ${friendly_name} Energy Delivered Lux
+    #energy_returned_lux:
+    #  name: ${friendly_name} Energy Returned Lux
+  - platform: wifi_signal
+    name: " Wi-Fi Signal"
+    update_interval: 360s
+ 
+  - platform: hdc1080
+    temperature:
+      id: sensor_temperature
+      name: "Temperature"
+      filters:
+        offset: -5.5
+    humidity:
+      id: sensor_humidity
+      name: "Humidity"
+      filters:
+        offset: 12
+    update_interval: 60s
+
+text_sensor:
+  - platform: dsmr
+    identification:
+      name: "DSMR Identification"
+    p1_version:
+      name: "DSMR Version"
+    timestamp:
+      id: dsmr_timestamp
+      internal: true
+  - platform: wifi_info
+    ip_address:
+      name: "IP Address"
+    ssid:
+      name: "Wi-Fi SSID"
+    bssid:
+      name: "Wi-Fi BSSID"
+  - platform: version
+    name: "ESPHome Version"
+    hide_timestamp: true

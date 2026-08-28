@@ -1,0 +1,20 @@
+substitutions:
+  device_name: ifan-mb
+  device_description: iFan Masterbedroom
+  WIFI_passwd: !secret wifi_password
+  fallback_passwd: "!paniek!"
+  friendly_name: "iFan Masterbedroom"
+  comment: "Sonoff Ifan03 Ventilator"
+  on_boot_light: ALWAYS_ON # or ALWAYS_OFF
+  spare_button_light_entity: "light.buro"
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "vJjgDfQyXydxTQEKGZWoBcQ4IpTqQg64bedq06P8gdI="
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [generic/generic_sensors.yml, generic/wifi.yml, sonoff/ifan03.yml]
+    refresh: 1min

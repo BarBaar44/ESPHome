@@ -1,0 +1,104 @@
+substitutions:
+  device_name: dbelivingroomrear
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+esphome:
+  name: '${device_name}'
+  friendly_name: "DBE Livingroom Rear"
+
+wifi:
+  ssid: "BarBaar_IoT"
+  password: !secret wifipass
+  fast_connect: on
+  power_save_mode: light
+  ap:
+   ssid: 'Livingroom Fallback Hotspot'
+   password: '!paniek!'
+  
+captive_portal:
+
+ota:
+
+api:
+  encryption:
+    key: "zduw6zzoXOkM1Xv2g5meYBNMk0ghRQS2ybZ/5AhqiQQ="
+  
+# Enable logging
+logger:
+  level: DEBUG
+  
+globals:
+  - id: fanspeedvalue
+    type: float
+    restore_value: true
+    initial_value: '0'
+  - id: fanspeedinternal
+    type: float
+    restore_value: true
+    initial_value: '0'
+  
+sensor:
+  - platform: homeassistant
+    name: "Current fanspeed"
+    entity_id: sensor.dbelivingroomfront_speed_setting_2
+    id: fanspeed
+    on_value:
+      then:
+        - globals.set:
+            id: fanspeedvalue
+            value: !lambda 'return int(x);'
+        - lambda: |-
+            id(fanspeedinternal) = (id(fanspeedvalue) / 1000);
+            if (id(fanspeedinternal) < 0) {
+              id(fanspeedinternal) = abs(id(fanspeedinternal));
+            }
+        - logger.log:
+            format: "fanspeed is %.1f, fanspeeinternal is %.1f"
+            args: [ 'id(fanspeedvalue)', 'id(fanspeedinternal)' ]
+        - if:
+            condition:
+              lambda: 'return id(fanspeedinternal) > id(fanspeedmax).state;'
+            then:
+                - output.set_level:
+                   id: ledc_speed
+                   level: 0.7
+                - logger.log: "Above 0.7"
+        - if:
+            condition:
+              lambda: 'return id(fanspeedinternal) < 0.1;'
+            then:
+              - output.set_level:
+                 id: ledc_speed
+                 level: 0
+              - logger.log: "Stop fans"       
+            else:
+              - output.set_level:
+                  id: ledc_speed
+                  level: !lambda "return id(fanspeedinternal);"
+              - logger.log: "Below 0.7"
+              
+  - platform: homeassistant
+    name: "Max fanspeed sensor"
+    entity_id: input_number.fanspeedmax
+    id: fanspeedmax
+    
+output:
+  - platform: ledc
+    pin: 22
+    id: ledc_speed
+    frequency: 25000
+
+button:
+  - platform: restart
+    name: '${device_name} restart'
+    
+mqtt:
+ port: 1883
+ broker: 192.168.0.221
+ username: "mqtt"
+ password: !secret mqttpass
+ client_id: '${device_name}'
