@@ -13,6 +13,11 @@ captive_portal:
 ota:
   - platform: esphome
 
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "${device_key}"
+
 time:
   - platform: homeassistant
     id: time_homeassistant
