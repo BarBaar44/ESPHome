@@ -1,0 +1,26 @@
+# Read by the Fleet for ESPHome add-on. Do not remove.
+# esphome-fleet:
+#   schedule: 0 10 */7 * *
+#   schedule_enabled: true
+#   schedule_tz: Europe/Amsterdam
+#   schedule_last_run: '2026-08-22T08:00:01.363966+00:00'
+
+substitutions:
+  device_name: sonoff-fb
+  device_description: Fan Bathroom
+  channel_1: sonoff-fb
+  WIFI_passwd: !secret wifi_password
+  fallback_passwd: !secret wifi_bck
+  device_key: !secret sonoff-fb_key
+  friendly_name: "Fan Bathroom"
+  area: "Bathroom"
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [generic/generic_sensors.yml, generic/wifi.yml, sonoff/basic.yml]
+    refresh: 1min
+
+switch:
+  - id: !extend light_1
+    icon: "mdi:fan"

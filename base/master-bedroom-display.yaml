@@ -1,0 +1,98 @@
+# Read by the Fleet for ESPHome add-on. Do not remove.
+# esphome-fleet:
+#   schedule: 0 10 * * 1
+#   schedule_enabled: true
+#   schedule_tz: Europe/Amsterdam
+#   schedule_last_run: '2026-08-25T08:00:00.094127+00:00'
+
+substitutions:
+  # NOTE: these were both "display" in the recovered copy. Set them to
+  # whatever you settled on during the rename - friendly_name is the one
+  # that shapes HA entity ids (e.g. "Master Bedroom Panel Restart").
+  device_name: mbrdisplay
+  friendly_name: Master Bedroom Display
+  device_description: lvgl display
+  WIFI_passwd: !secret wifi_password
+  fallback_passwd: !secret wifi_bck
+  device_key: !secret mbrdisplay_key
+
+esphome:
+  name: '${device_name}'
+  friendly_name: '${friendly_name}'
+  comment: '${device_description}'
+  platformio_options:
+    board_build.esp-idf.memory_type: qio_opi
+    board_build.flash_mode: dio
+  on_boot:
+    # Sync the screen timeout dropdown to the restored global value.
+    # Priority -100 runs late, after LVGL is set up.
+    #
+    # This block MERGES with the on_boot in lvglsensors.yml rather than
+    # replacing it - same priority, and ESPHome concatenates same-shape
+    # on_boot lists from packages. That file's copy restores the two
+    # night-mode dropdowns and (as of PR #41) kicks off the first HA
+    # helper health check.
+    priority: -100
+    then:
+      - delay: 2s
+      - lvgl.dropdown.update:
+          id: screen_timeout_dropdown
+          selected_index: !lambda |-
+            int secs[] = {30, 60, 120, 300, 600, 1800};
+            for (int i = 0; i < 6; i++) {
+              if (secs[i] == id(screen_timeout)) return i;
+            }
+            return 3;  // Default 5 min
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+    sdkconfig_options:
+      CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: y
+      CONFIG_ESP32S3_DATA_CACHE_64KB: y
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS: y
+      CONFIG_SPIRAM_RODATA: y
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+logger:
+
+# Enable web server
+web_server:
+  port: 80
+
+# =========================
+# DEVICE-LOCAL GLOBALS
+# =========================
+# Both are read via id(...) from the package files but declared only
+# here, because both are edited at runtime by widgets on the Settings /
+# Climate cards. Do not remove either - lvglsensors.yml and
+# lvglconfig.yml will not compile without them. (LVGL/Masterbedroom/
+# ci-harness.yaml stubs them for CI for exactly this reason.)
+globals:
+  - id: climate_setpoint_value
+    type: float
+    restore_value: no
+    initial_value: '21.0'
+
+  # Screen inactivity timeout in seconds (default 300 = 5 minutes).
+  # Written by screen_timeout_dropdown, read by wake_screen.
+  - id: screen_timeout
+    type: int
+    restore_value: yes
+    initial_value: '300'
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [
+      generic/wifi.yml,
+      generic/generic_sensors.yml,
+      LVGL/displayconfig.yml,
+      LVGL/Masterbedroom/lvglconfig.yml,
+      LVGL/Masterbedroom/lvglsensors.yml
+    ]
+    refresh: 1min

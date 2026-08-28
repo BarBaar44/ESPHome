@@ -1,0 +1,35 @@
+# Read by the Fleet for ESPHome add-on. Do not remove.
+# esphome-fleet:
+#   schedule: 0 10 */7 * *
+#   schedule_enabled: true
+#   schedule_tz: Europe/Amsterdam
+#   schedule_last_run: '2026-08-22T08:00:00.818265+00:00'
+
+substitutions:
+  device_name: dbemasright
+  device_description: "DBE Master Right"
+  dallas_1_ID: "0xde00000087153428"
+  dallas_2_ID: "0xd400000095281128"
+  WIFI_passwd: !secret wifi_password
+  fallback_passwd: !secret wifi_bck
+  friendly_name: "DBE Master Right"
+  device_key: !secret dbemasright_key
+  area: "Master Bedroom"
+
+esphome:
+  name: dbe-mas-right
+  friendly_name: '${device_description}'
+  comment: '${device_description}'
+
+esp8266:
+  board: d1_mini
+
+# Enable logging
+logger:
+  level: DEBUG
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [generic/wifi.yml, generic/generic_sensors.yml, DBE/DBEmain.yml]
+    refresh: 1min

@@ -1,0 +1,25 @@
+substitutions:
+  device_name: dbelivingfront
+  device_description: DBE Livingroom Front
+  friendly_name: "DBE Livingroom Front"
+  dallas_1_ID: "0x113c01f095991f28"
+  dallas_2_ID: "0x4c3c01f095c62228"
+  WIFI_passwd: !secret wifi_password
+  
+esp8266:
+  board: d1_mini
+
+esphome:
+  name: '${device_name}'
+  friendly_name: '${friendly_name}'
+  comment: '${device_description}'
+ 
+api:
+#  encryption:
+#    key: "Ho0lwRtwJpQ0Lj6T1eQa4Z/Dat1Tuw19U2oifxrQfpg="
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [generic/wifi.yml, generic/generic_sensors.yml, generic/mqtt.yml, DBE/DBEmain.yml]
+    refresh: 1min

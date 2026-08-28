@@ -1,0 +1,35 @@
+# Read by the Fleet for ESPHome add-on. Do not remove.
+# esphome-fleet:
+#   schedule: 0 10 */7 * *
+#   schedule_enabled: true
+#   schedule_tz: Europe/Amsterdam
+#   schedule_last_run: '2026-08-22T08:00:01.510415+00:00'
+
+substitutions:
+  friendly_name: USB Switch 3
+  device_description: USB Switch 3
+  device_name: usb-switch-3
+  default_state: RESTORE_DEFAULT_OFF
+  WIFI_passwd: !secret 'wifi_password'
+  fallback_passwd: !secret wifi_bck
+  device_key: !secret usb-switch-3_key
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${friendly_name}
+  comment: USB Switch 3
+
+esp8266:
+  board: esp01_1m
+  restore_from_flash: true
+
+logger:
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files:
+    - generic/wifi.yml
+    - generic/generic_sensors.yml
+    - generic/restartbutton.yml
+    refresh: 0d

@@ -1,0 +1,34 @@
+# Read by the Fleet for ESPHome add-on. Do not remove.
+# esphome-fleet:
+#   schedule: 0 10 */7 * *
+#   schedule_enabled: true
+#   schedule_tz: Europe/Amsterdam
+#   schedule_last_run: '2026-08-22T08:00:01.118282+00:00'
+
+substitutions:
+  device_name: shelly-oura
+  device_description: "Shelly Plug oura"
+  channel_1: "Oura"
+  WIFI_passwd: !secret wifi_password
+  fallback_passwd: !secret wifi_bck
+  device_key: !secret shelly-oura_key
+  friendly_name: "Shelly Plug Oura"
+  area: "Living Room"
+
+  # Higher value gives lower watt readout
+  current_res: "0.000943"
+  # Lower value gives lower voltage readout
+  voltage_div: "2066"
+  # measure a relatively strong load and enter values measured by the device vs the values your reference measurement provided here
+  power_cal_meas: "1710.0"
+  power_cal_real: "1685.0"
+
+  max_current: "10"
+  max_power: "2400"
+  max_temp: "70.0"
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [generic/generic_sensors.yml, generic/wifi.yml, shelly/plug_s.yml]
+    refresh: 1min

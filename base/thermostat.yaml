@@ -1,0 +1,181 @@
+# Read by the Fleet for ESPHome add-on. Do not remove.
+# esphome-fleet:
+#   schedule: 0 10 */7 * *
+#   schedule_enabled: true
+#   schedule_tz: Europe/Amsterdam
+#   schedule_last_run: '2026-08-22T08:00:01.464726+00:00'
+
+substitutions:
+  device_name: thermostat
+  device_description: "Main Thermostat"
+  WIFI_passwd: !secret wifi_password
+  fallback_passwd: !secret wifi_bck
+  device_key: !secret thermostat_key
+  friendly_name: "Main Thermostat"
+  area: "Attic"
+
+esphome:
+  name: thermostat
+  friendly_name: '${friendly_name}'
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+# Enable logging
+logger:
+  level: DEBUG
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [generic/generic_sensors.yml, generic/wifi.yml, generic/restartbutton.yml]
+    refresh: 1min
+
+# Enable simple web server to remotelly control the device using web interface
+web_server:
+
+opentherm:
+  in_pin: 21
+  out_pin: 22
+  ch_enable: true
+  dhw_enable: false
+  cooling_enable: false
+  otc_active: false
+  ch2_active: true
+
+  t_room: ch_room_temperature
+
+output:
+  - platform: opentherm
+    t_set:
+      id: t_set
+      min_value: 0
+      auto_max_value: true
+      zero_means_zero: true
+
+sensor:
+  - platform: homeassistant
+    name: "Temperature Sensor From Home Assistant"
+    entity_id: sensor.virtual_heating_temperature
+    id: ch_room_temperature
+    filters: 
+      # Push room temperature every second to update PID parameters
+      - heartbeat: 1s 
+  - platform: homeassistant
+    name: "Temperature Sensor From Home Assistant"
+    entity_id: sensor.temperature_living_room_temperature 
+    id: pid_room_temperature
+    filters: 
+      # Push room temperature every second to update PID parameters
+      - heartbeat: 1s 
+
+  - platform: opentherm
+    rel_mod_level:
+      name: "Relative modulation level"
+    ch_pressure:
+      name: "Water pressure in CH circuit"
+    dhw_flow_rate:
+      name: "Water flow rate in DHW circuit"
+    t_boiler:
+      name: "Water temperature"
+    t_dhw:
+      name: "DHW temperature"
+    t_outside:
+      name: "Outside temperature"
+    t_ret:
+      name: "Return water temperature"
+    t_dhw_set_ub:
+      name: "Upper bound for adjustement of DHW setpoint"
+    t_dhw_set_lb:
+      name: "Lower bound for adjustement of DHW setpoint"
+    max_t_set_ub:
+      name: "Upper bound for adjustement of max CH setpoint"
+    max_t_set_lb:
+      name: "Lower bound for adjustement of max CH setpoint"
+    t_dhw_set:
+      name: "Domestic hot water temperature setpoint"
+    max_t_set:
+      name: "Maximum allowable CH water setpoint"
+
+  - platform: pid
+    name: "PID Climate Result"
+    climate_id: pid_climate
+    type: RESULT
+  - platform: pid
+    name: "PID Climate KP"
+    climate_id: pid_climate
+    type: KP
+  - platform: pid
+    name: "PID Climate KI"
+    climate_id: pid_climate
+    type: KI
+  - platform: pid
+    name: "PID Climate KD"
+    climate_id: pid_climate
+    type: KD
+
+binary_sensor:
+  - platform: opentherm
+    fault_indication:
+      name: "Fault indication"
+    ch_active:
+      name: "Central Heating active"
+    dhw_active:
+      name: "Domestic Hot Water active"
+    flame_on:
+      name: "Flame on"
+    diagnostic_indication:
+      name: "Diagnostic event"
+    dhw_present:
+      name: "DHW present"
+    control_type_on_off:
+      name: "Control type is on off"
+    controller_pump_control_allowed:
+      name: "Master pump control allowed"
+    dhw_setpoint_transfer_enabled:
+      name: "DHW setpoint transfer enabled"
+    max_ch_setpoint_transfer_enabled:
+      name: "CH maximum setpoint transfer enabled"
+    dhw_setpoint_rw:
+      name: "DHW setpoint read write"
+    max_ch_setpoint_rw:
+      name: "CH maximum setpoint read write"
+
+switch:
+  - platform: opentherm
+    ch_enable:
+      name: "Central Heating enabled"
+    dhw_enable:
+      name: "Domestic Hot Water enabled"
+    otc_active:
+      name: "Outside temperature compensation active"
+
+climate:
+  - platform: pid
+    id: main_climate
+    name: "Central heating"
+    heat_output: t_set
+    default_target_temperature: 18
+    sensor: ch_room_temperature
+    control_parameters: 
+      kp: 0.7
+      ki: 0.003
+
+  - platform: pid
+    id: pid_climate
+    name: "PID Climate Controller"
+    sensor: pid_room_temperature
+    default_target_temperature: 18°C
+    heat_output: t_set
+    control_parameters:
+      kp: 0.0
+      ki: 0.0
+      kd: 0.0
+
+button:
+  - platform: template
+    name: "PID Climate Autotune"
+    on_press:
+      - climate.pid.autotune: pid_climate

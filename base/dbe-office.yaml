@@ -1,0 +1,35 @@
+# Read by the Fleet for ESPHome add-on. Do not remove.
+# esphome-fleet:
+#   schedule: 0 10 */7 * *
+#   schedule_enabled: true
+#   schedule_tz: Europe/Amsterdam
+#   schedule_last_run: '2026-08-22T08:00:00.850870+00:00'
+
+substitutions:
+  device_name: dbeoffice
+  device_description: "DBE Office"
+  dallas_1_ID: "0x1c00000093dae828"
+  dallas_2_ID: "0x760000007a964728"
+  WIFI_passwd: !secret wifi_password
+  fallback_passwd: !secret wifi_bck
+  friendly_name: "DBE Office"
+  device_key: !secret dbeoffice_key
+  area: "Office"
+
+esphome:
+  name: dbe-office
+  friendly_name: '${device_description}'
+  comment: '${device_description}'
+
+esp8266:
+  board: d1_mini
+
+# Enable logging
+logger:
+  level: DEBUG
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [generic/wifi.yml, generic/generic_sensors.yml, DBE/DBEmain.yml]
+    refresh: 1min

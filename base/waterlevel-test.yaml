@@ -1,0 +1,135 @@
+# Read by the Fleet for ESPHome add-on. Do not remove.
+# esphome-fleet:
+#   schedule: 0 10 */7 * *
+#   schedule_enabled: true
+#   schedule_tz: Europe/Amsterdam
+#   schedule_last_run: '2026-08-22T08:00:01.523584+00:00'
+
+substitutions:
+  device_name: waterlevel
+  device_description: "Water level controller"
+  name: "waterlevel-test"
+  WIFI_passwd: !secret wifi_password
+  fallback_passwd: !secret wifi_bck
+  device_key: !secret waterlevel_key
+  friendly_name: "Water Level Controller"
+  area: "Kitchen"
+
+esphome:
+ name: '${name}'
+ comment: '${device_description}'
+ friendly_name: "${friendly_name}"
+
+#esp8266:
+#  board: d1_mini_pro
+
+esp32:
+  board: lolin_s2_mini
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+  level: DEBUG
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [generic/wifi.yml, generic/generic_sensors.yml]
+    refresh: 1min
+
+web_server:
+  port: 80
+
+#binary_sensor:
+#  - platform: gpio
+#    pin: 13
+#    name: "waterlevel"
+#    device_class: moisture
+#    id: waterlevel
+#    filters: 
+#      - delayed_on: 10ms
+#      - delayed_off: 200ms
+#    on_state:
+#      then:
+#        if:
+#         condition:
+#           - binary_sensor.is_on: waterlevel
+#         then:
+#           - switch.turn_on: watervalvecontrol
+
+#switch:
+#  - platform: gpio
+#    name: "Watervalve close"
+#    pin: 23
+#    inverted: true
+#    internal: True
+#    id: watervalveopen
+#   icon: mdi:pipe-valve
+#    interlock: [watervalveclose]
+#  - platform: gpio
+#    name: "Watervalve open"
+#    pin: 22
+#    inverted: True
+#    internal: True
+#    id: watervalveclose
+ #   icon: mdi:pipe-valve
+ #   interlock: [watervalveopen]
+
+ # - platform: template
+ #   name: "3-way-valve"
+ #   id: watervalvecontrol
+ #   icon: mdi:pipe-valve
+ #   turn_on_action:
+ #     - switch.turn_on: watervalveclose
+ #     - delay: 15s
+ #     - switch.turn_off: watervalveopen
+ #   turn_off_action:
+ #     - switch.turn_on: watervalveopen
+ #     - delay: 15s
+ #     - switch.turn_off: watervalveclose
+ #   restore_mode: DISABLED
+  #  optimistic: True
+
+sensor:
+#  - platform: pulse_counter
+#    pin: 21
+#    name: "Waterflow Counter"
+#    update_interval: 5s
+#    #Formula below needs to be checked
+#    filters:
+#    - lambda: return (x / 477.0) * 60.0;
+#    unit_of_measurement: "L/hr"
+
+  - platform: modbus_controller
+    modbus_controller_id: qd
+    name: "Water level"
+    id: modbus_water_level
+    register_type: holding
+    address: 0x0004
+    unit_of_measurement: "mm"
+    value_type: U_WORD
+
+# water level sensor
+# https://esphome.io/components/sensor/modbus_controller.html
+uart:
+  id: mod_bus
+  tx_pin: GPIO21
+  rx_pin: GPIO19
+  baud_rate: 9600
+  data_bits: 8
+  stop_bits: 1
+  parity: NONE
+  #debug: 
+
+modbus:
+  id: modbus1
+  uart_id: mod_bus
+  flow_control_pin: GPIO18
+
+modbus_controller:
+  - id: qd
+    address: 0x01
+    modbus_id: modbus1
+    setup_priority: -10
+    update_interval: 5s
