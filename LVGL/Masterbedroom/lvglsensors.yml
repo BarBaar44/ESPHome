@@ -907,7 +907,7 @@ text_sensor:
   # matching the color they had before this red-highlight logic existed.
   - platform: homeassistant
     id: ha_fan_speed_state
-    entity_id: sensor.master_bedroom_sonoff_ifan_ifan03_masterbedroom_fan_speed_state
+    entity_id: sensor.master_bedroom_fan_speed_state
     on_value:
       then:
         # Reset all buttons to default (blue) style
