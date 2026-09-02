@@ -1776,13 +1776,23 @@ lvgl:
                           - "50%"
                         selected_index: 2  # Default: 10%
                         on_value:
-                          - homeassistant.action:
-                              action: input_number.set_value
-                              data:
-                                entity_id: input_number.master_bedroom_cover_preopen_position
-                                value: !lambda |-
-                                  int vals[] = {0, 5, 10, 15, 20, 25, 30, 40, 50};
-                                  return vals[(int)x];
+                          # Guard against the mirror-loop caused by
+                          # lvgl.dropdown.update firing on_value
+                          # (esphome/esphome#17161). Only forward to HA when
+                          # this is a genuine user touch, not a programmatic
+                          # sync from the ha_cover_preopen_position handler or
+                          # sync_settings_from_ha (both set mirroring_cover_positions).
+                          - if:
+                              condition:
+                                lambda: 'return !id(mirroring_cover_positions);'
+                              then:
+                                - homeassistant.action:
+                                    action: input_number.set_value
+                                    data:
+                                      entity_id: input_number.master_bedroom_cover_preopen_position
+                                      value: !lambda |-
+                                        int vals[] = {0, 5, 10, 15, 20, 25, 30, 40, 50};
+                                        return vals[(int)x];
 
                     # ---- Cover door-open close position (row 5) ----
                     # Writes to input_number.master_bedroom_cover_door_open_position.
@@ -1813,13 +1823,23 @@ lvgl:
                           - "100%"
                         selected_index: 4  # Default: 60%
                         on_value:
-                          - homeassistant.action:
-                              action: input_number.set_value
-                              data:
-                                entity_id: input_number.master_bedroom_cover_door_open_position
-                                value: !lambda |-
-                                  int vals[] = {0, 20, 40, 50, 60, 70, 80, 100};
-                                  return vals[(int)x];
+                          # Guard against the mirror-loop caused by
+                          # lvgl.dropdown.update firing on_value
+                          # (esphome/esphome#17161). Only forward to HA when
+                          # this is a genuine user touch, not a programmatic
+                          # sync from the ha_cover_dooropen_position handler or
+                          # sync_settings_from_ha (both set mirroring_cover_positions).
+                          - if:
+                              condition:
+                                lambda: 'return !id(mirroring_cover_positions);'
+                              then:
+                                - homeassistant.action:
+                                    action: input_number.set_value
+                                    data:
+                                      entity_id: input_number.master_bedroom_cover_door_open_position
+                                      value: !lambda |-
+                                        int vals[] = {0, 20, 40, 50, 60, 70, 80, 100};
+                                        return vals[(int)x];
   
   # =========================
   # STYLE DEFINITIONS
