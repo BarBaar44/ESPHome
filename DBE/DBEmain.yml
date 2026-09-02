@@ -8,8 +8,31 @@ globals:
     restore_value: false
     initial_value: '0'
 
+  # millis() timestamp of the last GOOD reading from each Dallas sensor.
+  # filter_out: nan means a dropped reading is never published, so .state
+  # stays pinned to the last value - these let control_fans notice a
+  # sensor that has silently stopped reporting.
+  - id: temp_1_last_update
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+  - id: temp_2_last_update
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+
+  # Last fan speed we emitted a log line for, so the 5s control loop only
+  # logs when something actually changed instead of every cycle.
+  - id: last_log_speed
+    type: float
+    restore_value: false
+    initial_value: '-1'
+
 logger:
-  level: DEBUG
+  # INFO by default. NOTE: each base/dbe-*.yaml wrapper currently sets
+  # `logger: level: DEBUG`, which overrides this - drop those to INFO too
+  # for a quiet production device.
+  level: INFO
 
 ######################################################
 # OneWire bus
@@ -31,6 +54,8 @@ sensor:
     accuracy_decimals: 1
     filters:
       - filter_out: nan
+    on_value:
+      - lambda: 'id(temp_1_last_update) = millis();'
 
   - platform: dallas_temp
     address: '${dallas_2_ID}'
@@ -40,6 +65,8 @@ sensor:
     accuracy_decimals: 1
     filters:
       - filter_out: nan
+    on_value:
+      - lambda: 'id(temp_2_last_update) = millis();'
 
   - platform: pulse_counter
     pin: D5
@@ -142,7 +169,29 @@ script:
           float t1 = id(temp_1).state;
           float t2 = id(temp_2).state;
 
-          if (!isfinite(t1) || !isfinite(t2)) {
+          // --- Sensor sanity ---
+          // Reject non-finite readings, the DS18B20 power-on-reset
+          // sentinel (85.0), bus-error values (-127), and anything
+          // outside a plausible radiator-pipe range. Any bad reading
+          // fails safe to fan OFF.
+          const float t_lo = 0.0f;
+          const float t_hi = 95.0f;
+          bool t1_ok = isfinite(t1) && t1 > t_lo && t1 < t_hi && t1 != 85.0f;
+          bool t2_ok = isfinite(t2) && t2 > t_lo && t2 < t_hi && t2 != 85.0f;
+
+          // --- Staleness ---
+          // filter_out: nan keeps .state at the last good value when a
+          // sensor drops out, so without this a sustained failure would
+          // freeze deltaT and leave the fan running indefinitely. Fail
+          // if a sensor has not produced a fresh value in 3x its 30s
+          // update interval. (millis() wraps after ~49 days; the
+          // unsigned subtraction stays correct across a single wrap.)
+          const uint32_t max_age_ms = 90000;
+          uint32_t now = millis();
+          if (t1_ok && (now - id(temp_1_last_update)) > max_age_ms) t1_ok = false;
+          if (t2_ok && (now - id(temp_2_last_update)) > max_age_ms) t2_ok = false;
+
+          if (!t1_ok || !t2_ok) {
             id(fanspeed) = 0;
             return;
           }
@@ -190,11 +239,17 @@ script:
             - fan.turn_off: fancontrol
 
       # ==============================
-      # LOGGING (FIXED)
+      # LOGGING - only when the commanded speed actually changed, so a
+      # steady-state fan doesn't emit a line every 5s.
       # ==============================
-      - logger.log:
-          format: "Mode=%s ΔT=%.2f Fanspeed=%.1f"
-          args:
-            - 'id(fan_mode).current_option().c_str()'
-            - 'fabs(id(temp_1).state - id(temp_2).state)'
-            - 'id(fanspeed)'
+      - if:
+          condition:
+            lambda: 'return fabsf(id(fanspeed) - id(last_log_speed)) >= 1.0f;'
+          then:
+            - logger.log:
+                format: "Mode=%s ΔT=%.2f Fanspeed=%.1f"
+                args:
+                  - 'id(fan_mode).current_option().c_str()'
+                  - 'fabs(id(temp_1).state - id(temp_2).state)'
+                  - 'id(fanspeed)'
+            - lambda: 'id(last_log_speed) = id(fanspeed);'
