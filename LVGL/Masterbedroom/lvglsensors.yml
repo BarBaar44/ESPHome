@@ -1287,7 +1287,7 @@ sensor:
     on_value:
       then:
         - lvgl.label.update:
-            id: lbl_weather_forecast_temphi
+            id: lbl_weather_cloud
             text: !lambda |-
               char buf[16];
               snprintf(buf, sizeof(buf), "%d%%", (int)x);
@@ -1301,7 +1301,7 @@ sensor:
     on_value:
       then:
         - lvgl.label.update:
-            id: lbl_weather_forecast_templo
+            id: lbl_weather_humidity
             text: !lambda |-
               char buf[16];
               snprintf(buf, sizeof(buf), "%d%%", (int)x);
