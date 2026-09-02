@@ -198,9 +198,21 @@ script:
             }
 
 text_sensor:
+  # Hardcoded name (not $friendly_name) for the same reason as the fan
+  # buttons above: $friendly_name expands to "Master Bedroom Sonoff-Ifan
+  # iFan03 Masterbedroom", which produced the redundant entity_id
+  # sensor.master_bedroom_sonoff_ifan_ifan03_masterbedroom_fan_speed_state.
+  # "Master Bedroom Fan Speed State" gives sensor.master_bedroom_fan_speed_state,
+  # matching the button.master_bedroom_fan_set_* naming and what
+  # LVGL/Masterbedroom/lvglsensors.yml references.
+  #
+  # NOTE: renaming does NOT change an existing entity_id in HA's registry.
+  # After reflashing, check Developer Tools > States; if it still shows the
+  # long form, fix the Entity ID field in Settings > Devices & Services >
+  # Entities, or delete the stale entity so it re-registers.
   - platform: template
     id: fan_speed_state
-    name: "$friendly_name Fan Speed State"
+    name: "Master Bedroom Fan Speed State"
     update_interval: never
 
 remote_receiver:
