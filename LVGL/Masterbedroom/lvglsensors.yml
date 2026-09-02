@@ -512,12 +512,12 @@ script:
   # possibly-correct value. evaluate_helper_health is what makes that
   # silence visible.
   #
-  # NOTE ON SCOPE: only the five HA-backed cover/curtain helpers are
-  # re-applied. Screen timeout and night-mode start/end are device-local
-  # ESPHome globals with no HA counterpart, so there is nothing to sync
-  # them against - they are already authoritative and are left untouched.
-  # (Night start/end are restored into their dropdowns separately by the
-  # on_boot block at the top of this file.)
+  # NOTE ON SCOPE: the five HA-backed cover/curtain helpers plus the
+  # climate setpoint are re-applied. Screen timeout and night-mode
+  # start/end are device-local ESPHome globals with no HA counterpart, so
+  # there is nothing to sync them against - they are already authoritative
+  # and are left untouched. (Night start/end are restored into their
+  # dropdowns separately by the on_boot block at the top of this file.)
   - id: sync_settings_from_ha
     mode: restart
     then:
@@ -644,6 +644,26 @@ script:
             - lvgl.slider.update:
                 id: cover_slider
                 value: !lambda 'return 100 - (int) id(ha_cover_position).state;'
+
+      # ---- Climate setpoint ----
+      # No mirror-loop risk here: the +/- buttons write
+      # climate_setpoint_value directly and don't fire an on_value that
+      # forwards to HA, so no guard is needed. Re-applied only so the
+      # label and global aren't left at the 21.0 YAML default for the
+      # first second or two after a reboot.
+      - if:
+          condition:
+            lambda: 'return id(ha_climate_setpoint).has_state();'
+          then:
+            - globals.set:
+                id: climate_setpoint_value
+                value: !lambda 'return id(ha_climate_setpoint).state;'
+            - lvgl.label.update:
+                id: climate_setpoint_label
+                text: !lambda |-
+                  char buf[16];
+                  snprintf(buf, sizeof(buf), "%.1f", id(ha_climate_setpoint).state);
+                  return buf;
 
   # Ambient-light-driven backlight brightness.
   #
@@ -1007,30 +1027,18 @@ text_sensor:
     attribute: preset_mode
     on_value:
       then:
-        - if:
-            condition:
-              lambda: 'return x == "eco";'
-            then:
-              - lvgl.widget.update:
-                  id: climate_eco_button
-                  state:
-                    checked: true
-              - lvgl.widget.update:
-                  id: climate_warm_button
-                  state:
-                    checked: false
-        - if:
-            condition:
-              lambda: 'return x == "comfort";'
-            then:
-              - lvgl.widget.update:
-                  id: climate_warm_button
-                  state:
-                    checked: true
-              - lvgl.widget.update:
-                  id: climate_eco_button
-                  state:
-                    checked: false
+        # eco -> Eco button, comfort -> Warm button. Any other preset
+        # (away, none, ...) leaves both unchecked. A plain checked: !lambda
+        # covers every case without a branch per preset, so a button no
+        # longer stays lit for a preset that is no longer active.
+        - lvgl.widget.update:
+            id: climate_eco_button
+            state:
+              checked: !lambda 'return x == "eco";'
+        - lvgl.widget.update:
+            id: climate_warm_button
+            state:
+              checked: !lambda 'return x == "comfort";'
 
 # =========================
 # HOME ASSISTANT LIGHT STATES
