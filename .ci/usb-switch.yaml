@@ -10,6 +10,7 @@ substitutions:
   device_description: "CI validation harness"
   WIFI_passwd: "ci-dummy-password"
   fallback_passwd: "ci-dummy-password"
+  device_key: "ZGADVtIpvtmMT0gQEAIiwsZjP8q/s6AuQFxiZI4mxj4="  # CI-only dummy; real devices set device_key via !secret
 
 esphome:
   name: ${device_name}
