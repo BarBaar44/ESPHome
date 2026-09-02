@@ -3,7 +3,7 @@
 #   schedule: 0 10 */7 * *
 #   schedule_enabled: true
 #   schedule_tz: Europe/Amsterdam
-#   schedule_last_run: '2026-08-22T08:00:01.480204+00:00'
+#   schedule_last_run: '2026-09-01T08:00:01.183805+00:00'
 
 substitutions:
   friendly_name: "USB Switch 1"
@@ -29,5 +29,5 @@ logger:
 packages:
   Generic_config:
     url: https://github.com/BarBaar44/ESPHome
-    files: [generic/wifi.yml, generic/generic_sensors.yml, generic/restartbutton.yml]
+    files: [generic/wifi.yml, generic/generic_sensors.yml, generic/restartbutton.yml, USB-Switch/usbswitch.yaml]
     refresh: 0d
