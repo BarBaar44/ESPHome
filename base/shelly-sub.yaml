@@ -3,7 +3,7 @@
 #   schedule: 0 10 */7 * *
 #   schedule_enabled: true
 #   schedule_tz: Europe/Amsterdam
-#   schedule_last_run: '2026-08-22T08:00:01.218159+00:00'
+#   schedule_last_run: '2026-09-01T08:00:00.880372+00:00'
 
 substitutions:
   device_name: shelly-sub
@@ -11,7 +11,7 @@ substitutions:
   channel_1: "Subwoofer"
   WIFI_passwd: !secret wifi_password
   fallback_passwd: !secret wifi_bck
-  device:key: !secret shelly-sub_key
+  device_key: !secret shelly-sub_key
   friendly_name: "Shelly Plug Sub"
   area: "Living Room"
 
