@@ -17,15 +17,14 @@
 #    control returns to update_screen_state and the usual motion /
 #    ceiling-light / night-mode rules apply again.
 #
-# 2. Restore the night-mode start/end dropdowns (see
+# 2. Restore the screen-timeout and night-mode start/end dropdowns (see
 #    LVGL/Masterbedroom/lvglconfig.yml settings_obj) to reflect the
 #    globals restored from flash, since LVGL widgets themselves don't
 #    persist state across reboots - only the globals do
-#    (restore_value: yes). The options lists for both dropdowns are
-#    ordered 00:00..23:00, so the selected_index equals the stored hour
-#    value directly - no lookup table needed (unlike the
-#    screen_timeout_dropdown restoration, which maps through a small
-#    array of second values).
+#    (restore_value: yes). The night-mode option lists are ordered
+#    00:00..23:00, so the selected_index equals the stored hour value
+#    directly; screen_timeout maps through a small array of second
+#    values ({30, 60, 120, 300, 600, 1800}).
 #
 # 3. Evaluate whether the HA-backed settings helpers actually exist
 #    (see evaluate_helper_health), then re-apply their values to the
@@ -58,9 +57,12 @@
 #    exactly because the opposite is true of them: they are device-local
 #    globals with no HA counterpart.
 #
-# Runs late (priority -100, after LVGL is set up) and is appended to the
-# on_boot automation defined in the main device YAML (ESPHome
-# concatenates same-shape on_boot dicts from packages).
+# Runs late (priority -100, after LVGL is set up). This is the panel's
+# only on_boot - the per-device YAML used to add a second one at the same
+# priority (just the screen_timeout restore) and rely on ESPHome
+# concatenating same-priority on_boot lists across packages. That was
+# fragile (a merge-behaviour change would silently drop one sequence), so
+# it now all lives here.
 esphome:
   on_boot:
     priority: -100
@@ -69,6 +71,18 @@ esphome:
       # delay below so the timeout starts counting right away.
       - script.execute: wake_screen
       - delay: 2s
+      # Restore the Settings-page dropdowns from the globals recovered
+      # from flash (LVGL widget selection does not persist a reboot).
+      # screen_timeout is declared in the per-device YAML (see
+      # ci-harness.yaml for the CI stub).
+      - lvgl.dropdown.update:
+          id: screen_timeout_dropdown
+          selected_index: !lambda |-
+            int secs[] = {30, 60, 120, 300, 600, 1800};
+            for (int i = 0; i < 6; i++) {
+              if (secs[i] == id(screen_timeout)) return i;
+            }
+            return 3;  // Default 5 min
       - lvgl.dropdown.update:
           id: night_mode_start_dropdown
           selected_index: !lambda 'return id(night_mode_start_hour);'
