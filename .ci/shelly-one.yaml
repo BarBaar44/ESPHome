@@ -7,6 +7,7 @@ substitutions:
   device_description: "CI validation harness"
   WIFI_passwd: "ci-dummy-password"
   fallback_passwd: "ci-dummy-password"
+  device_key: "ZGADVtIpvtmMT0gQEAIiwsZjP8q/s6AuQFxiZI4mxj4="  # CI-only dummy; real devices set device_key via !secret
 
 packages:
   # wifi.yml's on_time_sync references sensor_uptime_timestamp, which

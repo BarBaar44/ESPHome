@@ -7,6 +7,7 @@ substitutions:
   friendly_name: "Generic CI"
   WIFI_passwd: "ci-dummy-password"
   fallback_passwd: "ci-dummy-password"
+  device_key: "ZGADVtIpvtmMT0gQEAIiwsZjP8q/s6AuQFxiZI4mxj4="  # CI-only dummy; real devices set device_key via !secret
   MQTT_passwd: "ci-dummy-password"
 
 esphome:
