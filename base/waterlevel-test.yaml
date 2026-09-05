@@ -1,70 +1,115 @@
-# Read by the Fleet for ESPHome add-on. Do not remove.
-# esphome-fleet:
-#   schedule: 0 10 */7 * *
-#   schedule_enabled: true
-#   schedule_tz: Europe/Amsterdam
-#   schedule_last_run: '2026-09-01T08:00:01.232525+00:00'
-
-substitutions:
-  device_name: waterlevel
-  device_description: "Water level controller"
-  name: "waterlevel-test"
-  WIFI_passwd: !secret wifi_password
-  fallback_passwd: !secret wifi_bck
-  device_key: !secret waterlevel_key
-  friendly_name: "Water Level Controller"
-  area: "Kitchen"
+########################################################################
+# Water filter controller — bring-up config
+#
+# Purpose: get logs flowing and confirm each piece of hardware responds,
+# stage by stage, matching the wiring-plan.md build order. This is NOT
+# the final fill-control logic — there's no fill/stop decision-making
+# here yet. It just proves each component is wired correctly and
+# readable, so problems get caught one stage at a time.
+#
+# Board: ESP32 DevKit (ESP-WROOM-32), matches the pin map in
+# wiring-overview.html.
+#
+# Before flashing:
+#   1. Create a file called secrets.yaml in the same folder as this
+#      file (see the template at the bottom of this file's comments).
+#   2. Adjust the register addresses in the modbus_controller section
+#      once the seller sends the QDY30A register map — the ones below
+#      are best-guess placeholders based on the common register layout
+#      for this class of sensor, not confirmed for your exact unit.
+########################################################################
 
 esphome:
- name: '${name}'
- comment: '${device_description}'
- friendly_name: "${friendly_name}"
+  name: waterfilter-controller
+  friendly_name: Water Filter Controller
 
 esp32:
   board: esp32dev
   framework:
     type: arduino
 
-# Enable logging
+# --- Networking ---------------------------------------------------
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Falls back to a hotspot if it can't join your network — lets you
+  # connect directly and fix the WiFi settings without a USB cable.
+  ap:
+    ssid: "Waterfilter Fallback"
+    password: !secret wifi_bck
+
+captive_portal:
+
+api:
+  encryption:
+    key: !secret waterlevel_key
+
+ota:
+  - platform: esphome
+    password: !secret waterlevel_ota
+
+# --- Logging --------------------------------------------------------
+# This board has its own USB-to-serial chip, so the logger runs on
+# UART0 with no special settings, leaving UART1 and UART2 completely
+# free for Modbus. Set to DEBUG while bringing components up; turn
+# down to INFO once everything works, to reduce log noise.
+
 logger:
   level: DEBUG
 
-packages:
-  Generic_config:
-    url: https://github.com/BarBaar44/ESPHome
-    files: [generic/wifi.yml, generic/generic_sensors.yml]
-    refresh: 1min
-
-web_server:
-  port: 80
-
-## --- Modbus bus (shared, one MAX485 module, both probes) -----------
+# --- Modbus bus (shared, one MAX485 module, both probes) -----------
 # TX2/RX2 on the ESP32, matching wiring-overview.html.
 # flow_control_pin drives RE+DE together on the MAX485 module.
- 
+
 uart:
   id: modbus_uart
   tx_pin: GPIO17
   rx_pin: GPIO16
   baud_rate: 9600
   stop_bits: 1
- 
+  # Every valid reply from this probe arrived with 7-8 leading zero
+  # bytes in front of it, no matter how long send_wait_time was set —
+  # that ruled out a plain timeout problem. This is the UART batching
+  # incoming bytes instead of delivering them immediately, which
+  # confuses the Modbus frame parser. Forcing byte-by-byte delivery
+  # fixes it.
+  rx_full_threshold: 1
+  rx_timeout: 2
+  # Debug block: prints every raw byte sent and received on this UART.
+  # Turned on right now specifically to see the actual bytes coming back
+  # from the probe, since we know something IS replying but the frame
+  # isn't parsing cleanly. Remove this whole "debug:" block once the
+  # register map is sorted out — it's noisy in normal operation.
+  debug:
+    direction: BOTH
+    dummy_receiver: false
+    after:
+      delimiter: "\n"
+
 modbus:
   id: modbus_hub
   uart_id: modbus_uart
   flow_control_pin: GPIO4
+  # This probe reliably takes just over 2000ms to reply — the default
+  # send_wait_time cuts it off ~40-50ms before the real data arrives.
+  # Confirmed via uart debug logging: valid Modbus frames were landing
+  # right after the default timeout gave up. 2500ms gives comfortable
+  # margin without slowing normal operation much.
+  send_wait_time: 2500ms
 
-  # --- Probe 1 (whichever one is currently wired to the bus) ----------
+# --- Probe 1 (whichever one is currently wired to the bus) ----------
 # Factory default Modbus address is usually 1. If you've already
 # renumbered a probe per the seller's instructions, change the
 # address below to match.
- 
+
 modbus_controller:
   - id: probe_1
     address: 0x01
     modbus_id: modbus_hub
-    update_interval: 30s
- 
+    update_interval: 10s
+
 sensor:
   # --- Register scan block, for finding the real register map -------
   # Reads holding registers 0 through 9 in one pass. Move the probe up
@@ -145,7 +190,7 @@ sensor:
     register_type: holding
     address: 0x09
     value_type: U_WORD
- 
+
   # Once you've identified which register holds the raw value, and
   # (if the sensor works this way) which two hold the unit code and
   # decimal-place count, replace probe_1_raw_value / _decimals below
@@ -158,7 +203,7 @@ sensor:
     register_type: holding
     address: 0x04
     value_type: U_WORD
- 
+
   - platform: modbus_controller
     modbus_controller_id: probe_1
     id: probe_1_decimals
@@ -166,7 +211,7 @@ sensor:
     register_type: holding
     address: 0x03
     value_type: U_WORD
- 
+
   - platform: modbus_controller
     modbus_controller_id: probe_1
     id: probe_1_unit_code
@@ -174,7 +219,7 @@ sensor:
     register_type: holding
     address: 0x02
     value_type: U_WORD
- 
+
   # Computed reading: raw value divided by 10^(decimal places).
   # Will show "NA" for the first update cycle until the two source
   # sensors above have reported at least once. That's expected.
@@ -188,7 +233,7 @@ sensor:
         return {};
       }
       return id(probe_1_raw_value).state / pow(10, id(probe_1_decimals).state);
- 
+
   # --- Flow sensor ---------------------------------------------------
   # Hall-effect pulse counter on GPIO27, arriving through the voltage
   # divider. Shows raw pulses per update interval — blow through the
@@ -204,7 +249,7 @@ sensor:
     name: "Flow sensor pulses"
     id: flow_pulses
     update_interval: 5s
- 
+
 # --- Relay / valve ----------------------------------------------------
 # inverted: true because this relay module is active-low (pulling the
 # input pin low energises the coil). restore_mode ALWAYS_OFF means
@@ -214,7 +259,7 @@ sensor:
 # Wired so that de-energised = valve closed (see wiring-plan.md,
 # "why the valve fails closed"). Toggling this switch in Home
 # Assistant or the ESPHome dashboard should physically turn the valve.
- 
+
 switch:
   - platform: gpio
     pin: GPIO25
@@ -222,3 +267,15 @@ switch:
     name: "Fill Valve"
     inverted: true
     restore_mode: ALWAYS_OFF
+
+########################################################################
+# secrets.yaml template — create this as a separate file in the same
+# folder, filled in with your own values. Never commit this file or
+# share it; it contains your WiFi password and device credentials.
+#
+# wifi_ssid: "your-wifi-name"
+# wifi_password: "your-wifi-password"
+# fallback_ap_password: "pick-any-password-8-chars-plus"
+# api_encryption_key: "generate one at https://esphome.io/components/api.html#generating-an-encryption-key"
+# ota_password: "pick-any-password"
+########################################################################
