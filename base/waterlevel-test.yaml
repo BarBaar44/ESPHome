@@ -63,7 +63,7 @@ modbus_controller:
   - id: probe_1
     address: 0x01
     modbus_id: modbus_hub
-    update_interval: 10s
+    update_interval: 30s
  
 sensor:
   # --- Register scan block, for finding the real register map -------
