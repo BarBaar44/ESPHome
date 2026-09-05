@@ -20,11 +20,8 @@ esphome:
  comment: '${device_description}'
  friendly_name: "${friendly_name}"
 
-#esp8266:
-#  board: d1_mini_pro
-
 esp32:
-  board: lolin_s2_mini
+  board: esp32dev
   framework:
     type: arduino
 
@@ -41,95 +38,187 @@ packages:
 web_server:
   port: 80
 
-#binary_sensor:
-#  - platform: gpio
-#    pin: 13
-#    name: "waterlevel"
-#    device_class: moisture
-#    id: waterlevel
-#    filters: 
-#      - delayed_on: 10ms
-#      - delayed_off: 200ms
-#    on_state:
-#      then:
-#        if:
-#         condition:
-#           - binary_sensor.is_on: waterlevel
-#         then:
-#           - switch.turn_on: watervalvecontrol
-
-#switch:
-#  - platform: gpio
-#    name: "Watervalve close"
-#    pin: 23
-#    inverted: true
-#    internal: True
-#    id: watervalveopen
-#   icon: mdi:pipe-valve
-#    interlock: [watervalveclose]
-#  - platform: gpio
-#    name: "Watervalve open"
-#    pin: 22
-#    inverted: True
-#    internal: True
-#    id: watervalveclose
- #   icon: mdi:pipe-valve
- #   interlock: [watervalveopen]
-
- # - platform: template
- #   name: "3-way-valve"
- #   id: watervalvecontrol
- #   icon: mdi:pipe-valve
- #   turn_on_action:
- #     - switch.turn_on: watervalveclose
- #     - delay: 15s
- #     - switch.turn_off: watervalveopen
- #   turn_off_action:
- #     - switch.turn_on: watervalveopen
- #     - delay: 15s
- #     - switch.turn_off: watervalveclose
- #   restore_mode: DISABLED
-  #  optimistic: True
-
-sensor:
-#  - platform: pulse_counter
-#    pin: 21
-#    name: "Waterflow Counter"
-#    update_interval: 5s
-#    #Formula below needs to be checked
-#    filters:
-#    - lambda: return (x / 477.0) * 60.0;
-#    unit_of_measurement: "L/hr"
-
-  - platform: modbus_controller
-    modbus_controller_id: qd
-    name: "Water level"
-    id: modbus_water_level
-    register_type: holding
-    address: 0x0004
-    unit_of_measurement: "mm"
-    value_type: U_WORD
-
-# water level sensor
-# https://esphome.io/components/sensor/modbus_controller.html
+## --- Modbus bus (shared, one MAX485 module, both probes) -----------
+# TX2/RX2 on the ESP32, matching wiring-overview.html.
+# flow_control_pin drives RE+DE together on the MAX485 module.
+ 
 uart:
-  id: mod_bus
-  tx_pin: GPIO21
-  rx_pin: GPIO19
+  id: modbus_uart
+  tx_pin: GPIO17
+  rx_pin: GPIO16
   baud_rate: 9600
-  data_bits: 8
   stop_bits: 1
-  parity: NONE
-  #debug: 
-
+ 
 modbus:
-  id: modbus1
-  uart_id: mod_bus
-  flow_control_pin: GPIO18
+  id: modbus_hub
+  uart_id: modbus_uart
+  flow_control_pin: GPIO4
 
+  # --- Probe 1 (whichever one is currently wired to the bus) ----------
+# Factory default Modbus address is usually 1. If you've already
+# renumbered a probe per the seller's instructions, change the
+# address below to match.
+ 
 modbus_controller:
-  - id: qd
+  - id: probe_1
     address: 0x01
-    modbus_id: modbus1
-    setup_priority: -10
+    modbus_id: modbus_hub
+    update_interval: 10s
+ 
+sensor:
+  # --- Register scan block, for finding the real register map -------
+  # Reads holding registers 0 through 9 in one pass. Move the probe up
+  # and down in a bucket of water and watch the logs: exactly one or
+  # two of these should change while the rest stay flat. That tells
+  # you which register holds the live value, without guessing one
+  # address at a time and reflashing between each try.
+  #
+  # Once you know which register is the real value, you can delete the
+  # ones that never move and keep just the one(s) that matter.
+  - platform: modbus_controller
+    modbus_controller_id: probe_1
+    id: probe_1_reg0
+    name: "Probe 1 reg 0"
+    register_type: holding
+    address: 0x00
+    value_type: U_WORD
+  - platform: modbus_controller
+    modbus_controller_id: probe_1
+    id: probe_1_reg1
+    name: "Probe 1 reg 1"
+    register_type: holding
+    address: 0x01
+    value_type: U_WORD
+  - platform: modbus_controller
+    modbus_controller_id: probe_1
+    id: probe_1_reg2
+    name: "Probe 1 reg 2"
+    register_type: holding
+    address: 0x02
+    value_type: U_WORD
+  - platform: modbus_controller
+    modbus_controller_id: probe_1
+    id: probe_1_reg3
+    name: "Probe 1 reg 3"
+    register_type: holding
+    address: 0x03
+    value_type: U_WORD
+  - platform: modbus_controller
+    modbus_controller_id: probe_1
+    id: probe_1_reg4
+    name: "Probe 1 reg 4"
+    register_type: holding
+    address: 0x04
+    value_type: U_WORD
+  - platform: modbus_controller
+    modbus_controller_id: probe_1
+    id: probe_1_reg5
+    name: "Probe 1 reg 5"
+    register_type: holding
+    address: 0x05
+    value_type: U_WORD
+  - platform: modbus_controller
+    modbus_controller_id: probe_1
+    id: probe_1_reg6
+    name: "Probe 1 reg 6"
+    register_type: holding
+    address: 0x06
+    value_type: U_WORD
+  - platform: modbus_controller
+    modbus_controller_id: probe_1
+    id: probe_1_reg7
+    name: "Probe 1 reg 7"
+    register_type: holding
+    address: 0x07
+    value_type: U_WORD
+  - platform: modbus_controller
+    modbus_controller_id: probe_1
+    id: probe_1_reg8
+    name: "Probe 1 reg 8"
+    register_type: holding
+    address: 0x08
+    value_type: U_WORD
+  - platform: modbus_controller
+    modbus_controller_id: probe_1
+    id: probe_1_reg9
+    name: "Probe 1 reg 9"
+    register_type: holding
+    address: 0x09
+    value_type: U_WORD
+ 
+  # Once you've identified which register holds the raw value, and
+  # (if the sensor works this way) which two hold the unit code and
+  # decimal-place count, replace probe_1_raw_value / _decimals below
+  # with the real addresses you found above, and delete the reg0-reg9
+  # scan block — it's only needed for this initial discovery step.
+  - platform: modbus_controller
+    modbus_controller_id: probe_1
+    id: probe_1_raw_value
+    name: "Probe 1 raw value (guess: reg 4)"
+    register_type: holding
+    address: 0x04
+    value_type: U_WORD
+ 
+  - platform: modbus_controller
+    modbus_controller_id: probe_1
+    id: probe_1_decimals
+    name: "Probe 1 decimal places (guess: reg 3)"
+    register_type: holding
+    address: 0x03
+    value_type: U_WORD
+ 
+  - platform: modbus_controller
+    modbus_controller_id: probe_1
+    id: probe_1_unit_code
+    name: "Probe 1 unit code (guess: reg 2)"
+    register_type: holding
+    address: 0x02
+    value_type: U_WORD
+ 
+  # Computed reading: raw value divided by 10^(decimal places).
+  # Will show "NA" for the first update cycle until the two source
+  # sensors above have reported at least once. That's expected.
+  - platform: template
+    name: "Probe 1 level (computed)"
+    id: probe_1_level
+    unit_of_measurement: "units"
+    update_interval: 10s
+    lambda: |-
+      if (isnan(id(probe_1_raw_value).state) || isnan(id(probe_1_decimals).state)) {
+        return {};
+      }
+      return id(probe_1_raw_value).state / pow(10, id(probe_1_decimals).state);
+ 
+  # --- Flow sensor ---------------------------------------------------
+  # Hall-effect pulse counter on GPIO27, arriving through the voltage
+  # divider. Shows raw pulses per update interval — blow through the
+  # sensor or spin the rotor by hand to confirm it counts. Converting
+  # this to litres/min comes later, once you've calibrated the actual
+  # pulses-per-litre figure against a kitchen scale.
+  - platform: pulse_counter
+    pin:
+      number: GPIO27
+      mode:
+        input: true
+    unit_of_measurement: "pulses/min"
+    name: "Flow sensor pulses"
+    id: flow_pulses
     update_interval: 5s
+ 
+# --- Relay / valve ----------------------------------------------------
+# inverted: true because this relay module is active-low (pulling the
+# input pin low energises the coil). restore_mode ALWAYS_OFF means
+# after any reboot the valve starts closed and stays closed until you
+# explicitly command it open — never defaults to open.
+#
+# Wired so that de-energised = valve closed (see wiring-plan.md,
+# "why the valve fails closed"). Toggling this switch in Home
+# Assistant or the ESPHome dashboard should physically turn the valve.
+ 
+switch:
+  - platform: gpio
+    pin: GPIO25
+    id: fill_valve
+    name: "Fill Valve"
+    inverted: true
+    restore_mode: ALWAYS_OFF

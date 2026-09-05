@@ -159,5 +159,8 @@
   },
   "master-bedroom-display.yaml": {
     "mac_address": "CC:8D:A2:E7:C3:90"
+  },
+  "waterlevel-test.yaml": {
+    "mac_address": "F0:08:D1:D3:0F:7C"
   }
 }
