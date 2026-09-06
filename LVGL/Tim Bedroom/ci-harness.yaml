@@ -15,7 +15,7 @@
 substitutions:
   device_name: "wandpaneel-ci"
   friendly_name: "Wandpaneel CI"
-  room_title: "Slaapkamer"
+  room_title: "Kamer Tim"
   WIFI_passwd: "ci-dummy-password"
   fallback_passwd: "ci-dummy-password"
   device_key: "ZGADVtIpvtmMT0gQEAIiwsZjP8q/s6AuQFxiZI4mxj4="  # alleen CI; echte devices via !secret
@@ -25,43 +25,21 @@ substitutions:
   # Controleer ze in Developer Tools > States; HA hernoemt een entity_id
   # NIET als de `name:` upstream verandert, alleen de weergavenaam.
 
-  # Licht
-  ent_licht_kamer: light.slaapkamer_plafond
-  ent_licht_bed: light.slaapkamer_bed
+  # Licht. Kamer Tim heeft geen light-entities: de licht-kaart bedient
+  # deze via switch.toggle en leest de switch-state terug.
+  ent_licht_kamer: switch.slaapkamer_tim
+  ent_licht_bed: switch.nachtlamp_tim
 
   # Klimaat (thermostaat met temperature + current_temperature attributen)
-  ent_klimaat: climate.slaapkamer
-
-  # Ventilator: vijf standen (0, 25, 50, 75, 100%). Zie het commentaar bij
-  # ventilator_obj in lvglconfig.yml voor waarom fan.set_percentage hier
-  # WEL veilig is (in tegenstelling tot de Master Bedroom).
-  ent_ventilator: fan.slaapkamer
+  ent_klimaat: climate.virtual_thermostat_room_tim
 
   # Weer (een weather-entity met de attributen temperature en
   # apparent_temperature)
   ent_weer: weather.openweathermap
 
-  # Gordijnen
-  ent_gordijn: cover.slaapkamer
-  # input_select helpers. Hun optielijsten MOETEN de tijden bevatten die
-  # als knop op het scherm staan, exact zoals daar geschreven:
-  #   dicht: 21:00, 21:30, 22:00, 22:30
-  #   open:  7:00, 7:30, 8:00, 8:30, 9:00, 9:30
-  # Let op het ontbrekende voorloopnul in de ochtendtijden - dat volgt de
-  # bestaande conventie van de Master Bedroom helpers.
-  ent_tijd_dicht: input_select.slaapkamer_gordijn_dicht_tijd
-  ent_tijd_open: input_select.slaapkamer_gordijn_open_tijd
-
-  # Agenda: vijf template sensors, een per regel.
-  ent_agenda_1: sensor.agenda_regel_1
-  ent_agenda_2: sensor.agenda_regel_2
-  ent_agenda_3: sensor.agenda_regel_3
-  ent_agenda_4: sensor.agenda_regel_4
-  ent_agenda_5: sensor.agenda_regel_5
-
-  # Scherm
-  ent_beweging: binary_sensor.slaapkamer_beweging
-  ent_lux: sensor.slaapkamer_illuminance
+  # Gordijnen. Alleen Sluit nu / Open nu - dit paneel heeft geen
+  # tijdschema (geen input_select helpers voor kamer Tim).
+  ent_gordijn: cover.cover_tim
 
 esphome:
   name: ${device_name}
