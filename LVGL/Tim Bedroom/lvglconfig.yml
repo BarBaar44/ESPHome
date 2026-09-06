@@ -7,12 +7,9 @@
 #   +--------------------------------------------------+
 #   | header: titel, wifi, HA, chevron ->               |
 #   +---------------+----------------------------------+
-#   | Weer          | Licht          | Temperatuur      |
-#   +---------------+----------------------------------+
-#   |               | Ventilator  OFF LOW MID HIGH     |
-#   | Agenda        +----------------------------------+
-#   |               | Dicht  [Sluit nu]  21:00 .. 22:30|
-#   |               | Open   [Open nu]    7:00 ..  9:30|
+#   |               | Licht          | Temperatuur      |
+#   | Weer          +----------------------------------+
+#   |               | Gordijnen  [Sluit nu]  [Open nu] |
 #   +---------------+----------------------------------+
 #
 # Verschillen met het oorspronkelijke wandpaneel-ontwerp, met reden:
@@ -25,16 +22,16 @@
 #    icoon en de tekst in een enkel label met het icoonfont; dat font
 #    bevat geen latijnse glyphs, dus "Licht" zou leeg renderen.
 #
-# 3. De ventilator heeft OFF/LOW/MID/HIGH via button.press in plaats van
-#    0/1/2/3/4 via fan.set_percentage. Zie het commentaar bij
-#    ventilator_obj - dit is de bug die op de Master Bedroom is
-#    uitgezocht en die je met percentages opnieuw zou introduceren.
+# 3. De licht-kaart bedient switch-entities via switch.toggle. Kamer Tim
+#    heeft geen light-entities: het plafond hangt aan een Shelly1 en het
+#    bed aan een Sonoff, beide switch-domein. De bijbehorende
+#    homeassistant binary_sensors in lvglsensors.yml lezen dezelfde
+#    switch-state terug.
 #
-# 4. De gordijntijden schrijven naar input_select helpers (zelfde
-#    conventie als de Master Bedroom) in plaats van input_datetime.
-#    De knoppen zijn NIET checkable: hun geselecteerde staat komt
-#    uitsluitend terug uit Home Assistant. Zie update_close_time_buttons
-#    in lvglsensors.yml.
+# 4. Geen ventilatorkaart, geen agendakaart en geen gordijn-tijdschema.
+#    De ventilator van kamer Tim staat offline; er zijn geen agenda- of
+#    lux/bewegings-entities voor deze kamer. Het scherm blijft overdag
+#    aan en gaat uit binnen het nachtvenster (zie update_screen_state).
 #
 # Alle entity-namen staan als substitutions in de per-device config
 # (zie ci-harness.yaml voor de CI-variant).
@@ -223,7 +220,7 @@ lvgl:
             widgets:
 
               # =========================
-              # LINKERKOLOM: Weer boven, Agenda daaronder
+              # LINKERKOLOM: alleen Weer (agendakaart vervallen)
               # =========================
               - obj:
                   id: left_col
@@ -240,8 +237,7 @@ lvgl:
                     pad_row: 8
                     pad_column: 0
                     grid_rows:
-                      - FR(2)
-                      - FR(5)
+                      - FR(1)
                     grid_columns:
                       - FR(1)
 
@@ -315,92 +311,17 @@ lvgl:
                               grid_cell_x_align: START
                               grid_cell_y_align: CENTER
 
-                    # =========================
-                    # AGENDA
-                    #
-                    # Vijf regels uit vijf HA template sensors. long_mode
-                    # DOT vereist een expliciete breedte, vandaar de
-                    # width: 100% op elk label.
-                    # =========================
-                    - obj:
-                        id: agenda_obj
-                        bg_color: 0xFFFFFF
-                        radius: 6
-                        pad_all: 10
-                        scrollable: false
-                        scrollbar_mode: "off"
-
-                        grid_cell_row_pos: 1
-                        grid_cell_column_pos: 0
-                        grid_cell_x_align: STRETCH
-                        grid_cell_y_align: STRETCH
-
-                        layout:
-                          type: FLEX
-                          flex_flow: COLUMN
-                          flex_align_main: START
-                          flex_align_cross: START
-                          pad_row: 14
-
-                        widgets:
-                          - label:
-                              text: "Agenda"
-                              text_font: montserrat_20
-                              text_color: 0x0B0A0A
-
-                          - label:
-                              id: lbl_agenda_1
-                              width: 100%
-                              text: "-"
-                              text_font: montserrat_16
-                              text_color: 0x0B0A0A
-                              long_mode: DOT
-
-                          - label:
-                              id: lbl_agenda_2
-                              width: 100%
-                              text: "-"
-                              text_font: montserrat_16
-                              text_color: 0x0B0A0A
-                              long_mode: DOT
-
-                          - label:
-                              id: lbl_agenda_3
-                              width: 100%
-                              text: "-"
-                              text_font: montserrat_16
-                              text_color: 0x0B0A0A
-                              long_mode: DOT
-
-                          - label:
-                              id: lbl_agenda_4
-                              width: 100%
-                              text: "-"
-                              text_font: montserrat_16
-                              text_color: 0x0B0A0A
-                              long_mode: DOT
-
-                          - label:
-                              id: lbl_agenda_5
-                              width: 100%
-                              text: "-"
-                              text_font: montserrat_16
-                              text_color: 0x0B0A0A
-                              long_mode: DOT
-
               # =========================
               # RECHTERKOLOM
               #
               # Twee kolommen zodat Licht en Temperatuur naast elkaar in
-              # rij 0 passen, terwijl Ventilator en Gordijnen beide
-              # kolommen overspannen. Dat scheelt een extra container-obj
-              # met eigen achtergrond en padding.
+              # rij 0 passen, terwijl Gordijnen beide kolommen overspant.
+              # Dat scheelt een extra container-obj met eigen achtergrond
+              # en padding.
               #
-              # FR(11)/FR(7)/FR(22) is ongeveer 116 / 74 / 234 px binnen de
-              # 424px die na de header overblijft. Ventilator is kleiner
-              # gemaakt (heeft maar een enkele knoppenrij nodig) en die
-              # ruimte gaat naar Gordijnen, dat dicht en open nu in een
-              # gedeeld vak toont.
+              # FR(1)/FR(2): de bovenrij (Licht + Temperatuur) is compact,
+              # de rest van de hoogte gaat naar de Gordijnen-kaart met de
+              # twee grote knoppen.
               # =========================
               - obj:
                   id: right_col
@@ -417,9 +338,8 @@ lvgl:
                     pad_row: 8
                     pad_column: 8
                     grid_rows:
-                      - FR(11)
-                      - FR(7)
-                      - FR(22)
+                      - FR(1)
+                      - FR(2)
                     grid_columns:
                       - FR(1)
                       - FR(1)
@@ -505,7 +425,7 @@ lvgl:
                                       lambda: 'return !id(mirroring_light_switches);'
                                     then:
                                       - homeassistant.action:
-                                          action: light.toggle
+                                          action: switch.toggle
                                           data:
                                             entity_id: ${ent_licht_kamer}
 
@@ -544,7 +464,7 @@ lvgl:
                                       lambda: 'return !id(mirroring_light_switches);'
                                     then:
                                       - homeassistant.action:
-                                          action: light.toggle
+                                          action: switch.toggle
                                           data:
                                             entity_id: ${ent_licht_bed}
 
@@ -687,45 +607,17 @@ lvgl:
                                       temperature: !lambda 'return id(climate_setpoint_value);'
 
                     # =========================
-                    # VENTILATOR
+                    # GORDIJNEN
                     #
-                    # Vijf knoppen voor de vijf standen die deze ventilator
-                    # daadwerkelijk heeft: 0 (uit) en 1 t/m 4.
-                    #
-                    # Knop 0 roept fan.turn_off aan. Knoppen 1-4 roepen
-                    # fan.set_percentage aan met 25/50/75/100.
-                    #
-                    # Waarom dit HIER veilig is, terwijl de Master Bedroom
-                    # juist met opzet button.press op losse snelheidsknoppen
-                    # gebruikt (zie het commentaar bij ventilator_obj in
-                    # LVGL/Masterbedroom/lvglconfig.yml): HA's ESPHome
-                    # fan-integratie zet een percentage om naar een snelheid
-                    # met ceil(percentage_to_ranged_value((1, speed_count), pct)).
-                    # Bij precies vier snelheden liggen 25/50/75/100 exact op
-                    # de grenzen (25*4/100=1.0, 50*4/100=2.0, enzovoort), dus
-                    # ceil verandert er niets aan. De bug op de Master
-                    # Bedroom kwam van speed_count: 3 met percentage 67,
-                    # waar 67*3/100=2.01 juist NIET op een grens ligt en
-                    # ceil naar boven afrondt naar de verkeerde snelheid.
-                    # Heeft jouw ventilator geen vier gelijke snelheden,
-                    # gebruik dan het button.press-patroon van de Master
-                    # Bedroom in plaats van dit blok.
-                    #
-                    # De actieve knop wordt gekleurd door ha_vent_percentage
-                    # in lvglsensors.yml, op basis van het percentage dat HA
-                    # daadwerkelijk rapporteert - ongeacht wie de ventilator
-                    # schakelde.
-                    #
-                    # flex_grow in plaats van een vaste breedte: zo verdelen
-                    # de knoppen de beschikbare ruimte altijd eerlijk, ook
-                    # als de werkelijke padding van bovenliggende containers
-                    # afwijkt van wat je met de hand had uitgerekend.
+                    # Alleen directe bediening: Sluit nu / Open nu. Kamer
+                    # Tim heeft geen input_select tijd-helpers, dus het
+                    # tijdschema van de Master Bedroom is hier vervallen.
                     # =========================
                     - obj:
-                        id: ventilator_obj
+                        id: cover_obj
                         bg_color: 0xFFFFFF
                         radius: 6
-                        pad_all: 6
+                        pad_all: 10
                         scrollable: false
                         scrollbar_mode: "off"
 
@@ -736,503 +628,53 @@ lvgl:
                         grid_cell_y_align: STRETCH
 
                         layout:
-                          type: GRID
-                          pad_row: 2
-                          pad_column: 0
-                          grid_rows: [CONTENT, FR(1)]
-                          grid_columns: [FR(1)]
-
-                        widgets:
-                          - label:
-                              text: "Ventilator"
-                              text_font: montserrat_20
-                              text_color: 0x0B0A0A
-                              grid_cell_row_pos: 0
-                              grid_cell_column_pos: 0
-                              grid_cell_x_align: START
-                              grid_cell_y_align: CENTER
-
-                          - obj:
-                              width: 100%
-                              height: 100%
-                              bg_opa: TRANSP
-                              border_width: 0
-                              pad_all: 0
-                              scrollable: false
-                              scrollbar_mode: "off"
-                              grid_cell_row_pos: 1
-                              grid_cell_column_pos: 0
-                              grid_cell_x_align: STRETCH
-                              grid_cell_y_align: STRETCH
-                              layout:
-                                type: FLEX
-                                flex_flow: ROW
-                                flex_align_main: SPACE_EVENLY
-                                flex_align_cross: CENTER
-                                pad_column: 8
-
-                              widgets:
-                                - button:
-                                    id: btn_vent_0
-                                    flex_grow: 1
-                                    height: 46
-                                    bg_color: 0x2F8CD8
-                                    bg_opa: COVER
-                                    widgets:
-                                      - label:
-                                          text: "0"
-                                          align: CENTER
-                                          text_font: montserrat_20
-                                    on_click:
-                                      - homeassistant.action:
-                                          action: fan.turn_off
-                                          data:
-                                            entity_id: ${ent_ventilator}
-
-                                - button:
-                                    id: btn_vent_1
-                                    flex_grow: 1
-                                    height: 46
-                                    bg_color: 0x2F8CD8
-                                    bg_opa: COVER
-                                    widgets:
-                                      - label:
-                                          text: "1"
-                                          align: CENTER
-                                          text_font: montserrat_20
-                                    on_click:
-                                      - homeassistant.action:
-                                          action: fan.set_percentage
-                                          data:
-                                            entity_id: ${ent_ventilator}
-                                            percentage: "25"
-
-                                - button:
-                                    id: btn_vent_2
-                                    flex_grow: 1
-                                    height: 46
-                                    bg_color: 0x2F8CD8
-                                    bg_opa: COVER
-                                    widgets:
-                                      - label:
-                                          text: "2"
-                                          align: CENTER
-                                          text_font: montserrat_20
-                                    on_click:
-                                      - homeassistant.action:
-                                          action: fan.set_percentage
-                                          data:
-                                            entity_id: ${ent_ventilator}
-                                            percentage: "50"
-
-                                - button:
-                                    id: btn_vent_3
-                                    flex_grow: 1
-                                    height: 46
-                                    bg_color: 0x2F8CD8
-                                    bg_opa: COVER
-                                    widgets:
-                                      - label:
-                                          text: "3"
-                                          align: CENTER
-                                          text_font: montserrat_20
-                                    on_click:
-                                      - homeassistant.action:
-                                          action: fan.set_percentage
-                                          data:
-                                            entity_id: ${ent_ventilator}
-                                            percentage: "75"
-
-                                - button:
-                                    id: btn_vent_4
-                                    flex_grow: 1
-                                    height: 46
-                                    bg_color: 0x2F8CD8
-                                    bg_opa: COVER
-                                    widgets:
-                                      - label:
-                                          text: "4"
-                                          align: CENTER
-                                          text_font: montserrat_20
-                                    on_click:
-                                      - homeassistant.action:
-                                          action: fan.set_percentage
-                                          data:
-                                            entity_id: ${ent_ventilator}
-                                            percentage: "100"
-
-                    # =========================
-                    # GORDIJNEN
-                    #
-                    # Een gedeeld vak in plaats van twee losse omkaderde
-                    # vakken: dicht boven, een dunne scheidingslijn, open
-                    # onder. Dat geeft de open-tijdenrij (zes knoppen)
-                    # meer ademruimte dan twee even grote losse vakken
-                    # zouden bieden. Elke helft heeft een directe
-                    # bedieningsknop (Sluit nu / Open nu) los van het
-                    # tijdschema, plus de tijdknoppen zelf.
-                    #
-                    # De tijdknoppen zijn bewust NIET checkable. Een
-                    # checkable knop schakelt zichzelf om bij aanraking en
-                    # wordt daarna alsnog overschreven zodra HA de
-                    # werkelijke waarde terugstuurt; bij snel tikken zie
-                    # je dan twee knoppen oplichten. Nu stuurt een tik
-                    # alleen de input_select-actie, en bepaalt de HA-state
-                    # welke knop gekleurd is (zie update_close_time_buttons
-                    # en update_open_time_buttons in lvglsensors.yml).
-                    # Home Assistant is de enige bron van waarheid.
-                    # =========================
-                    - obj:
-                        id: cover_obj
-                        bg_color: 0xFFFFFF
-                        radius: 6
-                        pad_all: 10
-                        scrollable: false
-                        scrollbar_mode: "off"
-
-                        grid_cell_row_pos: 2
-                        grid_cell_column_pos: 0
-                        grid_cell_column_span: 2
-                        grid_cell_x_align: STRETCH
-                        grid_cell_y_align: STRETCH
-
-                        layout:
                           type: FLEX
                           flex_flow: COLUMN
                           flex_align_main: START
                           flex_align_cross: STRETCH
-                          pad_row: 6
+                          pad_row: 10
 
                         widgets:
                           - label:
                               text: "Gordijnen"
-                              text_font: montserrat_16
+                              text_font: montserrat_20
                               text_color: 0x0B0A0A
 
-                          # ---- groep: dicht ----
-                          - obj:
+                          - button:
+                              id: btn_gordijn_sluit_nu
                               width: 100%
                               flex_grow: 1
-                              bg_opa: TRANSP
-                              border_width: 0
-                              pad_all: 0
-                              scrollable: false
-                              scrollbar_mode: "off"
-                              layout:
-                                type: FLEX
-                                flex_flow: COLUMN
-                                flex_align_main: SPACE_BETWEEN
-                                flex_align_cross: STRETCH
-                                pad_row: 4
-
-                              widgets:
-                                - obj:
-                                    width: 100%
-                                    height: 22
-                                    bg_opa: TRANSP
-                                    border_width: 0
-                                    pad_all: 0
-                                    scrollable: false
-                                    scrollbar_mode: "off"
-                                    layout:
-                                      type: FLEX
-                                      flex_flow: ROW
-                                      flex_align_main: SPACE_BETWEEN
-                                      flex_align_cross: CENTER
-                                    widgets:
-                                      - label:
-                                          text: "dicht"
-                                          text_font: montserrat_14
-                                          text_color: 0x666666
-                                      - button:
-                                          id: btn_gordijn_sluit_nu
-                                          width: 96
-                                          height: 22
-                                          bg_color: 0x005782
-                                          bg_opa: COVER
-                                          widgets:
-                                            - label:
-                                                text: "Sluit nu"
-                                                align: CENTER
-                                                text_font: montserrat_12
-                                          on_click:
-                                            - homeassistant.action:
-                                                action: cover.close_cover
-                                                data:
-                                                  entity_id: ${ent_gordijn}
-
-                                - obj:
-                                    width: 100%
-                                    flex_grow: 1
-                                    bg_opa: TRANSP
-                                    border_width: 0
-                                    pad_all: 0
-                                    scrollable: false
-                                    scrollbar_mode: "off"
-                                    layout:
-                                      type: FLEX
-                                      flex_flow: ROW
-                                      flex_align_main: SPACE_EVENLY
-                                      flex_align_cross: CENTER
-                                      pad_column: 6
-                                    widgets:
-                                      - button:
-                                          id: btn_dicht_2100
-                                          flex_grow: 1
-                                          height: 40
-                                          bg_color: 0x2F8CD8
-                                          bg_opa: COVER
-                                          widgets:
-                                            - label:
-                                                text: "21:00"
-                                                align: CENTER
-                                                text_font: montserrat_16
-                                          on_click:
-                                            - homeassistant.action:
-                                                action: input_select.select_option
-                                                data:
-                                                  entity_id: ${ent_tijd_dicht}
-                                                  option: "21:00"
-
-                                      - button:
-                                          id: btn_dicht_2130
-                                          flex_grow: 1
-                                          height: 40
-                                          bg_color: 0x2F8CD8
-                                          bg_opa: COVER
-                                          widgets:
-                                            - label:
-                                                text: "21:30"
-                                                align: CENTER
-                                                text_font: montserrat_16
-                                          on_click:
-                                            - homeassistant.action:
-                                                action: input_select.select_option
-                                                data:
-                                                  entity_id: ${ent_tijd_dicht}
-                                                  option: "21:30"
-
-                                      - button:
-                                          id: btn_dicht_2200
-                                          flex_grow: 1
-                                          height: 40
-                                          bg_color: 0x2F8CD8
-                                          bg_opa: COVER
-                                          widgets:
-                                            - label:
-                                                text: "22:00"
-                                                align: CENTER
-                                                text_font: montserrat_16
-                                          on_click:
-                                            - homeassistant.action:
-                                                action: input_select.select_option
-                                                data:
-                                                  entity_id: ${ent_tijd_dicht}
-                                                  option: "22:00"
-
-                                      - button:
-                                          id: btn_dicht_2230
-                                          flex_grow: 1
-                                          height: 40
-                                          bg_color: 0x2F8CD8
-                                          bg_opa: COVER
-                                          widgets:
-                                            - label:
-                                                text: "22:30"
-                                                align: CENTER
-                                                text_font: montserrat_16
-                                          on_click:
-                                            - homeassistant.action:
-                                                action: input_select.select_option
-                                                data:
-                                                  entity_id: ${ent_tijd_dicht}
-                                                  option: "22:30"
-
-                          # ---- dunne scheidingslijn tussen dicht en open ----
-                          - obj:
-                              width: 100%
-                              height: 1
-                              bg_color: 0xE5E7EA
+                              bg_color: 0x005782
                               bg_opa: COVER
-                              border_width: 0
-                              pad_all: 0
-                              scrollable: false
-                              scrollbar_mode: "off"
+                              widgets:
+                                - label:
+                                    text: "Sluit nu"
+                                    align: CENTER
+                                    text_font: montserrat_20
+                                    text_color: 0xFFFFFF
+                              on_click:
+                                - homeassistant.action:
+                                    action: cover.close_cover
+                                    data:
+                                      entity_id: ${ent_gordijn}
 
-                          # ---- groep: open ----
-                          - obj:
+                          - button:
+                              id: btn_gordijn_open_nu
                               width: 100%
                               flex_grow: 1
-                              bg_opa: TRANSP
-                              border_width: 0
-                              pad_all: 0
-                              scrollable: false
-                              scrollbar_mode: "off"
-                              layout:
-                                type: FLEX
-                                flex_flow: COLUMN
-                                flex_align_main: SPACE_BETWEEN
-                                flex_align_cross: STRETCH
-                                pad_row: 4
-
+                              bg_color: 0x2F8CD8
+                              bg_opa: COVER
                               widgets:
-                                - obj:
-                                    width: 100%
-                                    height: 22
-                                    bg_opa: TRANSP
-                                    border_width: 0
-                                    pad_all: 0
-                                    scrollable: false
-                                    scrollbar_mode: "off"
-                                    layout:
-                                      type: FLEX
-                                      flex_flow: ROW
-                                      flex_align_main: SPACE_BETWEEN
-                                      flex_align_cross: CENTER
-                                    widgets:
-                                      - label:
-                                          text: "open"
-                                          text_font: montserrat_14
-                                          text_color: 0x666666
-                                      - button:
-                                          id: btn_gordijn_open_nu
-                                          width: 96
-                                          height: 22
-                                          bg_color: 0x005782
-                                          bg_opa: COVER
-                                          widgets:
-                                            - label:
-                                                text: "Open nu"
-                                                align: CENTER
-                                                text_font: montserrat_12
-                                          on_click:
-                                            - homeassistant.action:
-                                                action: cover.open_cover
-                                                data:
-                                                  entity_id: ${ent_gordijn}
-
-                                - obj:
-                                    width: 100%
-                                    flex_grow: 1
-                                    bg_opa: TRANSP
-                                    border_width: 0
-                                    pad_all: 0
-                                    scrollable: false
-                                    scrollbar_mode: "off"
-                                    layout:
-                                      type: FLEX
-                                      flex_flow: ROW
-                                      flex_align_main: SPACE_EVENLY
-                                      flex_align_cross: CENTER
-                                      pad_column: 4
-                                    widgets:
-                                      - button:
-                                          id: btn_open_0700
-                                          flex_grow: 1
-                                          height: 40
-                                          bg_color: 0x2F8CD8
-                                          bg_opa: COVER
-                                          widgets:
-                                            - label:
-                                                text: "7:00"
-                                                align: CENTER
-                                                text_font: montserrat_14
-                                          on_click:
-                                            - homeassistant.action:
-                                                action: input_select.select_option
-                                                data:
-                                                  entity_id: ${ent_tijd_open}
-                                                  option: "7:00"
-
-                                      - button:
-                                          id: btn_open_0730
-                                          flex_grow: 1
-                                          height: 40
-                                          bg_color: 0x2F8CD8
-                                          bg_opa: COVER
-                                          widgets:
-                                            - label:
-                                                text: "7:30"
-                                                align: CENTER
-                                                text_font: montserrat_14
-                                          on_click:
-                                            - homeassistant.action:
-                                                action: input_select.select_option
-                                                data:
-                                                  entity_id: ${ent_tijd_open}
-                                                  option: "7:30"
-
-                                      - button:
-                                          id: btn_open_0800
-                                          flex_grow: 1
-                                          height: 40
-                                          bg_color: 0x2F8CD8
-                                          bg_opa: COVER
-                                          widgets:
-                                            - label:
-                                                text: "8:00"
-                                                align: CENTER
-                                                text_font: montserrat_14
-                                          on_click:
-                                            - homeassistant.action:
-                                                action: input_select.select_option
-                                                data:
-                                                  entity_id: ${ent_tijd_open}
-                                                  option: "8:00"
-
-                                      - button:
-                                          id: btn_open_0830
-                                          flex_grow: 1
-                                          height: 40
-                                          bg_color: 0x2F8CD8
-                                          bg_opa: COVER
-                                          widgets:
-                                            - label:
-                                                text: "8:30"
-                                                align: CENTER
-                                                text_font: montserrat_14
-                                          on_click:
-                                            - homeassistant.action:
-                                                action: input_select.select_option
-                                                data:
-                                                  entity_id: ${ent_tijd_open}
-                                                  option: "8:30"
-
-                                      - button:
-                                          id: btn_open_0900
-                                          flex_grow: 1
-                                          height: 40
-                                          bg_color: 0x2F8CD8
-                                          bg_opa: COVER
-                                          widgets:
-                                            - label:
-                                                text: "9:00"
-                                                align: CENTER
-                                                text_font: montserrat_14
-                                          on_click:
-                                            - homeassistant.action:
-                                                action: input_select.select_option
-                                                data:
-                                                  entity_id: ${ent_tijd_open}
-                                                  option: "9:00"
-
-                                      - button:
-                                          id: btn_open_0930
-                                          flex_grow: 1
-                                          height: 40
-                                          bg_color: 0x2F8CD8
-                                          bg_opa: COVER
-                                          widgets:
-                                            - label:
-                                                text: "9:30"
-                                                align: CENTER
-                                                text_font: montserrat_14
-                                          on_click:
-                                            - homeassistant.action:
-                                                action: input_select.select_option
-                                                data:
-                                                  entity_id: ${ent_tijd_open}
-                                                  option: "9:30"
+                                - label:
+                                    text: "Open nu"
+                                    align: CENTER
+                                    text_font: montserrat_20
+                                    text_color: 0xFFFFFF
+                              on_click:
+                                - homeassistant.action:
+                                    action: cover.open_cover
+                                    data:
+                                      entity_id: ${ent_gordijn}
 
     # =========================
     # TWEEDE PAGINA - SYSTEEM EN INSTELLINGEN

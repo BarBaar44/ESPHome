@@ -155,9 +155,8 @@ button:
 # SCRIPTS
 # =========================
 script:
-  # Backlight aan/uit op basis van beweging OF plafondlamp. Scherm is aan
-  # als de plafondlamp aan is, OF er beweging is buiten het ingestelde
-  # nachtvenster.
+  # Backlight aan/uit. Kamer Tim heeft geen bewegingssensor: het scherm
+  # is aan als de plafondlamp aan is OF het buiten het nachtvenster is.
   - id: update_screen_state
     then:
       - if:
@@ -166,12 +165,9 @@ script:
               // De plafondlamp wekt/houdt het scherm altijd aan,
               // ongeacht nachtmodus.
               if (id(ceiling_light_on).state) return true;
-              // Geen licht en geen beweging -> scherm uit.
-              if (!id(motion_occupancy).state) return false;
-              // Beweging: onderdruk het automatisch wekken tijdens de
-              // ingestelde nachturen. Als de HA-tijd nog niet
-              // gesynchroniseerd is, fail open (wel wekken) in plaats van
-              // het scherm uit te laten hangen.
+              // Geen bewegingssensor in deze kamer: buiten het
+              // nachtvenster blijft het scherm gewoon aan. Als de HA-tijd
+              // nog niet gesynchroniseerd is, fail open (scherm aan).
               auto t = id(time_homeassistant).now();
               if (!t.is_valid()) return true;
               int hour = t.hour;
@@ -263,10 +259,9 @@ script:
     then:
       - lvgl.page.show: main_page
 
-  # Helderheid op basis van omgevingslicht. Lineaire ramp tussen twee
-  # klemwaarden:
-  #   <= 5 lux   -> 20%
-  #   >= 200 lux -> 100%
+  # Kamer Tim heeft geen lux-sensor: de backlight staat vast op 100%
+  # zolang hij aan is. Het script blijft bestaan omdat wake_screen en
+  # update_screen_state het aanroepen.
   #
   # BELANGRIJK: dit past alleen de helderheid aan terwijl back_light al
   # AAN is. Het zet de backlight nooit aan of uit, zodat
@@ -280,20 +275,7 @@ script:
           then:
             - light.turn_on:
                 id: back_light
-                brightness: !lambda |-
-                  // Als de sensor nog niets gerapporteerd heeft (NaN),
-                  // laat de backlight dan op vol staan in plaats van te
-                  // gokken.
-                  float lux = id(ha_room_illuminance).state;
-                  if (isnan(lux)) return 1.0f;
-                  const float lux_min = 5.0f;
-                  const float lux_max = 200.0f;
-                  const float b_min = 0.20f;
-                  const float b_max = 1.00f;
-                  if (lux <= lux_min) return b_min;
-                  if (lux >= lux_max) return b_max;
-                  float frac = (lux - lux_min) / (lux_max - lux_min);
-                  return b_min + frac * (b_max - b_min);
+                brightness: 100%
 
   # =========================
   # HA HELPER GEZONDHEIDSCHECK
@@ -330,8 +312,7 @@ script:
             bool present;
           };
           const HelperCheck checks[] = {
-            {"Open",  id(ha_cover_open_time).has_state()},
-            {"Dicht", id(ha_cover_close_time).has_state()},
+            {"Klimaat", id(ha_climate_setpoint).has_state()},
           };
           const int total = sizeof(checks) / sizeof(checks[0]);
 
@@ -386,9 +367,6 @@ script:
   - id: sync_settings_from_ha
     mode: restart
     then:
-      - script.execute: update_close_time_buttons
-      - script.execute: update_open_time_buttons
-
       # Klimaat-setpoint. Geen mirror-loop-risico: de +/- knoppen
       # schrijven climate_setpoint_value rechtstreeks en vuren geen
       # on_value af die naar HA doorstuurt. Alleen opnieuw toegepast
@@ -430,49 +408,6 @@ script:
                   checked: !lambda 'return id(ha_licht_bed).state;'
                 shadow_width: !lambda 'return id(ha_licht_bed).state ? 15 : 0;'
       - lambda: 'id(mirroring_light_switches) = false;'
-
-  # Kleurt de gordijn-sluittijdknoppen. Donkerblauw = de tijd die in Home
-  # Assistant geselecteerd staat, standaardblauw = de rest.
-  #
-  # Idempotent en zonder guard: dit zijn buttons met alleen on_click, dus
-  # een programmatische kleurwijziging kaatst niets terug naar HA. Wordt
-  # aangeroepen vanuit ha_cover_close_time en vanuit sync_settings_from_ha
-  # bij het opstarten.
-  - id: update_close_time_buttons
-    then:
-      - lvgl.widget.update:
-          id: btn_dicht_2100
-          bg_color: !lambda 'return lv_color_hex(id(ha_cover_close_time).state == "21:00" ? 0x005782 : 0x2F8CD8);'
-      - lvgl.widget.update:
-          id: btn_dicht_2130
-          bg_color: !lambda 'return lv_color_hex(id(ha_cover_close_time).state == "21:30" ? 0x005782 : 0x2F8CD8);'
-      - lvgl.widget.update:
-          id: btn_dicht_2200
-          bg_color: !lambda 'return lv_color_hex(id(ha_cover_close_time).state == "22:00" ? 0x005782 : 0x2F8CD8);'
-      - lvgl.widget.update:
-          id: btn_dicht_2230
-          bg_color: !lambda 'return lv_color_hex(id(ha_cover_close_time).state == "22:30" ? 0x005782 : 0x2F8CD8);'
-
-  - id: update_open_time_buttons
-    then:
-      - lvgl.widget.update:
-          id: btn_open_0700
-          bg_color: !lambda 'return lv_color_hex(id(ha_cover_open_time).state == "7:00" ? 0x005782 : 0x2F8CD8);'
-      - lvgl.widget.update:
-          id: btn_open_0730
-          bg_color: !lambda 'return lv_color_hex(id(ha_cover_open_time).state == "7:30" ? 0x005782 : 0x2F8CD8);'
-      - lvgl.widget.update:
-          id: btn_open_0800
-          bg_color: !lambda 'return lv_color_hex(id(ha_cover_open_time).state == "8:00" ? 0x005782 : 0x2F8CD8);'
-      - lvgl.widget.update:
-          id: btn_open_0830
-          bg_color: !lambda 'return lv_color_hex(id(ha_cover_open_time).state == "8:30" ? 0x005782 : 0x2F8CD8);'
-      - lvgl.widget.update:
-          id: btn_open_0900
-          bg_color: !lambda 'return lv_color_hex(id(ha_cover_open_time).state == "9:00" ? 0x005782 : 0x2F8CD8);'
-      - lvgl.widget.update:
-          id: btn_open_0930
-          bg_color: !lambda 'return lv_color_hex(id(ha_cover_open_time).state == "9:30" ? 0x005782 : 0x2F8CD8);'
 
   # Stuurt de twee statusiconen in de header op beide pagina's, en de
   # enabled-state van de Check-knop.
@@ -613,63 +548,6 @@ text_sensor:
               if (weather_icons.count(c)) return weather_icons[c];
               return std::string("\U000F0599");
 
-  # Gordijnen: geselecteerde openingstijd.
-  - platform: homeassistant
-    id: ha_cover_open_time
-    entity_id: ${ent_tijd_open}
-    on_value:
-      then:
-        - script.execute: update_open_time_buttons
-
-  # Gordijnen: geselecteerde sluitingstijd.
-  - platform: homeassistant
-    id: ha_cover_close_time
-    entity_id: ${ent_tijd_dicht}
-    on_value:
-      then:
-        - script.execute: update_close_time_buttons
-
-  # Agenda. Maak in HA vijf template sensors met de tekst per regel.
-  - platform: homeassistant
-    id: ha_agenda_1
-    entity_id: ${ent_agenda_1}
-    on_value:
-      - lvgl.label.update:
-          id: lbl_agenda_1
-          text: !lambda 'return x;'
-
-  - platform: homeassistant
-    id: ha_agenda_2
-    entity_id: ${ent_agenda_2}
-    on_value:
-      - lvgl.label.update:
-          id: lbl_agenda_2
-          text: !lambda 'return x;'
-
-  - platform: homeassistant
-    id: ha_agenda_3
-    entity_id: ${ent_agenda_3}
-    on_value:
-      - lvgl.label.update:
-          id: lbl_agenda_3
-          text: !lambda 'return x;'
-
-  - platform: homeassistant
-    id: ha_agenda_4
-    entity_id: ${ent_agenda_4}
-    on_value:
-      - lvgl.label.update:
-          id: lbl_agenda_4
-          text: !lambda 'return x;'
-
-  - platform: homeassistant
-    id: ha_agenda_5
-    entity_id: ${ent_agenda_5}
-    on_value:
-      - lvgl.label.update:
-          id: lbl_agenda_5
-          text: !lambda 'return x;'
-
 # =========================
 # BINARY SENSORS
 # =========================
@@ -691,14 +569,6 @@ binary_sensor:
     device_class: problem
     entity_category: "diagnostic"
     lambda: 'return id(helpers_missing_count) > 0;'
-
-  # Bewegingssensor - stuurt de backlight aan.
-  - platform: homeassistant
-    id: motion_occupancy
-    entity_id: ${ent_beweging}
-    on_state:
-      then:
-        - script.execute: update_screen_state
 
   # Plafondlamp. Stuurt de schakelaar, het lampicoon en het scherm.
   - platform: homeassistant
@@ -741,66 +611,6 @@ binary_sensor:
 # SENSORS
 # =========================
 sensor:
-  # Omgevingslicht (lux). Stuurt de helderheid van de backlight via
-  # apply_brightness.
-  - platform: homeassistant
-    id: ha_room_illuminance
-    entity_id: ${ent_lux}
-    on_value:
-      then:
-        - script.execute: apply_brightness
-
-  # Ventilatorsnelheid uit het percentage-attribuut van de fan zelf, NIET
-  # uit een off/low/mid/high text sensor - deze ventilator kent alleen
-  # 0/25/50/75/100%. Kleurt de actieve knop, ongeacht wie de fan
-  # schakelde: het paneel, de fysieke afstandsbediening of een
-  # HA-automatisering.
-  - platform: homeassistant
-    id: ha_vent_percentage
-    entity_id: ${ent_ventilator}
-    attribute: percentage
-    on_value:
-      then:
-        - lvgl.widget.update:
-            id: [btn_vent_0, btn_vent_1, btn_vent_2, btn_vent_3, btn_vent_4]
-            bg_color: 0x2F8CD8
-            bg_opa: COVER
-        - if:
-            condition:
-              lambda: 'return x == 0;'
-            then:
-              - lvgl.widget.update:
-                  id: btn_vent_0
-                  bg_color: 0x005782
-        - if:
-            condition:
-              lambda: 'return x > 0 && x <= 25;'
-            then:
-              - lvgl.widget.update:
-                  id: btn_vent_1
-                  bg_color: 0x005782
-        - if:
-            condition:
-              lambda: 'return x > 25 && x <= 50;'
-            then:
-              - lvgl.widget.update:
-                  id: btn_vent_2
-                  bg_color: 0x005782
-        - if:
-            condition:
-              lambda: 'return x > 50 && x <= 75;'
-            then:
-              - lvgl.widget.update:
-                  id: btn_vent_3
-                  bg_color: 0x005782
-        - if:
-            condition:
-              lambda: 'return x > 75;'
-            then:
-              - lvgl.widget.update:
-                  id: btn_vent_4
-                  bg_color: 0x005782
-
   - platform: homeassistant
     id: ha_weather_temp_now
     entity_id: ${ent_weer}
