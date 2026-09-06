@@ -7,6 +7,10 @@
 # fonts/materialdesignicons-webfont.ttf naast zich, dus het harnas moet
 # hier ook staan.
 #
+# De entity_ids staan hardcoded in lvglconfig.yml en lvglsensors.yml, dus
+# hier hoeven geen entity-substitutions meer te staan - alleen de
+# device-identiteit die ${friendly_name} vult.
+#
 # LET OP: screen_timeout en climate_setpoint_value worden hier NIET
 # gedeclareerd. Anders dan bij de Master Bedroom staan die in
 # lvglsensors.yml zelf, zodat ze in de repo terug te vinden zijn. Zet ze
@@ -15,31 +19,9 @@
 substitutions:
   device_name: "wandpaneel-ci"
   friendly_name: "Wandpaneel CI"
-  room_title: "Kamer Tim"
   WIFI_passwd: "ci-dummy-password"
   fallback_passwd: "ci-dummy-password"
   device_key: "ZGADVtIpvtmMT0gQEAIiwsZjP8q/s6AuQFxiZI4mxj4="  # alleen CI; echte devices via !secret
-
-  # ---- Entities ----
-  # Vervang deze door de echte entity_ids uit jouw Home Assistant.
-  # Controleer ze in Developer Tools > States; HA hernoemt een entity_id
-  # NIET als de `name:` upstream verandert, alleen de weergavenaam.
-
-  # Licht. Kamer Tim heeft geen light-entities: de licht-kaart bedient
-  # deze via switch.toggle en leest de switch-state terug.
-  ent_licht_kamer: switch.slaapkamer_tim
-  ent_licht_bed: switch.nachtlamp_tim
-
-  # Klimaat (thermostaat met temperature + current_temperature attributen)
-  ent_klimaat: climate.virtual_thermostat_room_tim
-
-  # Weer (een weather-entity met de attributen temperature en
-  # apparent_temperature)
-  ent_weer: weather.openweathermap
-
-  # Gordijnen. Alleen Sluit nu / Open nu - dit paneel heeft geen
-  # tijdschema (geen input_select helpers voor kamer Tim).
-  ent_gordijn: cover.cover_tim
 
 esphome:
   name: ${device_name}
