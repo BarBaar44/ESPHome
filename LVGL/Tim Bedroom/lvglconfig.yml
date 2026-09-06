@@ -33,8 +33,9 @@
 #    lux/bewegings-entities voor deze kamer. Het scherm blijft overdag
 #    aan en gaat uit binnen het nachtvenster (zie update_screen_state).
 #
-# Alle entity-namen staan als substitutions in de per-device config
-# (zie ci-harness.yaml voor de CI-variant).
+# De entity_ids staan hardcoded in dit bestand en in lvglsensors.yml
+# (zelfde aanpak als LVGL/Masterbedroom). De per-device hoofdconfig
+# bevat alleen nog device-identiteit, secrets en de packages-lijst.
 # =====================================================================
 
 # =========================
@@ -149,7 +150,7 @@ lvgl:
 
             widgets:
               - label:
-                  text: "${room_title}"
+                  text: "Kamer Tim"
                   align: CENTER
                   text_font: montserrat_22
                   text_color: 0xFFFFFF
@@ -427,7 +428,7 @@ lvgl:
                                       - homeassistant.action:
                                           action: switch.toggle
                                           data:
-                                            entity_id: ${ent_licht_kamer}
+                                            entity_id: switch.shelly1_tim_shelly1_shelly1_tim
 
                           # ---- Bed ----
                           - label:
@@ -466,7 +467,7 @@ lvgl:
                                       - homeassistant.action:
                                           action: switch.toggle
                                           data:
-                                            entity_id: ${ent_licht_bed}
+                                            entity_id: switch.sonoff_tim_sonoff_tim
 
                     # =========================
                     # TEMPERATUUR
@@ -552,7 +553,7 @@ lvgl:
                                 - homeassistant.action:
                                     action: climate.set_temperature
                                     data:
-                                      entity_id: ${ent_klimaat}
+                                      entity_id: climate.virtual_thermostat_room_tim
                                       temperature: !lambda 'return id(climate_setpoint_value);'
 
                           - label:
@@ -603,7 +604,7 @@ lvgl:
                                 - homeassistant.action:
                                     action: climate.set_temperature
                                     data:
-                                      entity_id: ${ent_klimaat}
+                                      entity_id: climate.virtual_thermostat_room_tim
                                       temperature: !lambda 'return id(climate_setpoint_value);'
 
                     # =========================
@@ -656,7 +657,7 @@ lvgl:
                                 - homeassistant.action:
                                     action: cover.close_cover
                                     data:
-                                      entity_id: ${ent_gordijn}
+                                      entity_id: cover.cover_tim
 
                           - button:
                               id: btn_gordijn_open_nu
@@ -674,7 +675,7 @@ lvgl:
                                 - homeassistant.action:
                                     action: cover.open_cover
                                     data:
-                                      entity_id: ${ent_gordijn}
+                                      entity_id: cover.cover_tim
 
     # =========================
     # TWEEDE PAGINA - SYSTEEM EN INSTELLINGEN

@@ -497,7 +497,7 @@ interval:
 text_sensor:
   - platform: homeassistant
     id: ha_weather_condition
-    entity_id: ${ent_weer}
+    entity_id: weather.openweathermap
     on_value:
       then:
         - lvgl.label.update:
@@ -573,7 +573,7 @@ binary_sensor:
   # Plafondlamp. Stuurt de schakelaar, het lampicoon en het scherm.
   - platform: homeassistant
     id: ceiling_light_on
-    entity_id: ${ent_licht_kamer}
+    entity_id: switch.shelly1_tim_shelly1_shelly1_tim
     on_state:
       then:
         - lambda: 'id(mirroring_light_switches) = true;'
@@ -592,7 +592,7 @@ binary_sensor:
   # Bedlamp.
   - platform: homeassistant
     id: ha_licht_bed
-    entity_id: ${ent_licht_bed}
+    entity_id: switch.sonoff_tim_sonoff_tim
     on_state:
       then:
         - lambda: 'id(mirroring_light_switches) = true;'
@@ -613,7 +613,7 @@ binary_sensor:
 sensor:
   - platform: homeassistant
     id: ha_weather_temp_now
-    entity_id: ${ent_weer}
+    entity_id: weather.openweathermap
     attribute: temperature
     on_value:
       then:
@@ -626,7 +626,7 @@ sensor:
 
   - platform: homeassistant
     id: ha_weather_feels_like
-    entity_id: ${ent_weer}
+    entity_id: weather.openweathermap
     attribute: apparent_temperature
     on_value:
       then:
@@ -642,7 +642,7 @@ sensor:
   # vanaf wat de thermostaat werkelijk doet.
   - platform: homeassistant
     id: ha_climate_setpoint
-    entity_id: ${ent_klimaat}
+    entity_id: climate.virtual_thermostat_room_tim
     attribute: temperature
     on_value:
       then:
@@ -658,7 +658,7 @@ sensor:
 
   - platform: homeassistant
     id: ha_climate_current_temp
-    entity_id: ${ent_klimaat}
+    entity_id: climate.virtual_thermostat_room_tim
     attribute: current_temperature
     on_value:
       then:
