@@ -6,18 +6,6 @@ substitutions:
   fallback_passwd: !secret wifi_bck
   device_key: !secret tbdisplay_key
 
-  # ---- Kamer Tim entities ----
-  # Alles wat het paneel bedient staat hier; de rest van de config komt
-  # uit de packages. climate_setpoint_value en screen_timeout NIET hier
-  # declareren - die staan in LVGL/Tim Bedroom/lvglsensors.yml (anders
-  # dan de Master Bedroom, waar ze lokaal staan).
-  room_title: "Kamer Tim"
-  ent_licht_kamer: switch.shelly1_tim_shelly1_shelly1_tim   # plafond (Shelly1)
-  ent_licht_bed: switch.sonoff_tim_sonoff_tim               # bed (Sonoff)
-  ent_klimaat: climate.virtual_thermostat_room_tim
-  ent_gordijn: cover.cover_tim
-  ent_weer: weather.openweathermap
-
 esphome:
   name: '${device_name}'
   friendly_name: '${friendly_name}'
