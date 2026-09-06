@@ -1,0 +1,58 @@
+substitutions:
+  device_name: tbr-display
+  friendly_name: Tim Bedroom Display
+  device_description: lvgl display Tim
+  WIFI_passwd: !secret wifi_password
+  fallback_passwd: !secret wifi_bck
+  device_key: !secret tbdisplay_key
+
+  # ---- Kamer Tim entities ----
+  # Alles wat het paneel bedient staat hier; de rest van de config komt
+  # uit de packages. climate_setpoint_value en screen_timeout NIET hier
+  # declareren - die staan in LVGL/Tim Bedroom/lvglsensors.yml (anders
+  # dan de Master Bedroom, waar ze lokaal staan).
+  room_title: "Kamer Tim"
+  ent_licht_kamer: switch.shelly1_tim_shelly1_shelly1_tim   # plafond (Shelly1)
+  ent_licht_bed: switch.sonoff_tim_sonoff_tim               # bed (Sonoff)
+  ent_klimaat: climate.virtual_thermostat_room_tim
+  ent_gordijn: cover.cover_tim
+  ent_weer: weather.openweathermap
+
+esphome:
+  name: '${device_name}'
+  friendly_name: '${friendly_name}'
+  comment: '${device_description}'
+  platformio_options:
+    board_build.esp-idf.memory_type: qio_opi
+    board_build.flash_mode: dio
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+    sdkconfig_options:
+      CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: y
+      CONFIG_ESP32S3_DATA_CACHE_64KB: y
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS: y
+      CONFIG_SPIRAM_RODATA: y
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+logger:
+
+web_server:
+  port: 80
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [
+      generic/wifi.yml,
+      generic/generic_sensors.yml,
+      LVGL/displayconfig.yml,
+      LVGL/Tim Bedroom/lvglconfig.yml,
+      LVGL/Tim Bedroom/lvglsensors.yml
+    ]
+    refresh: 1min
