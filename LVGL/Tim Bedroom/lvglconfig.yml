@@ -1,1 +1,1619 @@
+# =====================================================================
+# LVGL wandpaneel - indeling volgens het wandpaneel-ontwerp,
+# opgebouwd met de patronen uit LVGL/Masterbedroom/lvglconfig.yml.
+#
+# Indeling hoofdpagina (800x480, header 40px, grid daaronder 800x440):
+#
+#   +--------------------------------------------------+
+#   | header: titel, wifi, HA, chevron ->               |
+#   +---------------+----------------------------------+
+#   | Weer          | Licht          | Temperatuur      |
+#   +---------------+----------------------------------+
+#   |               | Ventilator  OFF LOW MID HIGH     |
+#   | Agenda        +----------------------------------+
+#   |               | Dicht  [Sluit nu]  21:00 .. 22:30|
+#   |               | Open   [Open nu]    7:00 ..  9:30|
+#   +---------------+----------------------------------+
+#
+# Verschillen met het oorspronkelijke wandpaneel-ontwerp, met reden:
+#
+# 1. Geen absolute x/y meer voor de panelen, maar geneste GRID-layouts
+#    zoals main_grid in de Master Bedroom. Bij vaste pixelcoordinaten
+#    verschuift alles zodra een font of padding wijzigt.
+#
+# 2. Titels zijn platte tekst in Montserrat. Het ontwerp zette het MDI
+#    icoon en de tekst in een enkel label met het icoonfont; dat font
+#    bevat geen latijnse glyphs, dus "Licht" zou leeg renderen.
+#
+# 3. De ventilator heeft OFF/LOW/MID/HIGH via button.press in plaats van
+#    0/1/2/3/4 via fan.set_percentage. Zie het commentaar bij
+#    ventilator_obj - dit is de bug die op de Master Bedroom is
+#    uitgezocht en die je met percentages opnieuw zou introduceren.
+#
+# 4. De gordijntijden schrijven naar input_select helpers (zelfde
+#    conventie als de Master Bedroom) in plaats van input_datetime.
+#    De knoppen zijn NIET checkable: hun geselecteerde staat komt
+#    uitsluitend terug uit Home Assistant. Zie update_close_time_buttons
+#    in lvglsensors.yml.
+#
+# Alle entity-namen staan als substitutions in de per-device config
+# (zie ci-harness.yaml voor de CI-variant).
+# =====================================================================
 
+# =========================
+# FONTS (buiten lvgl sectie!)
+# =========================
+font:
+  # Header: wifi / HA status en de paginanavigatie.
+  - file: "fonts/materialdesignicons-webfont.ttf"
+    id: icons_24
+    size: 24
+    bpp: 4
+    glyphs: [
+      "\U000F07D0", # home-assistant
+      "\U000F05A9", # wifi
+      "\U000F16B5", # wifi-alert
+      "\U000F0141", # chevron-left
+      "\U000F0142", # chevron-right
+      ]
+
+  # Lampjes in de Licht-kaart.
+  - file: "fonts/materialdesignicons-webfont.ttf"
+    id: icons_28
+    size: 28
+    bpp: 4
+    glyphs: [
+      "\U000F0335", # lightbulb (aan)
+      "\U000F0336", # lightbulb-outline (uit)
+      ]
+
+  # Weericoon. 44 in plaats van de 100 van de Master Bedroom: de
+  # weerkaart is hier de kleinste cel van het scherm, niet de halve
+  # rechterkolom.
+  - file: "fonts/materialdesignicons-webfont.ttf"
+    id: icons_44
+    size: 44
+    bpp: 4
+    glyphs: [
+      "\U000F0594", # clear-night
+      "\U000F0590", # cloudy
+      "\U000F0F2F", # exceptional
+      "\U000F0591", # fog
+      "\U000F0592", # hail
+      "\U000F0593", # lightning
+      "\U000F067E", # lightning-rainy
+      "\U000F0595", # partlycloudy
+      "\U000F0596", # pouring
+      "\U000F0597", # rainy
+      "\U000F0598", # snowy
+      "\U000F067F", # snowy-rainy
+      "\U000F0599", # sunny
+      "\U000F059D", # windy
+      "\U000F059E", # windy-variant
+      "\U000F14E4", # sunny-off (startwaarde)
+      ]
+
+  - file: "gfonts://Montserrat@500"
+    id: montserrat_12
+    size: 12
+    bpp: 4
+
+  - file: "gfonts://Montserrat@500"
+    id: montserrat_14
+    size: 14
+    bpp: 4
+
+  - file: "gfonts://Montserrat@500"
+    id: montserrat_16
+    size: 16
+    bpp: 4
+
+  - file: "gfonts://Montserrat@500"
+    id: montserrat_20
+    size: 20
+    bpp: 4
+
+  - file: "gfonts://Montserrat@500"
+    id: montserrat_22
+    size: 22
+    bpp: 4
+
+# =========================
+# LVGL
+# =========================
+lvgl:
+  # Zelfde reden als op de Master Bedroom: zodra LVGL het display
+  # aanstuurt weigert de displaycomponent een eigen rotation-key, en
+  # LVGL draait ook de touchcoordinaten mee (dus geen transform op de
+  # gt911). 180 laat de 800x480 geometrie intact.
+  #
+  # Zet dit op 0 als dit paneel niet ondersteboven hangt.
+  rotation: 180
+
+  pages:
+    - id: main_page
+      bg_color: 0x0B0A0A
+      pad_all: 0
+      scrollable: false
+      scrollbar_mode: "off"
+
+      widgets:
+
+        # =========================
+        # HEADER
+        # =========================
+        - obj:
+            align: TOP_MID
+            styles: header_footer
+            width: 100%
+            height: 40
+            scrollable: false
+            scrollbar_mode: "off"
+
+            widgets:
+              - label:
+                  text: "${room_title}"
+                  align: CENTER
+                  text_font: montserrat_22
+                  text_color: 0xFFFFFF
+
+              # Wit wifi-glyph zolang de verbinding staat, rood
+              # wifi-alert zodra hij wegvalt. Gestuurd door
+              # update_connectivity_icons in lvglsensors.yml.
+              - label:
+                  text: "\U000F05A9"
+                  id: lbl_wifistatus
+                  align: RIGHT_MID
+                  x: -95
+                  text_font: icons_24
+                  text_color: 0xFFFFFF
+
+              # Wit zolang de API-verbinding met Home Assistant staat,
+              # rood zodra die wegvalt.
+              - label:
+                  text: "\U000F07D0"
+                  id: lbl_hastatus
+                  align: RIGHT_MID
+                  x: -55
+                  text_font: icons_24
+                  text_color: 0xFFFFFF
+
+              - button:
+                  align: RIGHT_MID
+                  x: -5
+                  width: 40
+                  height: 34
+                  bg_opa: TRANSP
+                  shadow_width: 0
+                  widgets:
+                    - label:
+                        text: "\U000F0142"
+                        align: CENTER
+                        text_font: icons_24
+                        text_color: 0xFFFFFF
+                  on_click:
+                    - lvgl.page.show: second_page
+
+        # =========================
+        # MAIN GRID
+        #
+        # FR(1)/FR(2): het ontwerp had 260px links tegen 522px rechts.
+        # =========================
+        - obj:
+            id: main_grid
+            x: 0
+            y: 40
+            width: 800
+            height: 440
+            bg_color: 0xD3D6D9
+            pad_all: 8
+            scrollable: false
+            scrollbar_mode: "off"
+
+            layout:
+              type: GRID
+              pad_row: 8
+              pad_column: 8
+              grid_rows:
+                - FR(1)
+              grid_columns:
+                - FR(1)
+                - FR(2)
+
+            widgets:
+
+              # =========================
+              # LINKERKOLOM: Weer boven, Agenda daaronder
+              # =========================
+              - obj:
+                  id: left_col
+                  scrollable: false
+                  scrollbar_mode: "off"
+
+                  grid_cell_row_pos: 0
+                  grid_cell_column_pos: 0
+                  grid_cell_x_align: STRETCH
+                  grid_cell_y_align: STRETCH
+
+                  layout:
+                    type: GRID
+                    pad_row: 8
+                    pad_column: 0
+                    grid_rows:
+                      - FR(2)
+                      - FR(5)
+                    grid_columns:
+                      - FR(1)
+
+                  widgets:
+
+                    # =========================
+                    # WEER
+                    #
+                    # Grid: icoon links over drie rijen, rechts de
+                    # conditie, de huidige temperatuur en "voelt als".
+                    # =========================
+                    - obj:
+                        id: weather_obj
+                        bg_color: 0xFFFFFF
+                        radius: 6
+                        pad_all: 8
+                        scrollable: false
+                        scrollbar_mode: "off"
+
+                        grid_cell_row_pos: 0
+                        grid_cell_column_pos: 0
+                        grid_cell_x_align: STRETCH
+                        grid_cell_y_align: STRETCH
+
+                        layout:
+                          type: GRID
+                          pad_row: 0
+                          pad_column: 8
+                          grid_rows: [FR(1), FR(1), FR(1)]
+                          grid_columns: [CONTENT, FR(1)]
+
+                        widgets:
+                          - label:
+                              text: "\U000F14E4"
+                              id: lbl_weather_icon
+                              text_font: icons_44
+                              text_color: 0xFDB813
+                              grid_cell_row_pos: 0
+                              grid_cell_column_pos: 0
+                              grid_cell_row_span: 3
+                              grid_cell_x_align: CENTER
+                              grid_cell_y_align: CENTER
+
+                          - label:
+                              text: "Onbekend"
+                              id: lbl_weather_condition
+                              text_font: montserrat_16
+                              text_color: 0x0B0A0A
+                              grid_cell_row_pos: 0
+                              grid_cell_column_pos: 1
+                              grid_cell_x_align: START
+                              grid_cell_y_align: CENTER
+
+                          - label:
+                              text: "--.- °C"
+                              id: lbl_weather_temp
+                              text_font: montserrat_22
+                              text_color: 0x2F8CD8
+                              grid_cell_row_pos: 1
+                              grid_cell_column_pos: 1
+                              grid_cell_x_align: START
+                              grid_cell_y_align: CENTER
+
+                          - label:
+                              text: "voelt als --.- °C"
+                              id: lbl_weather_feels
+                              text_font: montserrat_12
+                              text_color: 0x666666
+                              grid_cell_row_pos: 2
+                              grid_cell_column_pos: 1
+                              grid_cell_x_align: START
+                              grid_cell_y_align: CENTER
+
+                    # =========================
+                    # AGENDA
+                    #
+                    # Vijf regels uit vijf HA template sensors. long_mode
+                    # DOT vereist een expliciete breedte, vandaar de
+                    # width: 100% op elk label.
+                    # =========================
+                    - obj:
+                        id: agenda_obj
+                        bg_color: 0xFFFFFF
+                        radius: 6
+                        pad_all: 10
+                        scrollable: false
+                        scrollbar_mode: "off"
+
+                        grid_cell_row_pos: 1
+                        grid_cell_column_pos: 0
+                        grid_cell_x_align: STRETCH
+                        grid_cell_y_align: STRETCH
+
+                        layout:
+                          type: FLEX
+                          flex_flow: COLUMN
+                          flex_align_main: START
+                          flex_align_cross: START
+                          pad_row: 14
+
+                        widgets:
+                          - label:
+                              text: "Agenda"
+                              text_font: montserrat_20
+                              text_color: 0x0B0A0A
+
+                          - label:
+                              id: lbl_agenda_1
+                              width: 100%
+                              text: "-"
+                              text_font: montserrat_16
+                              text_color: 0x0B0A0A
+                              long_mode: DOT
+
+                          - label:
+                              id: lbl_agenda_2
+                              width: 100%
+                              text: "-"
+                              text_font: montserrat_16
+                              text_color: 0x0B0A0A
+                              long_mode: DOT
+
+                          - label:
+                              id: lbl_agenda_3
+                              width: 100%
+                              text: "-"
+                              text_font: montserrat_16
+                              text_color: 0x0B0A0A
+                              long_mode: DOT
+
+                          - label:
+                              id: lbl_agenda_4
+                              width: 100%
+                              text: "-"
+                              text_font: montserrat_16
+                              text_color: 0x0B0A0A
+                              long_mode: DOT
+
+                          - label:
+                              id: lbl_agenda_5
+                              width: 100%
+                              text: "-"
+                              text_font: montserrat_16
+                              text_color: 0x0B0A0A
+                              long_mode: DOT
+
+              # =========================
+              # RECHTERKOLOM
+              #
+              # Twee kolommen zodat Licht en Temperatuur naast elkaar in
+              # rij 0 passen, terwijl Ventilator en Gordijnen beide
+              # kolommen overspannen. Dat scheelt een extra container-obj
+              # met eigen achtergrond en padding.
+              #
+              # FR(11)/FR(7)/FR(22) is ongeveer 116 / 74 / 234 px binnen de
+              # 424px die na de header overblijft. Ventilator is kleiner
+              # gemaakt (heeft maar een enkele knoppenrij nodig) en die
+              # ruimte gaat naar Gordijnen, dat dicht en open nu in een
+              # gedeeld vak toont.
+              # =========================
+              - obj:
+                  id: right_col
+                  scrollable: false
+                  scrollbar_mode: "off"
+
+                  grid_cell_row_pos: 0
+                  grid_cell_column_pos: 1
+                  grid_cell_x_align: STRETCH
+                  grid_cell_y_align: STRETCH
+
+                  layout:
+                    type: GRID
+                    pad_row: 8
+                    pad_column: 8
+                    grid_rows:
+                      - FR(11)
+                      - FR(7)
+                      - FR(22)
+                    grid_columns:
+                      - FR(1)
+                      - FR(1)
+
+                  widgets:
+
+                    # =========================
+                    # LICHT
+                    #
+                    # Grid met drie kolommen: lampicoon (CONTENT), naam
+                    # (FR(1)), switch (CONTENT). Daardoor staan beide
+                    # switches gegarandeerd onder elkaar, ook als de
+                    # namen van lengte verschillen.
+                    # =========================
+                    - obj:
+                        id: light_obj
+                        bg_color: 0xFFFFFF
+                        radius: 6
+                        pad_all: 6
+                        scrollable: false
+                        scrollbar_mode: "off"
+
+                        grid_cell_row_pos: 0
+                        grid_cell_column_pos: 0
+                        grid_cell_x_align: STRETCH
+                        grid_cell_y_align: STRETCH
+
+                        layout:
+                          type: GRID
+                          pad_row: 2
+                          pad_column: 8
+                          grid_rows: [CONTENT, FR(1), FR(1)]
+                          grid_columns: [CONTENT, FR(1), CONTENT]
+
+                        widgets:
+                          - label:
+                              text: "Licht"
+                              text_font: montserrat_20
+                              text_color: 0x0B0A0A
+                              grid_cell_row_pos: 0
+                              grid_cell_column_pos: 0
+                              grid_cell_column_span: 3
+                              grid_cell_x_align: START
+                              grid_cell_y_align: CENTER
+
+                          # ---- Kamer (plafondlamp) ----
+                          - label:
+                              id: lbl_bulb_kamer
+                              text: "\U000F0336"
+                              text_font: icons_28
+                              text_color: 0xBBBBBB
+                              grid_cell_row_pos: 1
+                              grid_cell_column_pos: 0
+                              grid_cell_x_align: CENTER
+                              grid_cell_y_align: CENTER
+
+                          - label:
+                              text: "Kamer"
+                              text_font: montserrat_16
+                              text_color: 0x0B0A0A
+                              grid_cell_row_pos: 1
+                              grid_cell_column_pos: 1
+                              grid_cell_x_align: START
+                              grid_cell_y_align: CENTER
+
+                          - switch:
+                              id: switch_licht_kamer
+                              shadow_color: 0xFDB813
+                              shadow_width: 0
+                              shadow_spread: 2
+                              grid_cell_row_pos: 1
+                              grid_cell_column_pos: 2
+                              grid_cell_x_align: END
+                              grid_cell_y_align: CENTER
+                              on_value:
+                                # Guard tegen de mirror-loop uit
+                                # esphome/esphome#17161: lvgl.widget.update
+                                # vuurt on_value ook af als de wijziging
+                                # programmatisch is. Alleen doorsturen naar
+                                # HA bij een echte aanraking.
+                                - if:
+                                    condition:
+                                      lambda: 'return !id(mirroring_light_switches);'
+                                    then:
+                                      - homeassistant.action:
+                                          action: light.toggle
+                                          data:
+                                            entity_id: ${ent_licht_kamer}
+
+                          # ---- Bed ----
+                          - label:
+                              id: lbl_bulb_bed
+                              text: "\U000F0336"
+                              text_font: icons_28
+                              text_color: 0xBBBBBB
+                              grid_cell_row_pos: 2
+                              grid_cell_column_pos: 0
+                              grid_cell_x_align: CENTER
+                              grid_cell_y_align: CENTER
+
+                          - label:
+                              text: "Bed"
+                              text_font: montserrat_16
+                              text_color: 0x0B0A0A
+                              grid_cell_row_pos: 2
+                              grid_cell_column_pos: 1
+                              grid_cell_x_align: START
+                              grid_cell_y_align: CENTER
+
+                          - switch:
+                              id: switch_licht_bed
+                              shadow_color: 0xFDB813
+                              shadow_width: 0
+                              shadow_spread: 2
+                              grid_cell_row_pos: 2
+                              grid_cell_column_pos: 2
+                              grid_cell_x_align: END
+                              grid_cell_y_align: CENTER
+                              on_value:
+                                - if:
+                                    condition:
+                                      lambda: 'return !id(mirroring_light_switches);'
+                                    then:
+                                      - homeassistant.action:
+                                          action: light.toggle
+                                          data:
+                                            entity_id: ${ent_licht_bed}
+
+                    # =========================
+                    # TEMPERATUUR
+                    #
+                    # De +/- knoppen rekenen op climate_setpoint_value en
+                    # sturen die waarde daarna in een keer naar HA, in
+                    # plaats van elke tik te baseren op de laatst
+                    # ontvangen HA-state. Dat laatste (zoals het
+                    # oorspronkelijke wandpaneel-ontwerp deed) verliest
+                    # tikken zodra je sneller drukt dan de round-trip.
+                    # =========================
+                    - obj:
+                        id: climate_obj
+                        bg_color: 0xFFFFFF
+                        radius: 6
+                        pad_all: 6
+                        scrollable: false
+                        scrollbar_mode: "off"
+
+                        grid_cell_row_pos: 0
+                        grid_cell_column_pos: 1
+                        grid_cell_x_align: STRETCH
+                        grid_cell_y_align: STRETCH
+
+                        layout:
+                          type: GRID
+                          pad_row: 2
+                          pad_column: 6
+                          grid_rows: [CONTENT, FR(1)]
+                          grid_columns: [CONTENT, FR(1), CONTENT]
+
+                        widgets:
+                          - label:
+                              text: "Temperatuur"
+                              text_font: montserrat_20
+                              text_color: 0x0B0A0A
+                              grid_cell_row_pos: 0
+                              grid_cell_column_pos: 0
+                              grid_cell_column_span: 2
+                              grid_cell_x_align: START
+                              grid_cell_y_align: CENTER
+
+                          - label:
+                              id: climate_current_temp
+                              text: "-- °C"
+                              text_font: montserrat_14
+                              text_color: 0x666666
+                              grid_cell_row_pos: 0
+                              grid_cell_column_pos: 2
+                              grid_cell_x_align: END
+                              grid_cell_y_align: CENTER
+
+                          - button:
+                              id: climate_temp_decrease
+                              width: 58
+                              height: 44
+                              bg_color: 0x2F8CD8
+                              bg_opa: COVER
+                              grid_cell_row_pos: 1
+                              grid_cell_column_pos: 0
+                              grid_cell_x_align: START
+                              grid_cell_y_align: CENTER
+                              widgets:
+                                - label:
+                                    text: "-"
+                                    align: CENTER
+                                    text_font: montserrat_22
+                                    text_color: 0xFFFFFF
+                              on_click:
+                                - globals.set:
+                                    id: climate_setpoint_value
+                                    value: !lambda |-
+                                      float new_value = id(climate_setpoint_value) - 0.5;
+                                      if (new_value < 10.0) new_value = 10.0;
+                                      return new_value;
+                                - lvgl.label.update:
+                                    id: climate_setpoint_label
+                                    text: !lambda |-
+                                      char buf[16];
+                                      snprintf(buf, sizeof(buf), "%.1f °C", id(climate_setpoint_value));
+                                      return buf;
+                                - delay: 100ms
+                                - homeassistant.action:
+                                    action: climate.set_temperature
+                                    data:
+                                      entity_id: ${ent_klimaat}
+                                      temperature: !lambda 'return id(climate_setpoint_value);'
+
+                          - label:
+                              id: climate_setpoint_label
+                              text: "21.0 °C"
+                              text_align: CENTER
+                              text_font: montserrat_22
+                              text_color: 0x000000
+                              pad_all: 4
+                              border_width: 2
+                              border_color: 0x000000
+                              radius: 4
+                              grid_cell_row_pos: 1
+                              grid_cell_column_pos: 1
+                              grid_cell_x_align: CENTER
+                              grid_cell_y_align: CENTER
+
+                          - button:
+                              id: climate_temp_increase
+                              width: 58
+                              height: 44
+                              bg_color: 0xE24B4A
+                              bg_opa: COVER
+                              grid_cell_row_pos: 1
+                              grid_cell_column_pos: 2
+                              grid_cell_x_align: END
+                              grid_cell_y_align: CENTER
+                              widgets:
+                                - label:
+                                    text: "+"
+                                    align: CENTER
+                                    text_font: montserrat_22
+                                    text_color: 0xFFFFFF
+                              on_click:
+                                - globals.set:
+                                    id: climate_setpoint_value
+                                    value: !lambda |-
+                                      float new_value = id(climate_setpoint_value) + 0.5;
+                                      if (new_value > 30.0) new_value = 30.0;
+                                      return new_value;
+                                - lvgl.label.update:
+                                    id: climate_setpoint_label
+                                    text: !lambda |-
+                                      char buf[16];
+                                      snprintf(buf, sizeof(buf), "%.1f °C", id(climate_setpoint_value));
+                                      return buf;
+                                - delay: 100ms
+                                - homeassistant.action:
+                                    action: climate.set_temperature
+                                    data:
+                                      entity_id: ${ent_klimaat}
+                                      temperature: !lambda 'return id(climate_setpoint_value);'
+
+                    # =========================
+                    # VENTILATOR
+                    #
+                    # Vijf knoppen voor de vijf standen die deze ventilator
+                    # daadwerkelijk heeft: 0 (uit) en 1 t/m 4.
+                    #
+                    # Knop 0 roept fan.turn_off aan. Knoppen 1-4 roepen
+                    # fan.set_percentage aan met 25/50/75/100.
+                    #
+                    # Waarom dit HIER veilig is, terwijl de Master Bedroom
+                    # juist met opzet button.press op losse snelheidsknoppen
+                    # gebruikt (zie het commentaar bij ventilator_obj in
+                    # LVGL/Masterbedroom/lvglconfig.yml): HA's ESPHome
+                    # fan-integratie zet een percentage om naar een snelheid
+                    # met ceil(percentage_to_ranged_value((1, speed_count), pct)).
+                    # Bij precies vier snelheden liggen 25/50/75/100 exact op
+                    # de grenzen (25*4/100=1.0, 50*4/100=2.0, enzovoort), dus
+                    # ceil verandert er niets aan. De bug op de Master
+                    # Bedroom kwam van speed_count: 3 met percentage 67,
+                    # waar 67*3/100=2.01 juist NIET op een grens ligt en
+                    # ceil naar boven afrondt naar de verkeerde snelheid.
+                    # Heeft jouw ventilator geen vier gelijke snelheden,
+                    # gebruik dan het button.press-patroon van de Master
+                    # Bedroom in plaats van dit blok.
+                    #
+                    # De actieve knop wordt gekleurd door ha_vent_percentage
+                    # in lvglsensors.yml, op basis van het percentage dat HA
+                    # daadwerkelijk rapporteert - ongeacht wie de ventilator
+                    # schakelde.
+                    #
+                    # flex_grow in plaats van een vaste breedte: zo verdelen
+                    # de knoppen de beschikbare ruimte altijd eerlijk, ook
+                    # als de werkelijke padding van bovenliggende containers
+                    # afwijkt van wat je met de hand had uitgerekend.
+                    # =========================
+                    - obj:
+                        id: ventilator_obj
+                        bg_color: 0xFFFFFF
+                        radius: 6
+                        pad_all: 6
+                        scrollable: false
+                        scrollbar_mode: "off"
+
+                        grid_cell_row_pos: 1
+                        grid_cell_column_pos: 0
+                        grid_cell_column_span: 2
+                        grid_cell_x_align: STRETCH
+                        grid_cell_y_align: STRETCH
+
+                        layout:
+                          type: GRID
+                          pad_row: 2
+                          pad_column: 0
+                          grid_rows: [CONTENT, FR(1)]
+                          grid_columns: [FR(1)]
+
+                        widgets:
+                          - label:
+                              text: "Ventilator"
+                              text_font: montserrat_20
+                              text_color: 0x0B0A0A
+                              grid_cell_row_pos: 0
+                              grid_cell_column_pos: 0
+                              grid_cell_x_align: START
+                              grid_cell_y_align: CENTER
+
+                          - obj:
+                              width: 100%
+                              height: 100%
+                              bg_opa: TRANSP
+                              border_width: 0
+                              pad_all: 0
+                              scrollable: false
+                              scrollbar_mode: "off"
+                              grid_cell_row_pos: 1
+                              grid_cell_column_pos: 0
+                              grid_cell_x_align: STRETCH
+                              grid_cell_y_align: STRETCH
+                              layout:
+                                type: FLEX
+                                flex_flow: ROW
+                                flex_align_main: SPACE_EVENLY
+                                flex_align_cross: CENTER
+                                pad_column: 8
+
+                              widgets:
+                                - button:
+                                    id: btn_vent_0
+                                    flex_grow: 1
+                                    height: 46
+                                    bg_color: 0x2F8CD8
+                                    bg_opa: COVER
+                                    widgets:
+                                      - label:
+                                          text: "0"
+                                          align: CENTER
+                                          text_font: montserrat_20
+                                    on_click:
+                                      - homeassistant.action:
+                                          action: fan.turn_off
+                                          data:
+                                            entity_id: ${ent_ventilator}
+
+                                - button:
+                                    id: btn_vent_1
+                                    flex_grow: 1
+                                    height: 46
+                                    bg_color: 0x2F8CD8
+                                    bg_opa: COVER
+                                    widgets:
+                                      - label:
+                                          text: "1"
+                                          align: CENTER
+                                          text_font: montserrat_20
+                                    on_click:
+                                      - homeassistant.action:
+                                          action: fan.set_percentage
+                                          data:
+                                            entity_id: ${ent_ventilator}
+                                            percentage: "25"
+
+                                - button:
+                                    id: btn_vent_2
+                                    flex_grow: 1
+                                    height: 46
+                                    bg_color: 0x2F8CD8
+                                    bg_opa: COVER
+                                    widgets:
+                                      - label:
+                                          text: "2"
+                                          align: CENTER
+                                          text_font: montserrat_20
+                                    on_click:
+                                      - homeassistant.action:
+                                          action: fan.set_percentage
+                                          data:
+                                            entity_id: ${ent_ventilator}
+                                            percentage: "50"
+
+                                - button:
+                                    id: btn_vent_3
+                                    flex_grow: 1
+                                    height: 46
+                                    bg_color: 0x2F8CD8
+                                    bg_opa: COVER
+                                    widgets:
+                                      - label:
+                                          text: "3"
+                                          align: CENTER
+                                          text_font: montserrat_20
+                                    on_click:
+                                      - homeassistant.action:
+                                          action: fan.set_percentage
+                                          data:
+                                            entity_id: ${ent_ventilator}
+                                            percentage: "75"
+
+                                - button:
+                                    id: btn_vent_4
+                                    flex_grow: 1
+                                    height: 46
+                                    bg_color: 0x2F8CD8
+                                    bg_opa: COVER
+                                    widgets:
+                                      - label:
+                                          text: "4"
+                                          align: CENTER
+                                          text_font: montserrat_20
+                                    on_click:
+                                      - homeassistant.action:
+                                          action: fan.set_percentage
+                                          data:
+                                            entity_id: ${ent_ventilator}
+                                            percentage: "100"
+
+                    # =========================
+                    # GORDIJNEN
+                    #
+                    # Een gedeeld vak in plaats van twee losse omkaderde
+                    # vakken: dicht boven, een dunne scheidingslijn, open
+                    # onder. Dat geeft de open-tijdenrij (zes knoppen)
+                    # meer ademruimte dan twee even grote losse vakken
+                    # zouden bieden. Elke helft heeft een directe
+                    # bedieningsknop (Sluit nu / Open nu) los van het
+                    # tijdschema, plus de tijdknoppen zelf.
+                    #
+                    # De tijdknoppen zijn bewust NIET checkable. Een
+                    # checkable knop schakelt zichzelf om bij aanraking en
+                    # wordt daarna alsnog overschreven zodra HA de
+                    # werkelijke waarde terugstuurt; bij snel tikken zie
+                    # je dan twee knoppen oplichten. Nu stuurt een tik
+                    # alleen de input_select-actie, en bepaalt de HA-state
+                    # welke knop gekleurd is (zie update_close_time_buttons
+                    # en update_open_time_buttons in lvglsensors.yml).
+                    # Home Assistant is de enige bron van waarheid.
+                    # =========================
+                    - obj:
+                        id: cover_obj
+                        bg_color: 0xFFFFFF
+                        radius: 6
+                        pad_all: 10
+                        scrollable: false
+                        scrollbar_mode: "off"
+
+                        grid_cell_row_pos: 2
+                        grid_cell_column_pos: 0
+                        grid_cell_column_span: 2
+                        grid_cell_x_align: STRETCH
+                        grid_cell_y_align: STRETCH
+
+                        layout:
+                          type: FLEX
+                          flex_flow: COLUMN
+                          flex_align_main: START
+                          flex_align_cross: STRETCH
+                          pad_row: 6
+
+                        widgets:
+                          - label:
+                              text: "Gordijnen"
+                              text_font: montserrat_16
+                              text_color: 0x0B0A0A
+
+                          # ---- groep: dicht ----
+                          - obj:
+                              width: 100%
+                              flex_grow: 1
+                              bg_opa: TRANSP
+                              border_width: 0
+                              pad_all: 0
+                              scrollable: false
+                              scrollbar_mode: "off"
+                              layout:
+                                type: FLEX
+                                flex_flow: COLUMN
+                                flex_align_main: SPACE_BETWEEN
+                                flex_align_cross: STRETCH
+                                pad_row: 4
+
+                              widgets:
+                                - obj:
+                                    width: 100%
+                                    height: 22
+                                    bg_opa: TRANSP
+                                    border_width: 0
+                                    pad_all: 0
+                                    scrollable: false
+                                    scrollbar_mode: "off"
+                                    layout:
+                                      type: FLEX
+                                      flex_flow: ROW
+                                      flex_align_main: SPACE_BETWEEN
+                                      flex_align_cross: CENTER
+                                    widgets:
+                                      - label:
+                                          text: "dicht"
+                                          text_font: montserrat_14
+                                          text_color: 0x666666
+                                      - button:
+                                          id: btn_gordijn_sluit_nu
+                                          width: 96
+                                          height: 22
+                                          bg_color: 0x005782
+                                          bg_opa: COVER
+                                          widgets:
+                                            - label:
+                                                text: "Sluit nu"
+                                                align: CENTER
+                                                text_font: montserrat_12
+                                          on_click:
+                                            - homeassistant.action:
+                                                action: cover.close_cover
+                                                data:
+                                                  entity_id: ${ent_gordijn}
+
+                                - obj:
+                                    width: 100%
+                                    flex_grow: 1
+                                    bg_opa: TRANSP
+                                    border_width: 0
+                                    pad_all: 0
+                                    scrollable: false
+                                    scrollbar_mode: "off"
+                                    layout:
+                                      type: FLEX
+                                      flex_flow: ROW
+                                      flex_align_main: SPACE_EVENLY
+                                      flex_align_cross: CENTER
+                                      pad_column: 6
+                                    widgets:
+                                      - button:
+                                          id: btn_dicht_2100
+                                          flex_grow: 1
+                                          height: 40
+                                          bg_color: 0x2F8CD8
+                                          bg_opa: COVER
+                                          widgets:
+                                            - label:
+                                                text: "21:00"
+                                                align: CENTER
+                                                text_font: montserrat_16
+                                          on_click:
+                                            - homeassistant.action:
+                                                action: input_select.select_option
+                                                data:
+                                                  entity_id: ${ent_tijd_dicht}
+                                                  option: "21:00"
+
+                                      - button:
+                                          id: btn_dicht_2130
+                                          flex_grow: 1
+                                          height: 40
+                                          bg_color: 0x2F8CD8
+                                          bg_opa: COVER
+                                          widgets:
+                                            - label:
+                                                text: "21:30"
+                                                align: CENTER
+                                                text_font: montserrat_16
+                                          on_click:
+                                            - homeassistant.action:
+                                                action: input_select.select_option
+                                                data:
+                                                  entity_id: ${ent_tijd_dicht}
+                                                  option: "21:30"
+
+                                      - button:
+                                          id: btn_dicht_2200
+                                          flex_grow: 1
+                                          height: 40
+                                          bg_color: 0x2F8CD8
+                                          bg_opa: COVER
+                                          widgets:
+                                            - label:
+                                                text: "22:00"
+                                                align: CENTER
+                                                text_font: montserrat_16
+                                          on_click:
+                                            - homeassistant.action:
+                                                action: input_select.select_option
+                                                data:
+                                                  entity_id: ${ent_tijd_dicht}
+                                                  option: "22:00"
+
+                                      - button:
+                                          id: btn_dicht_2230
+                                          flex_grow: 1
+                                          height: 40
+                                          bg_color: 0x2F8CD8
+                                          bg_opa: COVER
+                                          widgets:
+                                            - label:
+                                                text: "22:30"
+                                                align: CENTER
+                                                text_font: montserrat_16
+                                          on_click:
+                                            - homeassistant.action:
+                                                action: input_select.select_option
+                                                data:
+                                                  entity_id: ${ent_tijd_dicht}
+                                                  option: "22:30"
+
+                          # ---- dunne scheidingslijn tussen dicht en open ----
+                          - obj:
+                              width: 100%
+                              height: 1
+                              bg_color: 0xE5E7EA
+                              bg_opa: COVER
+                              border_width: 0
+                              pad_all: 0
+                              scrollable: false
+                              scrollbar_mode: "off"
+
+                          # ---- groep: open ----
+                          - obj:
+                              width: 100%
+                              flex_grow: 1
+                              bg_opa: TRANSP
+                              border_width: 0
+                              pad_all: 0
+                              scrollable: false
+                              scrollbar_mode: "off"
+                              layout:
+                                type: FLEX
+                                flex_flow: COLUMN
+                                flex_align_main: SPACE_BETWEEN
+                                flex_align_cross: STRETCH
+                                pad_row: 4
+
+                              widgets:
+                                - obj:
+                                    width: 100%
+                                    height: 22
+                                    bg_opa: TRANSP
+                                    border_width: 0
+                                    pad_all: 0
+                                    scrollable: false
+                                    scrollbar_mode: "off"
+                                    layout:
+                                      type: FLEX
+                                      flex_flow: ROW
+                                      flex_align_main: SPACE_BETWEEN
+                                      flex_align_cross: CENTER
+                                    widgets:
+                                      - label:
+                                          text: "open"
+                                          text_font: montserrat_14
+                                          text_color: 0x666666
+                                      - button:
+                                          id: btn_gordijn_open_nu
+                                          width: 96
+                                          height: 22
+                                          bg_color: 0x005782
+                                          bg_opa: COVER
+                                          widgets:
+                                            - label:
+                                                text: "Open nu"
+                                                align: CENTER
+                                                text_font: montserrat_12
+                                          on_click:
+                                            - homeassistant.action:
+                                                action: cover.open_cover
+                                                data:
+                                                  entity_id: ${ent_gordijn}
+
+                                - obj:
+                                    width: 100%
+                                    flex_grow: 1
+                                    bg_opa: TRANSP
+                                    border_width: 0
+                                    pad_all: 0
+                                    scrollable: false
+                                    scrollbar_mode: "off"
+                                    layout:
+                                      type: FLEX
+                                      flex_flow: ROW
+                                      flex_align_main: SPACE_EVENLY
+                                      flex_align_cross: CENTER
+                                      pad_column: 4
+                                    widgets:
+                                      - button:
+                                          id: btn_open_0700
+                                          flex_grow: 1
+                                          height: 40
+                                          bg_color: 0x2F8CD8
+                                          bg_opa: COVER
+                                          widgets:
+                                            - label:
+                                                text: "7:00"
+                                                align: CENTER
+                                                text_font: montserrat_14
+                                          on_click:
+                                            - homeassistant.action:
+                                                action: input_select.select_option
+                                                data:
+                                                  entity_id: ${ent_tijd_open}
+                                                  option: "7:00"
+
+                                      - button:
+                                          id: btn_open_0730
+                                          flex_grow: 1
+                                          height: 40
+                                          bg_color: 0x2F8CD8
+                                          bg_opa: COVER
+                                          widgets:
+                                            - label:
+                                                text: "7:30"
+                                                align: CENTER
+                                                text_font: montserrat_14
+                                          on_click:
+                                            - homeassistant.action:
+                                                action: input_select.select_option
+                                                data:
+                                                  entity_id: ${ent_tijd_open}
+                                                  option: "7:30"
+
+                                      - button:
+                                          id: btn_open_0800
+                                          flex_grow: 1
+                                          height: 40
+                                          bg_color: 0x2F8CD8
+                                          bg_opa: COVER
+                                          widgets:
+                                            - label:
+                                                text: "8:00"
+                                                align: CENTER
+                                                text_font: montserrat_14
+                                          on_click:
+                                            - homeassistant.action:
+                                                action: input_select.select_option
+                                                data:
+                                                  entity_id: ${ent_tijd_open}
+                                                  option: "8:00"
+
+                                      - button:
+                                          id: btn_open_0830
+                                          flex_grow: 1
+                                          height: 40
+                                          bg_color: 0x2F8CD8
+                                          bg_opa: COVER
+                                          widgets:
+                                            - label:
+                                                text: "8:30"
+                                                align: CENTER
+                                                text_font: montserrat_14
+                                          on_click:
+                                            - homeassistant.action:
+                                                action: input_select.select_option
+                                                data:
+                                                  entity_id: ${ent_tijd_open}
+                                                  option: "8:30"
+
+                                      - button:
+                                          id: btn_open_0900
+                                          flex_grow: 1
+                                          height: 40
+                                          bg_color: 0x2F8CD8
+                                          bg_opa: COVER
+                                          widgets:
+                                            - label:
+                                                text: "9:00"
+                                                align: CENTER
+                                                text_font: montserrat_14
+                                          on_click:
+                                            - homeassistant.action:
+                                                action: input_select.select_option
+                                                data:
+                                                  entity_id: ${ent_tijd_open}
+                                                  option: "9:00"
+
+                                      - button:
+                                          id: btn_open_0930
+                                          flex_grow: 1
+                                          height: 40
+                                          bg_color: 0x2F8CD8
+                                          bg_opa: COVER
+                                          widgets:
+                                            - label:
+                                                text: "9:30"
+                                                align: CENTER
+                                                text_font: montserrat_14
+                                          on_click:
+                                            - homeassistant.action:
+                                                action: input_select.select_option
+                                                data:
+                                                  entity_id: ${ent_tijd_open}
+                                                  option: "9:30"
+
+    # =========================
+    # TWEEDE PAGINA - SYSTEEM EN INSTELLINGEN
+    #
+    # Overgenomen van second_page van de Master Bedroom, zonder de
+    # woonkamerlamp en zonder de cover-positie dropdowns (dit paneel
+    # heeft geen pre-open / door-open logica).
+    # =========================
+    - id: second_page
+      bg_color: 0x0B0A0A
+      pad_all: 0
+      scrollable: false
+      scrollbar_mode: "off"
+
+      widgets:
+
+        - obj:
+            align: TOP_MID
+            styles: header_footer
+            width: 100%
+            height: 40
+            scrollable: false
+            scrollbar_mode: "off"
+
+            widgets:
+              - label:
+                  text: "Instellingen"
+                  align: CENTER
+                  text_font: montserrat_22
+                  text_color: 0xFFFFFF
+
+              # LVGL widget-ids zijn per pagina, dus de wifi/HA labels van
+              # main_page kunnen hier niet hergebruikt worden. Dit zijn
+              # aparte widgets die update_connectivity_icons gelijk houdt
+              # met hun tegenhangers op de hoofdpagina.
+              - label:
+                  text: "\U000F05A9"
+                  id: lbl_wifistatus_2
+                  align: RIGHT_MID
+                  x: -55
+                  text_font: icons_24
+                  text_color: 0xFFFFFF
+
+              - label:
+                  text: "\U000F07D0"
+                  id: lbl_hastatus_2
+                  align: RIGHT_MID
+                  x: -15
+                  text_font: icons_24
+                  text_color: 0xFFFFFF
+
+              - button:
+                  align: LEFT_MID
+                  x: 5
+                  width: 40
+                  height: 34
+                  bg_opa: TRANSP
+                  shadow_width: 0
+                  widgets:
+                    - label:
+                        text: "\U000F0141"
+                        align: CENTER
+                        text_font: icons_24
+                        text_color: 0xFFFFFF
+                  on_click:
+                    - lvgl.page.show: main_page
+
+        - obj:
+            id: main_grid_2
+            x: 0
+            y: 40
+            width: 800
+            height: 440
+            bg_color: 0xD3D6D9
+            pad_all: 8
+            scrollable: false
+            scrollbar_mode: "off"
+
+            layout:
+              type: GRID
+              pad_row: 8
+              pad_column: 8
+              grid_rows:
+                - FR(1)
+              grid_columns:
+                - FR(1)
+                - FR(1)
+
+            widgets:
+
+              # =========================
+              # SYSTEEM
+              #
+              # Draagt ook de twee statusregels: de uitkomst van de
+              # helper-gezondheidscheck en de ESPHome-versie. Beide gaan
+              # over het paneel en zijn verbinding met HA, dus ze horen
+              # bij de knoppen die daarop ingrijpen.
+              # =========================
+              - obj:
+                  id: system_buttons_obj
+                  bg_color: 0xFFFFFF
+                  radius: 6
+                  pad_all: 10
+                  scrollable: false
+                  scrollbar_mode: "off"
+
+                  grid_cell_row_pos: 0
+                  grid_cell_column_pos: 0
+                  grid_cell_x_align: STRETCH
+                  grid_cell_y_align: STRETCH
+
+                  widgets:
+                    - label:
+                        text: "Systeem"
+                        align: TOP_LEFT
+                        x: 0
+                        y: 0
+                        text_font: montserrat_20
+                        text_color: 0x0B0A0A
+
+                    # Controleert of de HA-helpers echt bestaan en past
+                    # hun waarden opnieuw toe. Start DISABLED: bij boot is
+                    # de API nog niet verbonden en is er dus geen gecachete
+                    # state om te beoordelen. update_connectivity_icons
+                    # zet hem aan zodra de API er is.
+                    - button:
+                        id: btn_check_settings
+                        width: 140
+                        height: 46
+                        x: -80
+                        y: -10
+                        align: CENTER
+                        state:
+                          disabled: true
+                        widgets:
+                          - label:
+                              text: "Check HA"
+                              align: CENTER
+                              text_font: montserrat_14
+                        on_click:
+                          - script.execute: check_ha_settings
+
+                    # Herstart het paneel. Rood en bewust niet naast de
+                    # Check-knop: de restart-platform reboot direct, er is
+                    # geen bevestigingsstap.
+                    #
+                    # Bewust NIET afhankelijk van api.connected: rebooten
+                    # heeft niets van HA nodig en is juist nuttig als de
+                    # API-verbinding stuk is.
+                    - button:
+                        id: btn_reboot_display
+                        width: 140
+                        height: 46
+                        x: 80
+                        y: -10
+                        align: CENTER
+                        bg_color: 0xC62828
+                        bg_opa: COVER
+                        widgets:
+                          - label:
+                              text: "Reboot"
+                              align: CENTER
+                              text_font: montserrat_14
+                        on_click:
+                          - button.press: btn_restart
+
+                    - label:
+                        id: lbl_settings_status
+                        text: "HA-instellingen controleren..."
+                        text_font: montserrat_14
+                        text_color: 0x666666
+                        align: BOTTOM_LEFT
+                        x: 0
+                        y: -18
+
+                    # ESPHOME_VERSION is een compile-time string uit
+                    # esphome/core/defines.h, dus dit toont de versie
+                    # waarmee de firmware daadwerkelijk gebouwd is - geen
+                    # HA-entity of extra text_sensor nodig.
+                    - label:
+                        id: lbl_esphome_version
+                        text: !lambda 'return std::string("ESPHome ") + ESPHOME_VERSION;'
+                        text_font: montserrat_12
+                        text_color: 0x999999
+                        align: BOTTOM_LEFT
+                        x: 0
+                        y: 0
+
+              # =========================
+              # INSTELLINGEN
+              #
+              # Kolom 0 is CONTENT zodat de labels op hun tekst passen en
+              # alle dropdowns op dezelfde x beginnen. De rijen zijn FR(1)
+              # met grid_cell_y_align: CENTER; een harde height per rij is
+              # korter dan de natuurlijke hoogte van een dropdown en
+              # kapte die onderaan af.
+              # =========================
+              - obj:
+                  id: settings_obj
+                  bg_color: 0xFFFFFF
+                  radius: 6
+                  pad_all: 12
+                  scrollable: false
+                  scrollbar_mode: "off"
+
+                  grid_cell_row_pos: 0
+                  grid_cell_column_pos: 1
+                  grid_cell_x_align: STRETCH
+                  grid_cell_y_align: STRETCH
+
+                  layout:
+                    type: GRID
+                    pad_row: 6
+                    pad_column: 12
+                    grid_rows:
+                      - CONTENT   # titel
+                      - FR(1)     # schermtimeout
+                      - FR(1)     # nacht start
+                      - FR(1)     # nacht eind
+                    grid_columns:
+                      - CONTENT
+                      - FR(1)
+
+                  widgets:
+                    - label:
+                        text: "Instellingen"
+                        text_font: montserrat_20
+                        text_color: 0x0B0A0A
+                        grid_cell_row_pos: 0
+                        grid_cell_column_pos: 0
+                        grid_cell_column_span: 2
+                        grid_cell_x_align: START
+                        grid_cell_y_align: CENTER
+
+                    - label:
+                        text: "Schermtimeout:"
+                        text_font: montserrat_16
+                        text_color: 0x0B0A0A
+                        grid_cell_row_pos: 1
+                        grid_cell_column_pos: 0
+                        grid_cell_x_align: START
+                        grid_cell_y_align: CENTER
+
+                    - dropdown:
+                        id: screen_timeout_dropdown
+                        width: 130
+                        grid_cell_row_pos: 1
+                        grid_cell_column_pos: 1
+                        grid_cell_x_align: START
+                        grid_cell_y_align: CENTER
+                        options:
+                          - "30 sec"
+                          - "1 min"
+                          - "2 min"
+                          - "5 min"
+                          - "10 min"
+                          - "30 min"
+                        selected_index: 3  # standaard 5 min
+                        on_value:
+                          - globals.set:
+                              id: screen_timeout
+                              value: !lambda |-
+                                int secs[] = {30, 60, 120, 300, 600, 1800};
+                                return secs[(int)x];
+
+                    # Nachtmodus: zolang het huidige uur binnen
+                    # [Nacht start, Nacht eind) valt, wekt PIR-beweging het
+                    # scherm niet meer. De plafondlamp en aanraken doen dat
+                    # nog wel. De optielijst loopt 00:00..23:00, dus de
+                    # geselecteerde index is gelijk aan het uur.
+                    - label:
+                        text: "Nacht start:"
+                        text_font: montserrat_16
+                        text_color: 0x0B0A0A
+                        grid_cell_row_pos: 2
+                        grid_cell_column_pos: 0
+                        grid_cell_x_align: START
+                        grid_cell_y_align: CENTER
+
+                    - dropdown:
+                        id: night_mode_start_dropdown
+                        width: 130
+                        grid_cell_row_pos: 2
+                        grid_cell_column_pos: 1
+                        grid_cell_x_align: START
+                        grid_cell_y_align: CENTER
+                        options:
+                          - "00:00"
+                          - "01:00"
+                          - "02:00"
+                          - "03:00"
+                          - "04:00"
+                          - "05:00"
+                          - "06:00"
+                          - "07:00"
+                          - "08:00"
+                          - "09:00"
+                          - "10:00"
+                          - "11:00"
+                          - "12:00"
+                          - "13:00"
+                          - "14:00"
+                          - "15:00"
+                          - "16:00"
+                          - "17:00"
+                          - "18:00"
+                          - "19:00"
+                          - "20:00"
+                          - "21:00"
+                          - "22:00"
+                          - "23:00"
+                        selected_index: 22  # standaard 22:00
+                        on_value:
+                          - globals.set:
+                              id: night_mode_start_hour
+                              value: !lambda 'return (int)x;'
+                          - script.execute: update_screen_state
+
+                    - label:
+                        text: "Nacht eind:"
+                        text_font: montserrat_16
+                        text_color: 0x0B0A0A
+                        grid_cell_row_pos: 3
+                        grid_cell_column_pos: 0
+                        grid_cell_x_align: START
+                        grid_cell_y_align: CENTER
+
+                    - dropdown:
+                        id: night_mode_end_dropdown
+                        width: 130
+                        grid_cell_row_pos: 3
+                        grid_cell_column_pos: 1
+                        grid_cell_x_align: START
+                        grid_cell_y_align: CENTER
+                        options:
+                          - "00:00"
+                          - "01:00"
+                          - "02:00"
+                          - "03:00"
+                          - "04:00"
+                          - "05:00"
+                          - "06:00"
+                          - "07:00"
+                          - "08:00"
+                          - "09:00"
+                          - "10:00"
+                          - "11:00"
+                          - "12:00"
+                          - "13:00"
+                          - "14:00"
+                          - "15:00"
+                          - "16:00"
+                          - "17:00"
+                          - "18:00"
+                          - "19:00"
+                          - "20:00"
+                          - "21:00"
+                          - "22:00"
+                          - "23:00"
+                        selected_index: 7  # standaard 07:00
+                        on_value:
+                          - globals.set:
+                              id: night_mode_end_hour
+                              value: !lambda 'return (int)x;'
+                          - script.execute: update_screen_state
+
+  # =========================
+  # STYLE DEFINITIONS
+  # =========================
+  style_definitions:
+    - id: header_footer
+      bg_color: 0x2F8CD8
+      bg_grad_color: 0x005782
+      bg_grad_dir: VER
+      bg_opa: COVER
+      border_opa: TRANSP
+      radius: 0
+      pad_all: 0
+      pad_row: 0
+      pad_column: 0
+      border_color: 0x0077b3
+      text_color: 0xFFFFFF
+      width: 100%
+      height: 30

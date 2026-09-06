@@ -1,0 +1,90 @@
+# CI-validatieharnas voor dit LVGL-paneel.
+#
+# Staat net als die van de Master Bedroom NIET in .ci/ maar hier, in de
+# map van het paneel zelf: ESPHome zoekt lokale font-paden (`file:`)
+# relatief aan het hoofdbestand dat gevalideerd wordt, niet relatief aan
+# het packages:-bestand dat het font declareert. lvglconfig.yml verwacht
+# fonts/materialdesignicons-webfont.ttf naast zich, dus het harnas moet
+# hier ook staan.
+#
+# LET OP: screen_timeout en climate_setpoint_value worden hier NIET
+# gedeclareerd. Anders dan bij de Master Bedroom staan die in
+# lvglsensors.yml zelf, zodat ze in de repo terug te vinden zijn. Zet ze
+# dus ook niet in je echte per-device hoofdconfig.
+
+substitutions:
+  device_name: "wandpaneel-ci"
+  friendly_name: "Wandpaneel CI"
+  room_title: "Slaapkamer"
+  WIFI_passwd: "ci-dummy-password"
+  fallback_passwd: "ci-dummy-password"
+  device_key: "ZGADVtIpvtmMT0gQEAIiwsZjP8q/s6AuQFxiZI4mxj4="  # alleen CI; echte devices via !secret
+
+  # ---- Entities ----
+  # Vervang deze door de echte entity_ids uit jouw Home Assistant.
+  # Controleer ze in Developer Tools > States; HA hernoemt een entity_id
+  # NIET als de `name:` upstream verandert, alleen de weergavenaam.
+
+  # Licht
+  ent_licht_kamer: light.slaapkamer_plafond
+  ent_licht_bed: light.slaapkamer_bed
+
+  # Klimaat (thermostaat met temperature + current_temperature attributen)
+  ent_klimaat: climate.slaapkamer
+
+  # Ventilator: vijf standen (0, 25, 50, 75, 100%). Zie het commentaar bij
+  # ventilator_obj in lvglconfig.yml voor waarom fan.set_percentage hier
+  # WEL veilig is (in tegenstelling tot de Master Bedroom).
+  ent_ventilator: fan.slaapkamer
+
+  # Weer (een weather-entity met de attributen temperature en
+  # apparent_temperature)
+  ent_weer: weather.openweathermap
+
+  # Gordijnen
+  ent_gordijn: cover.slaapkamer
+  # input_select helpers. Hun optielijsten MOETEN de tijden bevatten die
+  # als knop op het scherm staan, exact zoals daar geschreven:
+  #   dicht: 21:00, 21:30, 22:00, 22:30
+  #   open:  7:00, 7:30, 8:00, 8:30, 9:00, 9:30
+  # Let op het ontbrekende voorloopnul in de ochtendtijden - dat volgt de
+  # bestaande conventie van de Master Bedroom helpers.
+  ent_tijd_dicht: input_select.slaapkamer_gordijn_dicht_tijd
+  ent_tijd_open: input_select.slaapkamer_gordijn_open_tijd
+
+  # Agenda: vijf template sensors, een per regel.
+  ent_agenda_1: sensor.agenda_regel_1
+  ent_agenda_2: sensor.agenda_regel_2
+  ent_agenda_3: sensor.agenda_regel_3
+  ent_agenda_4: sensor.agenda_regel_4
+  ent_agenda_5: sensor.agenda_regel_5
+
+  # Scherm
+  ent_beweging: binary_sensor.slaapkamer_beweging
+  ent_lux: sensor.slaapkamer_illuminance
+
+esphome:
+  name: ${device_name}
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+# Een 800x480 RGB565 framebuffer plus de buffers van LVGL past niet in
+# het interne SRAM van de ESP32-S3; extern PSRAM is in de praktijk
+# noodzakelijk.
+psram:
+  mode: octal
+  speed: 80MHz
+
+api:
+
+packages:
+  # Levert wifi.connected (voor update_connectivity_icons) en
+  # time_homeassistant (voor update_screen_state).
+  wifi: !include ../../generic/wifi.yml
+  generic_sensors: !include ../../generic/generic_sensors.yml
+  display: !include ../displayconfig.yml
+  panel: !include lvglconfig.yml
+  sensors: !include lvglsensors.yml
