@@ -68,11 +68,7 @@ uart:
   tx_pin: GPIO17
   rx_pin: GPIO16
   baud_rate: 9600
-  data_bits: 8
-  parity: NONE
-  stop_bits: 1
-  rx_full_threshold: 1
-  rx_timeout: 2
+
   # NOTE: the debug: block that used to sit here has been removed.
   # It taps into the same bytes the manual read below consumes —
   # turns out that's not a passive observer, it's a second consumer
@@ -97,251 +93,93 @@ uart:
 # RE+DE (GPIO4) is driven manually below, since there's no modbus:
 # block to handle flow control anymore.
  
-output:
-  - platform: gpio
-    pin: GPIO4
-    id: rs485_direction
- 
-# --- Non-blocking Modbus state machine -----------------------------
-#
-# Why a state machine instead of a simple "send then wait" lambda:
-# any delay() inside a lambda blocks the ESP32's entire main loop —
-# WiFi, the API connection, and the watchdog all stall. Two OTA
-# rollbacks during bring-up were caused by exactly that: a read loop
-# that held the loop for several seconds at a time.
-#
-# Instead, each 250ms tick does a small amount of work and returns
-# immediately. A request is sent on one tick; later ticks drain
-# whatever bytes have arrived; once a complete valid frame is seen
-# (or the deadline passes) the result is published and the cycle
-# resets. Nothing ever waits in place.
-#
-# State: 0 = idle (waiting for next poll)
-#        1 = request sent, collecting reply bytes
- 
-globals:
-  # Decimal-place count from holding register 3, read once and cached.
-  # -1 means "not read yet". Per the protocol doc this is 0-4, and the
-  # measurement from register 4 must be divided by 10^(this value).
-  - id: probe_decimals
-    type: int
-    restore_value: false
-    initial_value: '-1'
- 
-  - id: probe_state
-    type: int
-    restore_value: false
-    initial_value: '0'
- 
-  # Which register the in-flight request is for: 3 or 4.
-  - id: probe_target_reg
-    type: int
-    restore_value: false
-    initial_value: '3'
- 
-  - id: probe_deadline
-    type: uint32_t
-    restore_value: false
-    initial_value: '0'
- 
-  - id: probe_next_poll
-    type: uint32_t
-    restore_value: false
-    initial_value: '0'
- 
-  - id: probe_rx
-    type: std::vector<uint8_t>
-    restore_value: false
- 
-  - id: probe_fail_count
-    type: int
-    restore_value: false
-    initial_value: '0'
- 
+
+modbus:
+  id: rs485_bus
+  uart_id: modbus_uart
+
+modbus_controller:
+  - id: qdy30
+    address: 0x01
+    modbus_id: rs485_bus
+    setup_priority: -10
+    update_interval: 3s
+
+# --- Sensors ---
 sensor:
-  - platform: template
-    id: probe_level
-    name: "Probe 1 level"
-    # Unit assumed to be cm. Per the protocol doc, holding register 2
-    # carries the real unit code (17 = cm, 16 = m, 18 = mm). Worth
-    # reading register 2 once on the bench to confirm before trusting
-    # this label.
-    unit_of_measurement: "cm"
-    accuracy_decimals: 1
-    # Published by the state machine below, not polled on its own.
-    update_interval: never
- 
-  - platform: template
-    id: probe_comms_ok
-    name: "Probe 1 comms OK"
+  - platform: modbus_controller
+    modbus_controller_id: qdy30
+    name: "QDY30 Unit Code"
+    id: qdy_unit_code
+    address: 0x0002
+    register_type: holding
+    value_type: U_WORD
     accuracy_decimals: 0
-    update_interval: never
- 
-  # --- Flow sensor  # Hall-effect pulse counter on GPIO27, arriving through the voltage
-  # divider. Shows raw pulses per update interval — blow through the
-  # sensor or spin the rotor by hand to confirm it counts. Converting
-  # this to litres/min comes later, once you've calibrated the actual
-  # pulses-per-litre figure against a kitchen scale.
-  - platform: pulse_counter
-    pin:
-      number: GPIO27
-      mode:
-        input: true
-    unit_of_measurement: "pulses/min"
-    name: "Flow sensor pulses"
-    id: flow_pulses
-    update_interval: 5s
- 
-# --- Non-blocking probe read state machine --------------------------
-#
-# Runs every 50ms and ALWAYS returns immediately — no delay(), no
-# waiting loops, nothing that blocks the main loop. Two earlier
-# blocking versions of this triggered OTA rollbacks by holding the
-# CPU for seconds at a time; this exists specifically to avoid that.
-#
-# States:
-#   0 = idle, waiting until the next poll is due
-#   1 = request sent, collecting reply bytes until the deadline
-#
-# Each pass does at most: drain whatever bytes have arrived, send one
-# request, or evaluate a completed buffer. Never more.
- 
-interval:
-  - interval: 50ms
-    then:
+    entity_category: diagnostic
+
+  - platform: modbus_controller
+    modbus_controller_id: qdy30
+    name: "Water Level (mm)"
+    id: level_mm
+    address: 0x0004
+    register_type: holding
+    value_type: U_WORD
+    unit_of_measurement: "mm"
+    device_class: distance
+    state_class: measurement
+    accuracy_decimals: 0
+    filters:
+      - sliding_window_moving_average:
+          window_size: 5
+          send_every: 1
       - lambda: |-
-          auto *uart = id(modbus_uart);
-          const uint32_t now = millis();
- 
-          // Register 3 = decimal places, register 4 = measurement.
-          // Both byte sequences, CRCs included, are copied verbatim
-          // from the manufacturer's protocol PDF worked examples.
-          static const uint8_t REQ_REG3[8] = {0x01, 0x03, 0x00, 0x03, 0x00, 0x01, 0x74, 0x0A};
-          static const uint8_t REQ_REG4[8] = {0x01, 0x03, 0x00, 0x04, 0x00, 0x01, 0xC5, 0xCB};
- 
-          // ---------- State 0: idle ----------
-          if (id(probe_state) == 0) {
-            if (now < id(probe_next_poll)) {
-              return;  // not due yet
-            }
- 
-            // The decimal count is read once; after that every poll
-            // reads the measurement register.
-            id(probe_target_reg) = (id(probe_decimals) < 0) ? 3 : 4;
-            const uint8_t *req = (id(probe_target_reg) == 3) ? REQ_REG3 : REQ_REG4;
- 
-            uint8_t junk;
-            while (uart->available()) {
-              uart->read_byte(&junk);
-            }
-            id(probe_rx).clear();
- 
-            id(rs485_direction).turn_on();   // DE/RE high = transmit
-            uart->write_array(req, 8);
-            uart->flush();
-            id(rs485_direction).turn_off();  // DE/RE low = listen
- 
-            id(probe_deadline) = now + 500;  // collect for up to 500ms
-            id(probe_state) = 1;
-            return;
-          }
- 
-          // ---------- State 1: collecting the reply ----------
-          // Drain whatever arrived since the last pass. Bounded by the
-          // bytes actually available, so this cannot spin.
-          while (uart->available() && id(probe_rx).size() < 64) {
-            uint8_t b;
-            if (!uart->read_byte(&b)) break;
-            id(probe_rx).push_back(b);
-          }
- 
-          if (now < id(probe_deadline) && id(probe_rx).size() < 64) {
-            return;  // still collecting, come back in 50ms
-          }
- 
-          // ---------- Deadline reached: evaluate ----------
-          id(probe_state) = 0;
-          id(probe_next_poll) = now + 10000;  // next poll in 10s
- 
-          auto &buf = id(probe_rx);
- 
-          {
-            std::string hex;
-            char tmp[4];
-            for (size_t i = 0; i < buf.size(); i++) {
-              sprintf(tmp, "%02X ", buf[i]);
-              hex += tmp;
-            }
-            ESP_LOGD("probe1", "reg%d raw (%d bytes): %s",
-                     id(probe_target_reg), buf.size(), hex.c_str());
-          }
- 
-          // Modbus exception reply? (function code with high bit set)
-          for (size_t i = 0; i + 2 < buf.size(); i++) {
-            if (buf[i] == 0x01 && buf[i + 1] == 0x83) {
-              ESP_LOGW("probe1", "Probe returned Modbus exception, code %d", buf[i + 2]);
-              break;
-            }
-          }
- 
-          // Find a valid frame: addr 01, func 03, byte count 02.
-          int fs = -1;
-          for (size_t i = 0; i + 6 < buf.size(); i++) {
-            if (buf[i] == 0x01 && buf[i + 1] == 0x03 && buf[i + 2] == 0x02) {
-              fs = i;
-              break;
-            }
-          }
- 
-          if (fs < 0) {
-            id(probe_fail_count)++;
-            ESP_LOGW("probe1", "No valid frame in %d bytes (fail #%d)",
-                     buf.size(), id(probe_fail_count));
-            if (id(probe_fail_count) >= 3) {
-              id(probe_comms_ok).publish_state(0);
-            }
-            id(probe_next_poll) = now + 2000;  // retry sooner
-            return;
-          }
- 
-          const uint8_t *f = &buf[fs];
- 
-          uint16_t crc = 0xFFFF;
-          for (int i = 0; i < 5; i++) {
-            crc ^= f[i];
-            for (int b = 0; b < 8; b++) {
-              crc = (crc & 1) ? ((crc >> 1) ^ 0xA001) : (crc >> 1);
-            }
-          }
-          if (f[5] != (crc & 0xFF) || f[6] != ((crc >> 8) & 0xFF)) {
-            id(probe_fail_count)++;
-            ESP_LOGW("probe1", "CRC mismatch (fail #%d)", id(probe_fail_count));
-            if (id(probe_fail_count) >= 3) {
-              id(probe_comms_ok).publish_state(0);
-            }
-            id(probe_next_poll) = now + 2000;
-            return;
-          }
- 
-          // Good frame.
-          int16_t value = (int16_t)((f[3] << 8) | f[4]);
-          id(probe_fail_count) = 0;
-          id(probe_comms_ok).publish_state(1);
- 
-          if (id(probe_target_reg) == 3) {
-            if (value >= 0 && value <= 4) {
-              id(probe_decimals) = value;
-              ESP_LOGI("probe1", "Decimal places (register 3) = %d", value);
-            } else {
-              ESP_LOGW("probe1", "Register 3 returned %d, outside documented 0-4; assuming 1", value);
-              id(probe_decimals) = 1;
-            }
-            id(probe_next_poll) = now + 200;  // read the measurement next
-          } else {
-            float divisor = powf(10.0f, (float) id(probe_decimals));
-            id(probe_level).publish_state(value / divisor);
-          }
- 
+          if (isnan(x) || x <= 0) return {};
+          return x;
+
+  - platform: template
+    name: "Water Level (m)"
+    id: level_m
+    unit_of_measurement: "m"
+    device_class: distance
+    state_class: measurement
+    accuracy_decimals: 3
+    update_interval: 3s
+    lambda: |-
+      if (isnan(id(level_mm).state) || id(level_mm).state <= 0) return {};
+      return id(level_mm).state / 1000.0f;
+
+  - platform: template
+    name: "Water Level"
+    id: level_pct
+    unit_of_measurement: "%"
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: 3s
+    lambda: |-
+      if (isnan(id(level_m).state) || id(level_m).state <= 0) return {};
+      const float FS_M = 1.0f;
+      return clamp((id(level_m).state / FS_M) * 100.0f, 0.0f, 100.0f);
+
+# Human-readable unit string
+text_sensor:
+  - platform: template
+    name: "QDY30 Units"
+    id: qdy_units
+    update_interval: 5s
+    lambda: |-
+      if (isnan(id(qdy_unit_code).state)) return {};
+      const int code = static_cast<int>(id(qdy_unit_code).state);
+      switch (code) {
+        case 0x11: return {std::string("cm of water")};
+        case 0x12: return {std::string("m of water")};
+        case 0x13: return {std::string("kPa")};
+        case 0x14: return {std::string("Bar")};
+        case 0x15: return {std::string("PSI")};
+        case 0x16: return {std::string("Temperature (°C)")};
+        case 0x17: return {std::string("Custom/Other")};
+        default:   return {std::string("Unrecognized")};
+      }
+
 # --- Relay / valve ----------------------------------------------------
 # inverted: true because this relay module is active-low (pulling the
 # input pin low energises the coil). restore_mode ALWAYS_OFF means
