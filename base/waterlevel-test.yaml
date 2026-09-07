@@ -68,6 +68,8 @@ uart:
   tx_pin: GPIO17
   rx_pin: GPIO16
   baud_rate: 9600
+  data_bits: 8
+  parity: NONE
   stop_bits: 1
   rx_full_threshold: 1
   rx_timeout: 2
@@ -84,26 +86,31 @@ uart:
  
 # --- Manual Modbus read, bypassing modbus:/modbus_controller: -------
 #
-# Why this exists: every reply from this probe arrives with a variable
-# number of leading junk bytes (6-8, changes between reads) in front
-# of an otherwise perfect Modbus frame. Confirmed NOT caused by: the
-# MAX485 module (swapped for a spare, no change), bias resistor value
-# (68kΩ vs 680Ω, no change), send_wait_time (2000/2500/4000ms, all the
-# same), rx_full_threshold/rx_timeout (added, no change), or which
-# physical probe is wired in (both units show it). Since the junk
-# length varies, a fixed "skip N bytes" filter isn't reliable — but
-# the real frame's header (address 1, function 3, byte count 0x14)
-# never varies. So instead of fighting modbus_controller's strict
-# framing, this reads the raw bytes directly and searches for that
-# exact header, ignoring anything before it.
+# See the header at the top of this file for the full story. Short
+# version: the read logic below sends one request at a time, waits,
+# then searches the received bytes for a valid 01 03 02 frame and
+# verifies its CRC before trusting anything. Searching for the frame
+# rather than assuming it starts at byte zero makes this tolerant of
+# any stray bytes on the line, which is worth keeping regardless of
+# what caused them.
 #
-# flow_control_pin (RE+DE) is now driven manually here instead of by
-# a modbus: block, since that block has been removed entirely.
+# RE+DE (GPIO4) is driven manually below, since there's no modbus:
+# block to handle flow control anymore.
  
 output:
   - platform: gpio
     pin: GPIO4
     id: rs485_direction
+ 
+globals:
+  # Decimal-place count from holding register 3, read once on the
+  # first successful poll and cached. -1 means "not read yet".
+  # Per the protocol doc this is 0-4, and the raw measurement from
+  # register 4 must be divided by 10^(this value).
+  - id: probe_1_decimals
+    type: int
+    restore_value: false
+    initial_value: '-1'
  
 sensor:
   # This one sensor does all the work: on its own 10s poll cycle it
@@ -115,154 +122,170 @@ sensor:
   # does exactly the same thing through an ordinary, already-supported
   # sensor pattern.
   #
-  # Wrapped in a retry loop: the first real run tonight showed the
-  # leading corruption is intermittent, not fixed — one cycle can fail
-  # to find a clean 01 03 14 header (or fail CRC) while the very next
-  # cycle succeeds. So instead of giving up after one bad attempt,
-  # this tries up to 3 times within the same 10s poll before reporting
-  # comms failure. A UART "timed out at byte 0" warning may appear in
-  # the log during a failed attempt — that's the low-level driver
-  # noticing a gap during our own manual polling, not a new fault on
-  # top of the framing issue.
+  # Wrapped in a retry loop for resilience against occasional bad
+  # reads. Two real bugs were found and fixed before this worked:
+  # (1) the old uart debug: block was reading the same bytes at the
+  # same time as this lambda, corrupting the stream — removed; (2)
+  # this originally requested 10 registers starting at 0 (a guess
+  # from watching which register changed in a bucket test), which the
+  # probe correctly rejected with a Modbus exception. The manufacturer's
+  # own protocol PDF documents register 4 as the actual measurement
+  # register, read one at a time — that's what's used now.
   - platform: template
     id: probe_1_level_raw
-    name: "Probe 1 level (raw register 9)"
-    accuracy_decimals: 0
+    name: "Probe 1 level"
+    # Unit assumed to be cm. Per the protocol doc, holding register 2
+    # carries the real unit code (17 = cm, 16 = m, 18 = mm, and a long
+    # list of pressure units besides). Worth reading register 2 once
+    # on the bench to confirm before trusting this label — if it comes
+    # back as something other than 17, change this and the fill logic
+    # that eventually depends on it.
+    unit_of_measurement: "cm"
+    accuracy_decimals: 1
     update_interval: 10s
     lambda: |-
       auto *uart = id(modbus_uart);
-      // Request: address 1, function 3, start at register 9, read 1
-      // register. Changed from the original 10-register burst read
-      // after the probe rejected that with a clean Modbus exception
-      // (function 0x83, code 1 = "Illegal Function") — this device
-      // apparently doesn't support reading 10 registers in one go.
-      // Register 9 is the one confirmed live during the reg0-reg9 scan.
-      const uint8_t request[8] = {0x01, 0x03, 0x00, 0x09, 0x00, 0x01, 0x54, 0x08};
+      // Request: address 1, function 3, start at register 4, read 1
+      // register. Straight from the manufacturer's protocol PDF
+      // (holding register 0x0004 = "Pressure/temperature measurement
+      // output value"), CRC bytes copied verbatim from their worked
+      // example "01 03 00 04 00 01 C5 CB" rather than recalculated.
+      const uint8_t request[8] = {0x01, 0x03, 0x00, 0x04, 0x00, 0x01, 0xC5, 0xCB};
  
-      for (int attempt = 0; attempt < 3; attempt++) {
-        // Discard anything left over from a previous, abandoned cycle
-        // so we always start reading a fresh reply from byte zero.
-        uint8_t junk;
-        while (uart->available()) {
-          uart->read_byte(&junk);
+      // Request for register 3 (decimal-place count, 0-4) — also from
+      // the doc's own example: "01 03 00 03 00 01 74 0A". The raw
+      // value from register 4 must be divided by 10^(this), NOT a
+      // hardcoded 10: the manufacturer's example happens to use 1
+      // decimal place, but this probe could be configured differently
+      // and the scaling would be silently wrong.
+      const uint8_t request_dp[8] = {0x01, 0x03, 0x00, 0x03, 0x00, 0x01, 0x74, 0x0A};
+ 
+      // --- One reusable read: sends an 8-byte request, waits, finds
+      // the 01 03 02 frame, verifies CRC, returns true + the value.
+      // Used for both the decimal-place register and the measurement
+      // register so there's only one copy of the tricky logic.
+      auto read_register = [&](const uint8_t *req, int16_t &out) -> bool {
+        for (int attempt = 0; attempt < 3; attempt++) {
+          uint8_t junk;
+          while (uart->available()) {
+            uart->read_byte(&junk);
+          }
+ 
+          id(rs485_direction).turn_on();   // DE/RE high = transmit
+          delay(2);
+          uart->write_array(req, 8);
+          uart->flush();
+          delay(2);
+          id(rs485_direction).turn_off();  // DE/RE low = listen
+ 
+          // Fixed 1s window per attempt. An earlier version waited 3s
+          // and reset its timer on every byte while bailing after 60ms
+          // of silence — that bug made the real wait far too short, and
+          // the 3s version blocked the main loop long enough to trigger
+          // an OTA rollback. 1s is comfortable margin without that risk.
+          std::vector<uint8_t> buf;
+          uint32_t loop_start = millis();
+          while (millis() - loop_start < 1000) {
+            uint8_t b;
+            if (uart->read_byte(&b)) {
+              buf.push_back(b);
+              if (buf.size() > 64) break;
+            } else {
+              delay(2);
+            }
+          }
+ 
+          {
+            std::string hex;
+            char tmp[4];
+            for (size_t i = 0; i < buf.size(); i++) {
+              sprintf(tmp, "%02X ", buf[i]);
+              hex += tmp;
+            }
+            ESP_LOGD("probe1", "Attempt %d raw (%d bytes): %s", attempt + 1, buf.size(), hex.c_str());
+          }
+ 
+          // Modbus exception reply? (function code with high bit set)
+          for (size_t i = 0; i + 1 < buf.size(); i++) {
+            if (buf[i] == 0x01 && buf[i + 1] == 0x83) {
+              uint8_t code = (i + 2 < buf.size()) ? buf[i + 2] : 0xFF;
+              ESP_LOGW("probe1", "Attempt %d: probe returned Modbus exception, code %d", attempt + 1, code);
+              break;
+            }
+          }
+ 
+          // Find the real frame: addr 01, func 03, byte count 02.
+          int frame_start = -1;
+          for (size_t i = 0; i + 2 < buf.size(); i++) {
+            if (buf[i] == 0x01 && buf[i + 1] == 0x03 && buf[i + 2] == 0x02) {
+              frame_start = i;
+              break;
+            }
+          }
+ 
+          // Full frame: addr + func + bytecount + 2 data + 2 CRC = 7.
+          if (frame_start < 0 || (size_t)(frame_start + 7) > buf.size()) {
+            ESP_LOGW("probe1", "Attempt %d: no valid frame found in %d bytes", attempt + 1, buf.size());
+            delay(50);
+            continue;
+          }
+ 
+          const uint8_t *f = &buf[frame_start];
+ 
+          uint16_t crc = 0xFFFF;
+          for (int i = 0; i < 5; i++) {
+            crc ^= f[i];
+            for (int b = 0; b < 8; b++) {
+              if (crc & 1) { crc = (crc >> 1) ^ 0xA001; }
+              else { crc >>= 1; }
+            }
+          }
+          if (f[5] != (crc & 0xFF) || f[6] != ((crc >> 8) & 0xFF)) {
+            ESP_LOGW("probe1", "Attempt %d: CRC mismatch, discarding frame", attempt + 1);
+            delay(50);
+            continue;
+          }
+ 
+          out = (int16_t)((f[3] << 8) | f[4]);
+          if (attempt > 0) {
+            ESP_LOGI("probe1", "Succeeded on attempt %d", attempt + 1);
+          }
+          return true;
         }
+        return false;
+      };
  
-        id(rs485_direction).turn_on();   // DE/RE high = transmit
-        delay(2);
-        uart->write_array(request, 8);
-        uart->flush();
-        delay(2);
-        id(rs485_direction).turn_off();  // DE/RE low = listen
- 
-        // --- Collect bytes for a fixed 1-second window per attempt.
-        // Earlier version waited a full 3 seconds and reset the timer
-        // on every byte, bailing after only 60ms of silence — that bug
-        // made the wait far too short in practice. The ~2050ms figure
-        // this project was built around all night looks like it was
-        // itself an artifact of the old uart debug: block's logging
-        // delay, not the probe's real behaviour — genuine replies seem
-        // to land within a few hundred ms. 1 second per attempt gives
-        // comfortable margin over that without holding the ESP32's
-        // main loop hostage for long stretches: 3 failed attempts now
-        // costs ~3s worst case instead of ~9s, which is very likely
-        // what caused an OTA rollback when this was still 3000ms.
-        std::vector<uint8_t> buf;
-        uint32_t loop_start = millis();
-        while (millis() - loop_start < 1000) {
-          uint8_t b;
-          if (uart->read_byte(&b)) {
-            buf.push_back(b);
-            if (buf.size() > 64) break;  // safety cap
+      // --- Read the decimal-place count once, then cache it. Doing
+      // this on the first poll rather than every cycle keeps the
+      // normal path to a single request.
+      if (id(probe_1_decimals) < 0) {
+        int16_t dp = 0;
+        if (read_register(request_dp, dp)) {
+          if (dp >= 0 && dp <= 4) {
+            id(probe_1_decimals) = dp;
+            ESP_LOGI("probe1", "Decimal places (register 3) = %d", dp);
           } else {
-            delay(2);
+            ESP_LOGW("probe1", "Register 3 returned %d, outside documented 0-4 range; assuming 1", dp);
+            id(probe_1_decimals) = 1;
           }
+        } else {
+          ESP_LOGW("probe1", "Could not read decimal-place register yet, will retry next cycle");
+          id(probe_1_comms_ok).publish_state(0);
+          return {};
         }
- 
-        // --- Log the raw bytes ourselves, now that nothing else is
-        // reading this UART at the same time. This replaces the
-        // visibility the old debug: block gave us.
-        {
-          std::string hex;
-          char tmp[4];
-          for (size_t i = 0; i < buf.size(); i++) {
-            sprintf(tmp, "%02X ", buf[i]);
-            hex += tmp;
-          }
-          ESP_LOGD("probe1", "Attempt %d raw (%d bytes): %s", attempt + 1, buf.size(), hex.c_str());
-        }
- 
-        // --- Check for a Modbus exception reply first: address, then
-        // function code with the high bit set (0x83 = 0x03 | 0x80).
-        // This is what the probe sent back when we asked for 10
-        // registers at once — a clean, valid, CRC-correct rejection,
-        // not corruption. Logging it distinctly so a real exception
-        // doesn't get lumped in with "couldn't find a frame at all."
-        for (size_t i = 0; i + 1 < buf.size(); i++) {
-          if (buf[i] == 0x01 && buf[i + 1] == 0x83) {
-            uint8_t code = (i + 2 < buf.size()) ? buf[i + 2] : 0xFF;
-            ESP_LOGW("probe1", "Attempt %d: probe returned Modbus exception, code %d", attempt + 1, code);
-            break;
-          }
-        }
- 
-        // --- Search the buffer for the real frame header: 01 03 02.
-        // Byte count is 0x02 here (one register = 2 data bytes),
-        // different from the 0x14 used when this requested 10
-        // registers at once.
-        int frame_start = -1;
-        for (size_t i = 0; i + 2 < buf.size(); i++) {
-          if (buf[i] == 0x01 && buf[i + 1] == 0x03 && buf[i + 2] == 0x02) {
-            frame_start = i;
-            break;
-          }
-        }
- 
-        // Full frame: addr(1) + func(1) + bytecount(1) + data(2) + CRC(2) = 7 bytes.
-        if (frame_start < 0 || (size_t)(frame_start + 7) > buf.size()) {
-          ESP_LOGW("probe1", "Attempt %d: no valid frame header found in %d bytes", attempt + 1, buf.size());
-          delay(50);
-          continue;  // try again
-        }
- 
-        // Frame layout from frame_start: addr, func, bytecount(0x02),
-        // 2 data bytes, then 2 CRC bytes.
-        const uint8_t *f = &buf[frame_start];
- 
-        // --- Verify CRC16/Modbus over the 5 bytes before it, so a
-        // frame that merely starts with the right header by chance
-        // still gets rejected if the data is corrupt.
-        uint16_t crc = 0xFFFF;
-        for (int i = 0; i < 5; i++) {
-          crc ^= f[i];
-          for (int b = 0; b < 8; b++) {
-            if (crc & 1) { crc = (crc >> 1) ^ 0xA001; }
-            else { crc >>= 1; }
-          }
-        }
-        uint8_t crc_lo = crc & 0xFF;
-        uint8_t crc_hi = (crc >> 8) & 0xFF;
- 
-        if (f[5] != crc_lo || f[6] != crc_hi) {
-          ESP_LOGW("probe1", "Attempt %d: CRC mismatch, discarding frame", attempt + 1);
-          delay(50);
-          continue;  // try again
-        }
- 
-        // --- The single requested register's value is right after
-        // the byte-count byte, at f[3] and f[4].
-        uint16_t reg9 = (f[3] << 8) | f[4];
- 
-        if (attempt > 0) {
-          ESP_LOGI("probe1", "Succeeded on attempt %d", attempt + 1);
-        }
-        id(probe_1_comms_ok).publish_state(1);
-        return reg9;
       }
  
-      // All 3 attempts failed this cycle.
-      ESP_LOGW("probe1", "All 3 attempts failed this cycle");
-      id(probe_1_comms_ok).publish_state(0);
-      return {};
+      // --- Read the actual measurement and scale it.
+      int16_t raw = 0;
+      if (!read_register(request, raw)) {
+        ESP_LOGW("probe1", "All attempts failed this cycle");
+        id(probe_1_comms_ok).publish_state(0);
+        return {};
+      }
+ 
+      float divisor = powf(10.0f, (float)id(probe_1_decimals));
+      id(probe_1_comms_ok).publish_state(1);
+      return raw / divisor;
  
   - platform: template
     id: probe_1_comms_ok
@@ -302,6 +325,7 @@ switch:
     name: "Fill Valve"
     inverted: true
     restore_mode: ALWAYS_OFF
+    
 ########################################################################
 # secrets.yaml template — create this as a separate file in the same
 # folder, filled in with your own values. Never commit this file or
