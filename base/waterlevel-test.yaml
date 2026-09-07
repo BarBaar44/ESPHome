@@ -57,138 +57,126 @@ ota:
 # down to INFO once everything works, to reduce log noise.
 
 logger:
-  level: DEBUG
-
-# --- Modbus bus (shared, one MAX485 module, both probes) -----------
+  # IMPORTANT: the global level: is a ceiling. Anything above it is
+  # compiled out of the firmware entirely, so a per-component entry of
+  # VERBOSE under logs: does nothing unless level: is VERBOSE too.
+  # That is why an earlier revision of this file, with level: DEBUG and
+  # modbus: VERBOSE, printed no frame hex at all.
+  level: VERBOSE
+  logs:
+    # Everything that is not modbus gets turned back down, otherwise
+    # VERBOSE globally is unreadable.
+    wifi: INFO
+    api: INFO
+    api.service: INFO
+    sensor: INFO
+    pulse_counter: INFO
+    switch: INFO
+    esp32: INFO
+    component: INFO
+    scheduler: INFO
+    # These two are the point of the exercise. modbus at VERBOSE prints
+    # every frame written and every frame received, as hex.
+    modbus: VERBOSE
+    modbus_controller: DEBUG
+ 
+# --- Modbus bus -----------------------------------------------------
 # TX2/RX2 on the ESP32, matching wiring-overview.html.
-# flow_control_pin drives RE+DE together on the MAX485 module.
  
 uart:
   id: modbus_uart
   tx_pin: GPIO17
   rx_pin: GPIO16
   baud_rate: 9600
-
-  # NOTE: the debug: block that used to sit here has been removed.
-  # It taps into the same bytes the manual read below consumes —
-  # turns out that's not a passive observer, it's a second consumer
-  # racing the lambda's read_byte() calls for the same incoming
-  # stream. That's a strong suspect for the specific, localized
-  # corruption seen near the start of every reply all night, which
-  # survived every module swap, resistor change, and timeout change:
-  # all of those tests ran with this debug block active the whole
-  # time. The lambda below now logs the raw bytes itself instead, so
-  # nothing else touches the UART while a read is in progress.
+  data_bits: 8
+  parity: NONE
+  stop_bits: 1
+  # Workaround for issue #17180. Forces the IDF UART to hand bytes over
+  # one at a time instead of in batches, so the inter-frame timer does
+  # not fire in the middle of a reply.
+  rx_full_threshold: 1
+  rx_timeout: 2
+  # Do not add a debug: block here. It is not a passive observer; it
+  # competes for the same incoming bytes. Use logger logs: modbus:
+  # VERBOSE above instead, which prints frames without stealing them.
  
-# --- Manual Modbus read, bypassing modbus:/modbus_controller: -------
-#
-# See the header at the top of this file for the full story. Short
-# version: the read logic below sends one request at a time, waits,
-# then searches the received bytes for a valid 01 03 02 frame and
-# verifies its CRC before trusting anything. Searching for the frame
-# rather than assuming it starts at byte zero makes this tolerant of
-# any stray bytes on the line, which is worth keeping regardless of
-# what caused them.
-#
-# RE+DE (GPIO4) is driven manually below, since there's no modbus:
-# block to handle flow control anymore.
- 
-
 modbus:
-  id: rs485_bus
+  id: modbus_bus
   uart_id: modbus_uart
-
+  # Drives RE and DE together on the MAX485 module. With this set, the
+  # component handles direction switching, which also removes the
+  # self-inflicted break bytes the hand-rolled version produced: while
+  # RE is high the MAX485's RO floats, the divider pulls the ESP32 RX
+  # pin low, and a held-low RX line reads out as a run of 0x00 bytes.
+  flow_control_pin: GPIO4
+  send_wait_time: 500ms
+ 
 modbus_controller:
-  - id: qdy30
-    address: 0x01
-    modbus_id: rs485_bus
+  - id: probe1
+    address: 0x01          # both probes ship as address 1
+    modbus_id: modbus_bus
     setup_priority: -10
-    update_interval: 3s
-
-# --- Sensors ---
+    update_interval: 10s
+ 
+# --- Sensors --------------------------------------------------------
+ 
 sensor:
+  # The measurement. Raw, unscaled: divide by 10^(decimals) once the
+  # decimal-place register below has been read and confirmed.
   - platform: modbus_controller
-    modbus_controller_id: qdy30
-    name: "QDY30 Unit Code"
-    id: qdy_unit_code
-    address: 0x0002
+    modbus_controller_id: probe1
+    name: "Probe 1 raw level"
+    id: probe1_raw
     register_type: holding
-    value_type: U_WORD
-    accuracy_decimals: 0
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: qdy30
-    name: "Water Level (mm)"
-    id: level_mm
     address: 0x0004
+    value_type: S_WORD
+    force_new_range: true
+ 
+  # Decimal-place count. Should be a small integer 0 to 4. Read on the
+  # same interval for now; once its value is known and stable it can be
+  # dropped to a very long interval or removed entirely.
+  - platform: modbus_controller
+    modbus_controller_id: probe1
+    name: "Probe 1 decimals"
+    id: probe1_decimals
     register_type: holding
-    value_type: U_WORD
-    unit_of_measurement: "mm"
-    device_class: distance
-    state_class: measurement
-    accuracy_decimals: 0
-    filters:
-      - sliding_window_moving_average:
-          window_size: 5
-          send_every: 1
-      - lambda: |-
-          if (isnan(x) || x <= 0) return {};
-          return x;
-
-  - platform: template
-    name: "Water Level (m)"
-    id: level_m
-    unit_of_measurement: "m"
-    device_class: distance
-    state_class: measurement
-    accuracy_decimals: 3
-    update_interval: 3s
-    lambda: |-
-      if (isnan(id(level_mm).state) || id(level_mm).state <= 0) return {};
-      return id(level_mm).state / 1000.0f;
-
-  - platform: template
-    name: "Water Level"
-    id: level_pct
-    unit_of_measurement: "%"
-    state_class: measurement
-    accuracy_decimals: 1
-    update_interval: 3s
-    lambda: |-
-      if (isnan(id(level_m).state) || id(level_m).state <= 0) return {};
-      const float FS_M = 1.0f;
-      return clamp((id(level_m).state / FS_M) * 100.0f, 0.0f, 100.0f);
-
-# Human-readable unit string
-text_sensor:
-  - platform: template
-    name: "QDY30 Units"
-    id: qdy_units
+    address: 0x0003
+    value_type: S_WORD
+    force_new_range: true
+ 
+  # Unit code. 16 = m, 17 = cm, 18 = mm. This settles the open question
+  # in wiring-overview.html about whether the cm assumption is right.
+  - platform: modbus_controller
+    modbus_controller_id: probe1
+    name: "Probe 1 unit code"
+    id: probe1_unit
+    register_type: holding
+    address: 0x0002
+    value_type: S_WORD
+    force_new_range: true
+ 
+  # Hall-effect pulse counter on GPIO27, through the voltage divider.
+  # Raw pulses for now. Blow through the sensor or spin the rotor by
+  # hand to confirm it counts. Litres per minute comes later, once the
+  # pulses-per-litre figure is calibrated against a kitchen scale.
+  - platform: pulse_counter
+    pin:
+      number: GPIO27
+      mode:
+        input: true
+    unit_of_measurement: "pulses/min"
+    name: "Flow sensor pulses"
+    id: flow_pulses
     update_interval: 5s
-    lambda: |-
-      if (isnan(id(qdy_unit_code).state)) return {};
-      const int code = static_cast<int>(id(qdy_unit_code).state);
-      switch (code) {
-        case 0x11: return {std::string("cm of water")};
-        case 0x12: return {std::string("m of water")};
-        case 0x13: return {std::string("kPa")};
-        case 0x14: return {std::string("Bar")};
-        case 0x15: return {std::string("PSI")};
-        case 0x16: return {std::string("Temperature (°C)")};
-        case 0x17: return {std::string("Custom/Other")};
-        default:   return {std::string("Unrecognized")};
-      }
-
-# --- Relay / valve ----------------------------------------------------
+ 
+# --- Relay / valve ---------------------------------------------------
 # inverted: true because this relay module is active-low (pulling the
-# input pin low energises the coil). restore_mode ALWAYS_OFF means
-# after any reboot the valve starts closed and stays closed until you
-# explicitly command it open — never defaults to open.
+# input pin low energises the coil). restore_mode ALWAYS_OFF means the
+# valve starts closed after any reboot and stays closed until it is
+# explicitly commanded open. It never defaults to open.
 #
-# Wired so that de-energised = valve closed (see wiring-plan.md,
-# "why the valve fails closed"). Toggling this switch in Home
-# Assistant or the ESPHome dashboard should physically turn the valve.
+# Wired so that de-energised equals valve closed (see wiring-plan.md,
+# "why the valve fails closed").
  
 switch:
   - platform: gpio
@@ -197,15 +185,3 @@ switch:
     name: "Fill Valve"
     inverted: true
     restore_mode: ALWAYS_OFF
-    
-########################################################################
-# secrets.yaml template — create this as a separate file in the same
-# folder, filled in with your own values. Never commit this file or
-# share it; it contains your WiFi password and device credentials.
-#
-# wifi_ssid: "your-wifi-name"
-# wifi_password: "your-wifi-password"
-# fallback_ap_password: "pick-any-password-8-chars-plus"
-# api_encryption_key: "generate one at https://esphome.io/components/api.html#generating-an-encryption-key"
-# ota_password: "pick-any-password"
-########################################################################
