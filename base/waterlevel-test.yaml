@@ -60,6 +60,15 @@ ota:
 # free for Modbus. Set to DEBUG while bringing components up; turn
 # down to INFO once everything works, to reduce log noise.
 
+# --- Logging --------------------------------------------------------
+# This board has its own USB-to-serial chip, so the logger runs on
+# UART0 with no special settings, leaving UART1 and UART2 free.
+#
+# modbus at VERBOSE prints every frame sent and received as hex. That
+# is what you want during bring-up: if the probe answers with an
+# exception rather than data, you will see the raw bytes rather than
+# just a timeout. Turn this back down to INFO once it reads reliably.
+ 
 logger:
   # IMPORTANT: the global level: is a ceiling. Anything above it is
   # compiled out of the firmware entirely, so a per-component entry of
@@ -125,39 +134,52 @@ modbus_controller:
 # --- Sensors --------------------------------------------------------
  
 sensor:
-  # The measurement. Raw, unscaled: divide by 10^(decimals) once the
-  # decimal-place register below has been read and confirmed.
+  # The measurement, scaled to real centimetres. Register 3 (decimals)
+  # was confirmed to read 1 during bring-up, and register 2 (unit) was
+  # confirmed to read 17, cm, matching wiring-overview.html's original
+  # assumption. Both are hardcoded below rather than polled every
+  # cycle, since they are configuration data on the probe, not a
+  # changing measurement — see probe1_decimals / probe1_unit further
+  # down for the one-off sensors that established these values.
+  #
+  # If a probe is ever swapped for a different unit or a different
+  # decimal-place setting, re-enable the register 2/3 sensors below,
+  # confirm the new values in the log, and update the divisor here.
   - platform: modbus_controller
     modbus_controller_id: probe1
-    name: "Probe 1 raw level"
-    id: probe1_raw
+    name: "Probe 1 level"
+    id: probe1_level
     register_type: holding
     address: 0x0004
     value_type: S_WORD
     force_new_range: true
+    unit_of_measurement: "cm"
+    accuracy_decimals: 1
+    filters:
+      - lambda: return x / 10.0;
  
-  # Decimal-place count. Should be a small integer 0 to 4. Read on the
-  # same interval for now; once its value is known and stable it can be
-  # dropped to a very long interval or removed entirely.
-  - platform: modbus_controller
-    modbus_controller_id: probe1
-    name: "Probe 1 decimals"
-    id: probe1_decimals
-    register_type: holding
-    address: 0x0003
-    value_type: S_WORD
-    force_new_range: true
- 
-  # Unit code. 16 = m, 17 = cm, 18 = mm. This settles the open question
-  # in wiring-overview.html about whether the cm assumption is right.
-  - platform: modbus_controller
-    modbus_controller_id: probe1
-    name: "Probe 1 unit code"
-    id: probe1_unit
-    register_type: holding
-    address: 0x0002
-    value_type: S_WORD
-    force_new_range: true
+  # Decimal-place count and unit code, confirmed once (1 and 17 / cm)
+  # during bring-up and disabled here rather than deleted, so a future
+  # probe swap can re-enable them for a quick sanity check instead of
+  # retyping the register addresses from the protocol PDF.
+  #
+  # - platform: modbus_controller
+  #   modbus_controller_id: probe1
+  #   name: "Probe 1 decimals"
+  #   id: probe1_decimals
+  #   register_type: holding
+  #   address: 0x0003
+  #   value_type: S_WORD
+  #   force_new_range: true
+  #
+  # - platform: modbus_controller
+  #   modbus_controller_id: probe1
+  #   name: "Probe 1 unit code"
+  #   id: probe1_unit
+  #   register_type: holding
+  #   address: 0x0002
+  #   value_type: S_WORD
+  #   force_new_range: true
  
   # Hall-effect pulse counter on GPIO27, through the voltage divider.
   # Raw pulses for now. Blow through the sensor or spin the rotor by
@@ -189,3 +211,4 @@ switch:
     name: "Fill Valve"
     inverted: true
     restore_mode: ALWAYS_OFF
+ 
