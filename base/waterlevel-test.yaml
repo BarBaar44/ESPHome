@@ -194,21 +194,3 @@ sensor:
     name: "Flow sensor pulses"
     id: flow_pulses
     update_interval: 5s
- 
-# --- Relay / valve ---------------------------------------------------
-# inverted: true because this relay module is active-low (pulling the
-# input pin low energises the coil). restore_mode ALWAYS_OFF means the
-# valve starts closed after any reboot and stays closed until it is
-# explicitly commanded open. It never defaults to open.
-#
-# Wired so that de-energised equals valve closed (see wiring-plan.md,
-# "why the valve fails closed").
- 
-switch:
-  - platform: gpio
-    pin: GPIO25
-    id: fill_valve
-    name: "Fill Valve"
-    inverted: true
-    restore_mode: ALWAYS_OFF
- 
