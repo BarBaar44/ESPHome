@@ -3,7 +3,7 @@
 #   schedule: 0 10 */7 * *
 #   schedule_enabled: true
 #   schedule_tz: Europe/Amsterdam
-#   schedule_last_run: '2026-09-01T08:00:00.381020+00:00'
+#   schedule_last_run: '2026-09-08T08:00:00.323886+00:00'
 
 substitutions:
   device_name: dbemasright

@@ -3,7 +3,7 @@
 #   schedule: 0 10 */7 * *
 #   schedule_enabled: true
 #   schedule_tz: Europe/Amsterdam
-#   schedule_last_run: '2026-09-01T08:00:01.199004+00:00'
+#   schedule_last_run: '2026-09-08T08:00:01.160996+00:00'
 
 substitutions:
   friendly_name: USB Switch 2
