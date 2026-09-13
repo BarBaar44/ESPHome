@@ -3,19 +3,38 @@
 #   schedule_last_run: '2026-09-08T08:00:01.200716+00:00'
 
 ########################################################################
-# Water filter controller — bring-up config
+# Water filter controller — both probes confirmed
 #
-# Current scope: reconfirm probe 1, renumber probe 2 to address 2, then
-# run both probes on the shared bus. No fill/stop decision logic yet.
+# STATE: both QDY30A probes read real centimetres on one shared
+# MAX485 bus, verified in water.
+#
+#   Modbus address 1 = UPPER chamber
+#   Modbus address 2 = LOWER chamber
+#
+# Label the physical probes. They are otherwise indistinguishable, and
+# an unlabelled swap is silent: the fill logic treats the two chambers
+# completely differently.
+#
+# There is still NO fill/stop decision logic here. This config reads
+# and reports; it does not decide anything.
 #
 # Board: ESP32 DevKit (ESP-WROOM-32), pin map per wiring-overview.html.
 #
-# Register map, confirmed on probe 1:
+# Register map, confirmed empirically on BOTH probes:
 #   0x0002 unit code   -> 17 (cm)
 #   0x0003 decimals    -> 1
 #   0x0004 measurement -> signed word, divide by 10
 #   0x0000 slave address (writable, FC06)
 #   0x000F save to user area (write 0, FC06)
+#
+# ADDRESSING, the thing that cost an evening: both probes were found
+# already on address 2, contradicting every document in this project.
+# The symptom was byte-perfect outgoing frames and zero bytes ever
+# received. If that ever recurs, scan addresses before measuring
+# anything. The renumbering buttons that fixed it have been removed
+# from this file deliberately, so a stray press cannot rewrite an
+# address in service. They are recorded in HANDOVER.md under "The
+# addressing trap" if they are ever needed again.
 ########################################################################
 
 esphome:
@@ -48,37 +67,36 @@ ota:
     password: !secret waterlevel_ota
 
 # --- Logging --------------------------------------------------------
-# This board has its own USB-to-serial chip, so the logger runs on
-# UART0 with no special settings, leaving UART1 and UART2 free.
+# Back down to INFO for day-to-day use.
 #
-# modbus at VERBOSE prints every frame sent and received as hex. That
-# is what you want during bring-up: if the probe answers with an
-# exception rather than data, you will see the raw bytes rather than
-# just a timeout. Turn this back down to INFO once both probes read
-# reliably.
+# To chase a frame-level Modbus fault again, set level: VERBOSE and
+# uncomment the logs: block below. The global level: is a CEILING —
+# anything above it is compiled out of the firmware entirely, so
+# modbus: VERBOSE under logs: does nothing unless level: is VERBOSE
+# too. An earlier revision with level: DEBUG and modbus: VERBOSE
+# printed no frame hex at all, which wasted real time.
 
 logger:
-  # IMPORTANT: the global level: is a ceiling. Anything above it is
-  # compiled out of the firmware entirely, so a per-component entry of
-  # VERBOSE under logs: does nothing unless level: is VERBOSE too.
-  # That is why an earlier revision of this file, with level: DEBUG and
-  # modbus: VERBOSE, printed no frame hex at all.
-  level: VERBOSE
-  logs:
-    wifi: INFO
-    api: INFO
-    api.service: INFO
-    sensor: INFO
-    pulse_counter: INFO
-    switch: INFO
-    esp32: INFO
-    component: INFO
-    scheduler: INFO
-    modbus: VERBOSE
-    modbus_controller: DEBUG
+  level: INFO
+  # level: VERBOSE
+  # logs:
+  #   wifi: INFO
+  #   api: INFO
+  #   api.service: INFO
+  #   sensor: INFO
+  #   pulse_counter: INFO
+  #   switch: INFO
+  #   esp32: INFO
+  #   component: INFO
+  #   scheduler: INFO
+  #   modbus: VERBOSE
+  #   modbus_controller: DEBUG
 
 # --- Modbus bus -----------------------------------------------------
 # TX2/RX2 on the ESP32, matching wiring-overview.html.
+# Probe wiring: blue to A, yellow to B. The MAX485 card in an earlier
+# revision of wiring-overview.html said the opposite; it was wrong and
+# has been corrected.
 
 uart:
   id: modbus_uart
@@ -94,114 +112,50 @@ uart:
   rx_full_threshold: 1
   rx_timeout: 2
   # Do not add a debug: block here. It is not a passive observer; it
-  # competes for the same incoming bytes. Use logger logs: modbus:
-  # VERBOSE above instead, which prints frames without stealing them.
+  # competes for the same incoming bytes. Use the logger logs: block
+  # above instead, which prints frames without stealing them.
 
 modbus:
   id: modbus_bus
   uart_id: modbus_uart
   flow_control_pin: GPIO4
   send_wait_time: 500ms
+  # Spacing between consecutive commands on the shared bus. This moved
+  # here from modbus_controller's command_throttle, which became a
+  # no-op in 2026.x and is removed in 2027.2.0. Two probes share this
+  # bus, so the gap matters. Raise to 300ms if intermittent timeouts
+  # ever appear.
+  turnaround_time: 200ms
 
 modbus_controller:
-  # Probe at address 1. Until probe 2 has been renumbered, whichever
-  # probe is physically on the bus answers here.
-  - id: probe1
+  - id: probe_upper
     address: 0x01
     modbus_id: modbus_bus
     setup_priority: -10
     update_interval: 10s
-    command_throttle: 200ms
 
-  # Probe at address 2. Exists from the start because the save command
-  # in step 2 must be addressed to the NEW address, not the old one.
-  # Polls nothing until the probe 2 sensors below are uncommented, so
-  # it produces no timeouts while probe 2 is still at address 1.
-  - id: probe2
+  - id: probe_lower
     address: 0x02
     modbus_id: modbus_bus
     setup_priority: -10
     update_interval: 10s
-    command_throttle: 200ms
-
-# --- Renumbering buttons --------------------------------------------
-#
-# Use these ONLY with a single probe physically connected to the bus.
-# Sequence:
-#   1. Press "Probe: set address to 2". The probe replies using its
-#      OLD address (1), then switches to 2. A logged mismatch or a
-#      single timeout right after this press is expected.
-#   2. Press "Probe: save address". This goes out on address 2, which
-#      is why the probe2 controller above has to exist. Without this
-#      save the change is lost on the next power cycle.
-#   3. Press "Probe: read address (2)" and confirm the log shows 0002.
-#   4. Power cycle, press it again, confirm it still shows 0002.
-#
-# Remove or disable these buttons once both probes are renumbered, so
-# an accidental press cannot rewrite an address mid-operation.
-#
-# API note, ESPHome 2026.8: the read callback signature is
-# (modbus::EntityType, uint16_t start_address, std::span<const uint8_t>)
-# and modbus_controller::ModbusRegisterType is deprecated in favour of
-# modbus::EntityType. Both are used correctly below. If this file is
-# ever built on an older release, that callback is what breaks first.
-
-button:
-  - platform: template
-    name: "Probe: set address to 2"
-    entity_category: config
-    on_press:
-      - lambda: |-
-          auto c = esphome::modbus_controller::ModbusCommandItem::
-                   create_write_single_command(id(probe1), 0x0000, 2);
-          id(probe1)->queue_command(c);
-
-  - platform: template
-    name: "Probe: save address"
-    entity_category: config
-    on_press:
-      - lambda: |-
-          auto c = esphome::modbus_controller::ModbusCommandItem::
-                   create_write_single_command(id(probe2), 0x000F, 0);
-          id(probe2)->queue_command(c);
-
-  - platform: template
-    name: "Probe: read address (2)"
-    entity_category: config
-    on_press:
-      - lambda: |-
-          auto c = esphome::modbus_controller::ModbusCommandItem::
-                   create_read_command(
-                     id(probe2),
-                     esphome::modbus::EntityType::HOLDING,
-                     0x0000, 1,
-                     [](esphome::modbus::EntityType, uint16_t,
-                        std::span<const uint8_t> data) {
-                       if (data.size() < 2) {
-                         ESP_LOGW("probe", "short reply, %d bytes",
-                                  (int) data.size());
-                         return;
-                       }
-                       ESP_LOGI("probe", "addr register = %04X",
-                                (data[0] << 8) | data[1]);
-                     });
-          id(probe2)->queue_command(c);
 
 # --- Sensors --------------------------------------------------------
+#
+# force_new_range: true is MANDATORY on every sensor. These probes
+# reject multi-register reads with a clean Modbus exception, and
+# modbus_controller merges adjacent registers into one read unless
+# told not to. Do not remove it on any sensor added later.
+#
+# The /10 divisor comes from register 3 (decimals = 1), confirmed on
+# both units. If a probe is ever swapped, re-enable the diagnostic
+# sensors below and confirm 17 and 1 before trusting the divisor.
 
 sensor:
-  # Measurement scaled to real centimetres. Decimals (register 3) = 1
-  # and unit (register 2) = 17 (cm) were confirmed on probe 1 and are
-  # hardcoded in the divisor below rather than polled every cycle.
-  #
-  # force_new_range: true is mandatory on every sensor. This probe
-  # rejects multi-register reads with a clean Modbus exception, and
-  # modbus_controller merges adjacent registers into one read unless
-  # told not to.
   - platform: modbus_controller
-    modbus_controller_id: probe1
-    name: "Probe 1 level"
-    id: probe1_level
+    modbus_controller_id: probe_upper
+    name: "Upper chamber level"
+    id: upper_level
     register_type: holding
     address: 0x0004
     value_type: S_WORD
@@ -211,41 +165,10 @@ sensor:
     filters:
       - lambda: return x / 10.0;
 
-  # Re-enabled for this session. Expect 1 and 17. Leave them on while
-  # confirming probe 1, and again while probe 2 sits alone on the bus
-  # at address 1, so any difference between the two units shows up
-  # before both are wired together. Comment out again afterwards.
   - platform: modbus_controller
-    modbus_controller_id: probe1
-    name: "Probe 1 decimals"
-    id: probe1_decimals
-    register_type: holding
-    address: 0x0003
-    value_type: S_WORD
-    force_new_range: true
-    entity_category: diagnostic
-
-  - platform: modbus_controller
-    modbus_controller_id: probe1
-    name: "Probe 1 unit code"
-    id: probe1_unit
-    register_type: holding
-    address: 0x0002
-    value_type: S_WORD
-    force_new_range: true
-    entity_category: diagnostic
-
-  # --- Probe 2, step 3 only ---------------------------------------
-  # Uncomment all three once probe 2 has been renumbered to address 2
-  # AND saved. Leaving them commented keeps the address-2 controller
-  # silent, so the log during steps 1 and 2 contains nothing but real
-  # traffic. Check the decimals/unit values match probe 1 before
-  # trusting the divisor below, then comment those two back out.
-  #
-  - platform: modbus_controller
-    modbus_controller_id: probe2
-    name: "Probe 2 level"
-    id: probe2_level
+    modbus_controller_id: probe_lower
+    name: "Lower chamber level"
+    id: lower_level
     register_type: holding
     address: 0x0004
     value_type: S_WORD
@@ -254,30 +177,53 @@ sensor:
     accuracy_decimals: 1
     filters:
       - lambda: return x / 10.0;
- 
-  - platform: modbus_controller
-    modbus_controller_id: probe2
-    name: "Probe 2 decimals"
-    id: probe2_decimals
-    register_type: holding
-    address: 0x0003
-    value_type: S_WORD
-    force_new_range: true
-    entity_category: diagnostic
- 
-  - platform: modbus_controller
-    modbus_controller_id: probe2
-    name: "Probe 2 unit code"
-    id: probe2_unit
-    register_type: holding
-    address: 0x0002
-    value_type: S_WORD
-    force_new_range: true
-    entity_category: diagnostic
+
+  # --- Diagnostics, off by default --------------------------------
+  # Unit code and decimal count for each probe. Both confirmed as 17
+  # (cm) and 1. Kept here rather than deleted so a probe swap is a
+  # two-minute check instead of a retype from the protocol PDF.
+  #
+  # - platform: modbus_controller
+  #   modbus_controller_id: probe_upper
+  #   name: "Upper unit code"
+  #   register_type: holding
+  #   address: 0x0002
+  #   value_type: S_WORD
+  #   force_new_range: true
+  #   entity_category: diagnostic
+  #
+  # - platform: modbus_controller
+  #   modbus_controller_id: probe_upper
+  #   name: "Upper decimals"
+  #   register_type: holding
+  #   address: 0x0003
+  #   value_type: S_WORD
+  #   force_new_range: true
+  #   entity_category: diagnostic
+  #
+  # - platform: modbus_controller
+  #   modbus_controller_id: probe_lower
+  #   name: "Lower unit code"
+  #   register_type: holding
+  #   address: 0x0002
+  #   value_type: S_WORD
+  #   force_new_range: true
+  #   entity_category: diagnostic
+  #
+  # - platform: modbus_controller
+  #   modbus_controller_id: probe_lower
+  #   name: "Lower decimals"
+  #   register_type: holding
+  #   address: 0x0003
+  #   value_type: S_WORD
+  #   force_new_range: true
+  #   entity_category: diagnostic
 
   # Hall-effect pulse counter on GPIO27, through the voltage divider.
   # Raw pulses for now. Litres per minute comes later, once the
   # pulses-per-litre figure is calibrated against a kitchen scale.
+  # Currently off the breadboard — this sensor simply reads zero until
+  # it is wired back in.
   - platform: pulse_counter
     pin:
       number: GPIO27
