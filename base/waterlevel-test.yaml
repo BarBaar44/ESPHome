@@ -1,6 +1,6 @@
 # Read by the Fleet for ESPHome add-on. Do not remove.
 # esphome-fleet:
-#   schedule_last_run: '2026-09-08T08:00:01.200716+00:00'
+#   schedule_last_run: '2026-09-15T08:00:01.678173+00:00'
 
 ########################################################################
 # Water filter controller — both probes confirmed
