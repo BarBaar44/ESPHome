@@ -3,7 +3,7 @@
 #   schedule: 0 10 * * 1
 #   schedule_enabled: true
 #   schedule_tz: Europe/Amsterdam
-#   schedule_last_run: '2026-09-15T08:00:00.808473+00:00'
+#   schedule_last_run: '2026-09-22T08:00:00.725281+00:00'
 
 substitutions:
   # NOTE: these were both "display" in the recovered copy. Set them to
