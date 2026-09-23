@@ -1,0 +1,114 @@
+substitutions:
+  device_name: "led-closet"
+  project_name: "China Athom Technology.LS 4P 4Wire"
+  project_version: "1.1.5"
+  light_restore_mode: RESTORE_DEFAULT_OFF
+  number_of_leds: '179'
+  device_description: "Led Closet Livingroom"
+  WIFI_passwd: !secret wifi_password
+  fallback_passwd: !secret wifi_bck
+  friendly_name: "DBE Hallway"
+  device_key: !secret ledcloset_key
+  area: "Livingroom"
+
+esphome:
+  name: "${device_name}"
+  friendly_name: '${device_description}'
+  comment: '${device_description}'
+  name_add_mac_suffix: false
+  min_version: 2026.6.0
+  project:
+    name: "${project_name}"
+    version: "${project_version}"
+  platformio_options:
+    board_upload.flash_size: 2MB
+    board_upload.maximum_size: 2097152
+    board_build.ldscript: eagle.flash.2m.ld
+
+esp8266:
+  board: esp8285
+  restore_from_flash: true
+#  framework:
+#    version: 2.7.4
+
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files: [generic/wifi.yml, generic/generic_sensors.yml]
+    refresh: 1min
+
+logger:
+  baud_rate: 0
+
+debug:
+  update_interval: 60s
+
+binary_sensor:
+  - platform: status
+    name: "Status"
+  - platform: gpio
+    pin:
+      number: 0
+      mode: INPUT_PULLUP
+      inverted: true
+    name: "Power Button"
+    disabled_by_default: true
+    on_multi_click:
+      - timing:
+          - ON for at most 1s
+          - OFF for at least 0.2s
+        then:
+          - light.toggle: leds
+      - timing:
+          - ON for at least 4s
+        then:
+          - button.press: Reset
+
+sensor:
+  - platform: uptime
+    name: "Uptime"
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 60s
+  - platform: debug
+    free:
+      name: "Heap Free"
+    fragmentation:
+      name: "Heap Fragmentation"
+
+text_sensor:
+  - platform: debug
+    reset_reason:
+      name: "Reset Reason"
+  - platform: wifi_info
+    ip_address:
+      name: "IP Address"
+
+button:
+  - platform: factory_reset
+    name: "Reset"
+    id: Reset
+  - platform: safe_mode
+    name: "Safe Mode"
+
+power_supply:
+  - id: relay
+    pin: GPIO12
+
+light:
+  - platform: neopixelbus
+    id: leds
+    name: "Light strip controller"
+    variant: WS2812X
+    type: GRB
+    pin: GPIO1
+    method:
+      type: esp8266_uart
+      bus: 0
+    num_leds: ${number_of_leds}
+    power_supply: relay
+    restore_mode: ALWAYS_OFF
+    default_transition_length: 0s
+    effects:
+      - addressable_rainbow:
+      - addressable_scan:
