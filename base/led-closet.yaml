@@ -1,6 +1,6 @@
 substitutions:
   device_name: "led-closet"
-  project_name: "China Athom Technology.LS 4P 4Wire"
+  project_name: "China Athom Technology.LS 4P"
   project_version: "1.1.5"
   light_restore_mode: RESTORE_DEFAULT_OFF
   number_of_leds: '179'
@@ -28,8 +28,6 @@ esphome:
 esp8266:
   board: esp8285
   restore_from_flash: true
-#  framework:
-#    version: 2.7.4
 
 packages:
   Generic_config:
@@ -99,16 +97,14 @@ light:
   - platform: neopixelbus
     id: leds
     name: "Light strip controller"
-    variant: WS2812X
+    variant: WS2813
     type: GRB
-    pin: GPIO1
+    pin: GPIO3
     method:
-      type: esp8266_uart
-      bus: 0
+      type: esp8266_dma
     num_leds: ${number_of_leds}
     power_supply: relay
     restore_mode: ALWAYS_OFF
-    default_transition_length: 0s
     effects:
       - addressable_rainbow:
       - addressable_scan:
