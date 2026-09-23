@@ -289,5 +289,8 @@
   },
   "led-closet.yaml": {
     "mac_address": "34:AB:95:A7:75:28"
+  },
+  "bluetooth-proxy-attic.yaml": {
+    "mac_address": "20:E7:C8:24:9B:E8"
   }
 }
