@@ -39,7 +39,7 @@ packages:
     files: [
       generic/wifi.yml,
       generic/generic_sensors.yml,
-      LVGL/displayconfig.yml,
+      LVGL/displayconfig7inch.yml,
       LVGL/Tim Bedroom/lvglconfig.yml,
       LVGL/Tim Bedroom/lvglsensors.yml
     ]
