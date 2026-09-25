@@ -314,25 +314,26 @@ lvgl:
                     # =========================
                     # AGENDA
                     #
-                    # Zeven regels: alle afspraken van vandaag en morgen uit
-                    # calendar.gijs_tim, per regel "vr 15:30 Zwemmen". Zijn
-                    # het er meer dan zeven, dan wordt regel 7 "+N meer".
-                    # De tekst wordt in HA opgebouwd door de template
-                    # sensor sensor.agenda_tim (zie het HA-bestand
-                    # agenda_tim_template.yaml), zodat het paneel alleen
-                    # kant-en-klare regels hoeft te tonen.
+                    # Opgezet als de HA "what's next" kaart: links de dag
+                    # (alleen bij de eerste afspraak van die dag), rechts
+                    # de titel met daaronder in grijs de tijd ("hele dag",
+                    # "17:00 - 18:00", "tot 27 sep"). Een dunne lijn boven
+                    # elke nieuwe dag.
                     #
-                    # Hoogte: 7 regels van ~17px + 6px tussenruimte + titel
-                    # past ruim in de ~265px van dit vak. Montserrat 14 in
-                    # plaats van 16 omdat de kolom maar ~190px breed is.
-                    # long_mode DOT vereist een expliciete breedte, vandaar
-                    # de width: 100% op elk label.
+                    # Zes vaste slots. De inhoud komt uit de attributen
+                    # item_1..item_6 van sensor.agenda_tim (zie
+                    # agenda_tim_template.yaml in HA), als "dag|titel|tijd".
+                    #
+                    # Titels mogen over twee regels lopen (WRAP), anders
+                    # blijft er in deze smalle kolom (~190px) weinig van
+                    # over. Past niet alles, dan valt de onderkant weg: dit
+                    # vak scrollt niet en knipt af op zijn eigen rand.
                     # =========================
                     - obj:
                         id: agenda_obj
                         bg_color: 0xFFFFFF
                         radius: 6
-                        pad_all: 10
+                        pad_all: 8
                         scrollable: false
                         scrollbar_mode: "off"
 
@@ -345,70 +346,321 @@ lvgl:
                           type: FLEX
                           flex_flow: COLUMN
                           flex_align_main: START
-                          flex_align_cross: START
-                          pad_row: 6
+                          flex_align_cross: STRETCH
+                          pad_row: 4
 
                         widgets:
-                          - label:
-                              text: "Agenda"
-                              text_font: montserrat_20
-                              text_color: 0x0B0A0A
-
-                          - label:
-                              id: lbl_agenda_1
+                          # ---- afspraak 1 ----
+                          - obj:
+                              id: ag_slot_1
                               width: 100%
-                              text: "-"
-                              text_font: montserrat_14
-                              text_color: 0x0B0A0A
-                              long_mode: DOT
+                              height: SIZE_CONTENT
+                              bg_opa: TRANSP
+                              radius: 0
+                              border_side: TOP
+                              border_color: 0xD3D6D9
+                              border_width: 0
+                              pad_all: 0
+                              pad_top: 4
+                              scrollable: false
+                              scrollbar_mode: "off"
+                              layout:
+                                type: GRID
+                                pad_row: 0
+                                pad_column: 6
+                                grid_rows: [CONTENT, CONTENT]
+                                grid_columns: [38, FR(1)]
+                              widgets:
+                                - label:
+                                    id: lbl_ag_dag_1
+                                    text: ""
+                                    text_font: montserrat_12
+                                    text_color: 0x0B0A0A
+                                    grid_cell_row_pos: 0
+                                    grid_cell_column_pos: 0
+                                    grid_cell_row_span: 2
+                                    grid_cell_x_align: START
+                                    grid_cell_y_align: START
+                                - label:
+                                    id: lbl_ag_titel_1
+                                    text: "Agenda laden..."
+                                    text_font: montserrat_14
+                                    text_color: 0x0B0A0A
+                                    long_mode: WRAP
+                                    grid_cell_row_pos: 0
+                                    grid_cell_column_pos: 1
+                                    grid_cell_x_align: STRETCH
+                                    grid_cell_y_align: START
+                                - label:
+                                    id: lbl_ag_sub_1
+                                    text: ""
+                                    text_font: montserrat_12
+                                    text_color: 0x666666
+                                    long_mode: DOT
+                                    grid_cell_row_pos: 1
+                                    grid_cell_column_pos: 1
+                                    grid_cell_x_align: STRETCH
+                                    grid_cell_y_align: START
 
-                          - label:
-                              id: lbl_agenda_2
+                          # ---- afspraak 2 ----
+                          - obj:
+                              id: ag_slot_2
                               width: 100%
-                              text: ""
-                              text_font: montserrat_14
-                              text_color: 0x0B0A0A
-                              long_mode: DOT
+                              height: SIZE_CONTENT
+                              bg_opa: TRANSP
+                              radius: 0
+                              border_side: TOP
+                              border_color: 0xD3D6D9
+                              border_width: 0
+                              pad_all: 0
+                              pad_top: 4
+                              scrollable: false
+                              scrollbar_mode: "off"
+                              layout:
+                                type: GRID
+                                pad_row: 0
+                                pad_column: 6
+                                grid_rows: [CONTENT, CONTENT]
+                                grid_columns: [38, FR(1)]
+                              widgets:
+                                - label:
+                                    id: lbl_ag_dag_2
+                                    text: ""
+                                    text_font: montserrat_12
+                                    text_color: 0x0B0A0A
+                                    grid_cell_row_pos: 0
+                                    grid_cell_column_pos: 0
+                                    grid_cell_row_span: 2
+                                    grid_cell_x_align: START
+                                    grid_cell_y_align: START
+                                - label:
+                                    id: lbl_ag_titel_2
+                                    text: ""
+                                    text_font: montserrat_14
+                                    text_color: 0x0B0A0A
+                                    long_mode: WRAP
+                                    grid_cell_row_pos: 0
+                                    grid_cell_column_pos: 1
+                                    grid_cell_x_align: STRETCH
+                                    grid_cell_y_align: START
+                                - label:
+                                    id: lbl_ag_sub_2
+                                    text: ""
+                                    text_font: montserrat_12
+                                    text_color: 0x666666
+                                    long_mode: DOT
+                                    grid_cell_row_pos: 1
+                                    grid_cell_column_pos: 1
+                                    grid_cell_x_align: STRETCH
+                                    grid_cell_y_align: START
 
-                          - label:
-                              id: lbl_agenda_3
+                          # ---- afspraak 3 ----
+                          - obj:
+                              id: ag_slot_3
                               width: 100%
-                              text: ""
-                              text_font: montserrat_14
-                              text_color: 0x0B0A0A
-                              long_mode: DOT
+                              height: SIZE_CONTENT
+                              bg_opa: TRANSP
+                              radius: 0
+                              border_side: TOP
+                              border_color: 0xD3D6D9
+                              border_width: 0
+                              pad_all: 0
+                              pad_top: 4
+                              scrollable: false
+                              scrollbar_mode: "off"
+                              layout:
+                                type: GRID
+                                pad_row: 0
+                                pad_column: 6
+                                grid_rows: [CONTENT, CONTENT]
+                                grid_columns: [38, FR(1)]
+                              widgets:
+                                - label:
+                                    id: lbl_ag_dag_3
+                                    text: ""
+                                    text_font: montserrat_12
+                                    text_color: 0x0B0A0A
+                                    grid_cell_row_pos: 0
+                                    grid_cell_column_pos: 0
+                                    grid_cell_row_span: 2
+                                    grid_cell_x_align: START
+                                    grid_cell_y_align: START
+                                - label:
+                                    id: lbl_ag_titel_3
+                                    text: ""
+                                    text_font: montserrat_14
+                                    text_color: 0x0B0A0A
+                                    long_mode: WRAP
+                                    grid_cell_row_pos: 0
+                                    grid_cell_column_pos: 1
+                                    grid_cell_x_align: STRETCH
+                                    grid_cell_y_align: START
+                                - label:
+                                    id: lbl_ag_sub_3
+                                    text: ""
+                                    text_font: montserrat_12
+                                    text_color: 0x666666
+                                    long_mode: DOT
+                                    grid_cell_row_pos: 1
+                                    grid_cell_column_pos: 1
+                                    grid_cell_x_align: STRETCH
+                                    grid_cell_y_align: START
 
-                          - label:
-                              id: lbl_agenda_4
+                          # ---- afspraak 4 ----
+                          - obj:
+                              id: ag_slot_4
                               width: 100%
-                              text: ""
-                              text_font: montserrat_14
-                              text_color: 0x0B0A0A
-                              long_mode: DOT
+                              height: SIZE_CONTENT
+                              bg_opa: TRANSP
+                              radius: 0
+                              border_side: TOP
+                              border_color: 0xD3D6D9
+                              border_width: 0
+                              pad_all: 0
+                              pad_top: 4
+                              scrollable: false
+                              scrollbar_mode: "off"
+                              layout:
+                                type: GRID
+                                pad_row: 0
+                                pad_column: 6
+                                grid_rows: [CONTENT, CONTENT]
+                                grid_columns: [38, FR(1)]
+                              widgets:
+                                - label:
+                                    id: lbl_ag_dag_4
+                                    text: ""
+                                    text_font: montserrat_12
+                                    text_color: 0x0B0A0A
+                                    grid_cell_row_pos: 0
+                                    grid_cell_column_pos: 0
+                                    grid_cell_row_span: 2
+                                    grid_cell_x_align: START
+                                    grid_cell_y_align: START
+                                - label:
+                                    id: lbl_ag_titel_4
+                                    text: ""
+                                    text_font: montserrat_14
+                                    text_color: 0x0B0A0A
+                                    long_mode: WRAP
+                                    grid_cell_row_pos: 0
+                                    grid_cell_column_pos: 1
+                                    grid_cell_x_align: STRETCH
+                                    grid_cell_y_align: START
+                                - label:
+                                    id: lbl_ag_sub_4
+                                    text: ""
+                                    text_font: montserrat_12
+                                    text_color: 0x666666
+                                    long_mode: DOT
+                                    grid_cell_row_pos: 1
+                                    grid_cell_column_pos: 1
+                                    grid_cell_x_align: STRETCH
+                                    grid_cell_y_align: START
 
-                          - label:
-                              id: lbl_agenda_5
+                          # ---- afspraak 5 ----
+                          - obj:
+                              id: ag_slot_5
                               width: 100%
-                              text: ""
-                              text_font: montserrat_14
-                              text_color: 0x0B0A0A
-                              long_mode: DOT
+                              height: SIZE_CONTENT
+                              bg_opa: TRANSP
+                              radius: 0
+                              border_side: TOP
+                              border_color: 0xD3D6D9
+                              border_width: 0
+                              pad_all: 0
+                              pad_top: 4
+                              scrollable: false
+                              scrollbar_mode: "off"
+                              layout:
+                                type: GRID
+                                pad_row: 0
+                                pad_column: 6
+                                grid_rows: [CONTENT, CONTENT]
+                                grid_columns: [38, FR(1)]
+                              widgets:
+                                - label:
+                                    id: lbl_ag_dag_5
+                                    text: ""
+                                    text_font: montserrat_12
+                                    text_color: 0x0B0A0A
+                                    grid_cell_row_pos: 0
+                                    grid_cell_column_pos: 0
+                                    grid_cell_row_span: 2
+                                    grid_cell_x_align: START
+                                    grid_cell_y_align: START
+                                - label:
+                                    id: lbl_ag_titel_5
+                                    text: ""
+                                    text_font: montserrat_14
+                                    text_color: 0x0B0A0A
+                                    long_mode: WRAP
+                                    grid_cell_row_pos: 0
+                                    grid_cell_column_pos: 1
+                                    grid_cell_x_align: STRETCH
+                                    grid_cell_y_align: START
+                                - label:
+                                    id: lbl_ag_sub_5
+                                    text: ""
+                                    text_font: montserrat_12
+                                    text_color: 0x666666
+                                    long_mode: DOT
+                                    grid_cell_row_pos: 1
+                                    grid_cell_column_pos: 1
+                                    grid_cell_x_align: STRETCH
+                                    grid_cell_y_align: START
 
-                          - label:
-                              id: lbl_agenda_6
+                          # ---- afspraak 6 ----
+                          - obj:
+                              id: ag_slot_6
                               width: 100%
-                              text: ""
-                              text_font: montserrat_14
-                              text_color: 0x0B0A0A
-                              long_mode: DOT
-
-                          - label:
-                              id: lbl_agenda_7
-                              width: 100%
-                              text: ""
-                              text_font: montserrat_14
-                              text_color: 0x0B0A0A
-                              long_mode: DOT
+                              height: SIZE_CONTENT
+                              bg_opa: TRANSP
+                              radius: 0
+                              border_side: TOP
+                              border_color: 0xD3D6D9
+                              border_width: 0
+                              pad_all: 0
+                              pad_top: 4
+                              scrollable: false
+                              scrollbar_mode: "off"
+                              layout:
+                                type: GRID
+                                pad_row: 0
+                                pad_column: 6
+                                grid_rows: [CONTENT, CONTENT]
+                                grid_columns: [38, FR(1)]
+                              widgets:
+                                - label:
+                                    id: lbl_ag_dag_6
+                                    text: ""
+                                    text_font: montserrat_12
+                                    text_color: 0x0B0A0A
+                                    grid_cell_row_pos: 0
+                                    grid_cell_column_pos: 0
+                                    grid_cell_row_span: 2
+                                    grid_cell_x_align: START
+                                    grid_cell_y_align: START
+                                - label:
+                                    id: lbl_ag_titel_6
+                                    text: ""
+                                    text_font: montserrat_14
+                                    text_color: 0x0B0A0A
+                                    long_mode: WRAP
+                                    grid_cell_row_pos: 0
+                                    grid_cell_column_pos: 1
+                                    grid_cell_x_align: STRETCH
+                                    grid_cell_y_align: START
+                                - label:
+                                    id: lbl_ag_sub_6
+                                    text: ""
+                                    text_font: montserrat_12
+                                    text_color: 0x666666
+                                    long_mode: DOT
+                                    grid_cell_row_pos: 1
+                                    grid_cell_column_pos: 1
+                                    grid_cell_x_align: STRETCH
+                                    grid_cell_y_align: START
 
               # =========================
               # RECHTERKOLOM
