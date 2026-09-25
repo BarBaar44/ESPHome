@@ -35,7 +35,7 @@ display:
     # (ST7701S, Guition, Sunton, Waveshare) do need an spi: section - RPI
     # does not, which is why none is defined here.
     #
-    # This is correct for this board: the Elecrow 7" panel's EK9716B
+    # This is correct for this board: the Elecrow 7" panel's EK9716BD3
     # driver chip is a plain RGB/TTL timing controller with no command
     # interface, exactly like the panels the RPI model targets.
   - platform: mipi_rgb
@@ -67,32 +67,39 @@ display:
       width: 800
       height: 480
     # =====================================================================
-    # FIX (2026-09-25): white-screen-on-boot on the Elecrow 7" EK9716B
-    # board. de_pin and vsync_pin were swapped, all six porch/pulse
-    # timing values were generic round-number placeholders instead of
-    # this panel's real timing, and pclk_inverted was missing entirely -
-    # any one of these can leave an RGB-parallel panel unable to lock
-    # onto a valid frame, which typically shows as solid white rather
-    # than black or noise. Corrected values below are cross-confirmed
-    # from two independent working configs for this exact board
-    # (Elecrow 7" ESP32-S3, EK9716B driver, GT911 touch):
-    #   - https://www.espboards.dev/blog/esphome-configuring-elecrow-7-inch-display/
-    #   - https://community.home-assistant.io/t/elecrow-crowpanel-7-with-esphome/768501
+    # FIX (2026-09-25): white-screen-on-boot on the Elecrow 7" EK9716BD3
+    # board (Elecrow CrowPanel ESP32-S3 7.0", DIS08070H). de_pin and
+    # vsync_pin were swapped, all six porch/pulse timing values were
+    # generic round-number placeholders instead of this panel's real
+    # timing, and pclk_inverted was missing entirely - any one of these
+    # can leave an RGB-parallel panel unable to lock onto a valid frame,
+    # which typically shows as solid white rather than black or noise.
     #
-    # de_pin and vsync_pin were swapped in the previous version
+    # All values below (including pclk_frequency and the full data_pins
+    # block) now match the config merged into the official ESPHome
+    # devices catalog for this exact board:
+    #   - https://github.com/esphome/esphome-devices/pull/1494
+    #     (Add Elecrow CrowPanel ESP32-S3 7.0" HMI Display, DIS08070H)
+    #
+    # de_pin and vsync_pin were swapped in the original version
     # (de_pin: 40, vsync_pin: 41) - corrected to the board's real wiring.
     de_pin: 41
     hsync_pin: 39
     vsync_pin: 40
     pclk_pin: 0
-    pclk_frequency: 12MHz
+    # Was 12MHz (a guess within the "12-15MHz works" range reported by
+    # other users). The official devices-catalog entry for this exact
+    # board uses 15MHz - set to match it exactly rather than a value
+    # that merely happened to be in range.
+    pclk_frequency: 15MHz
     # Missing before. Without this the panel samples data on the wrong
     # clock edge, which alone can be enough to prevent a valid image.
     pclk_inverted: true
     # These six were previously generic placeholders (10/10/20, 10/10/10)
     # carried over as "parity with the old rpi_dpi_rgb defaults" - they
-    # were never this panel's actual timing. Replaced with the EK9716B
-    # board's real porch/pulse values from the sources above.
+    # were never this panel's actual timing. Replaced with the EK9716BD3
+    # board's real porch/pulse values from the official devices-catalog
+    # entry above.
     hsync_pulse_width: 48
     hsync_back_porch: 13
     hsync_front_porch: 40
@@ -106,38 +113,39 @@ display:
     # blue->green->red branch, so the resulting bus order - and therefore
     # the colours - stay the same.
     #
-    # red: unchanged, this set/order already matched the confirmed board
-    # config. green/blue: the previous version used the same 16 GPIOs
-    # overall but split across the wrong channel - several pins that
-    # belong to green were listed under blue and vice versa. Corrected
-    # to the confirmed per-channel sets below.
-    #
-    # One caveat: the sources confirm WHICH pins belong to green and
-    # which to blue, but not each source's internal g0..g5 / b0..b4
-    # bit ordering. If the screen comes up but colours look wrong (e.g.
-    # a red tint where blue should be), the fix is complete on the
-    # white-screen front - only the bit order within green/blue below
-    # would still need adjusting.
+    # data_pins must be listed LEAST significant bit first (confirmed by
+    # the mipi_rgb component docs: "listed from least to most significant
+    # bit"). green and blue below were already correct. red was NOT: the
+    # original file had it as [45, 48, 47, 21, 14] - the exact reverse of
+    # the official LSB-first order [14, 21, 47, 48, 45]. A reversed 5-bit
+    # channel turns small colour changes into large, discontinuous jumps
+    # in the rendered value - which is exactly what produced the
+    # purple/pink horizontal streaking across the header's vertical blue
+    # gradient (bg_grad_dir: VER in lvglconfig.yml's header_footer style):
+    # each row's slightly different true red value mapped to a wildly
+    # different reversed-bit red value as the gradient swept through it.
+    # Fixed by reversing the red list to match the confirmed LSB-first
+    # order. green/blue were already correct and are unchanged.
     data_pins:
       red:
-        - 45 #r1
-        - 48 #r2
-        - 47 #r3
-        - 21 #r4
-        - 14 #r5
+        - 14 #r0 (LSB)
+        - 21 #r1
+        - 47 #r2
+        - 48 #r3
+        - 45 #r4 (MSB)
       green:
-        - 9  #g0
+        - 9  #g0 (LSB)
         - 46 #g1
         - 3  #g2
         - 8  #g3
         - 16 #g4
-        - 1  #g5
+        - 1  #g5 (MSB)
       blue:
-        - 15 #b1
-        - 7  #b2
-        - 6  #b3
-        - 5  #b4
-        - 4  #b5
+        - 15 #b0 (LSB)
+        - 7  #b1
+        - 6  #b2
+        - 5  #b3
+        - 4  #b4 (MSB)
 
 i2c:
   sda: GPIO19
