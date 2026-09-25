@@ -292,5 +292,8 @@
   },
   "bluetooth-proxy-attic.yaml": {
     "mac_address": "20:E7:C8:24:9B:E8"
+  },
+  "tim-bedroom-display.yaml": {
+    "mac_address": "94:A9:90:EB:C3:D0"
   }
 }
