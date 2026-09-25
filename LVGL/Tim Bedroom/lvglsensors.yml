@@ -1,15 +1,20 @@
 # =====================================================================
-# Scripts, globals en Home Assistant koppelingen voor het wandpaneel.
-# Overgenomen van LVGL/Masterbedroom/lvglsensors.yml.
+# Scripts, globals en Home Assistant koppelingen voor het wandpaneel
+# Kamer Tim. Overgenomen van LVGL/Masterbedroom/lvglsensors.yml.
 #
-# Verschil met de Master Bedroom: screen_timeout en climate_setpoint_value
-# worden HIER gedeclareerd, niet in de per-device hoofdconfig. Op de
-# Master Bedroom staan die twee alleen in de lokale hoofdconfig, wat
-# betekent dat ze nergens in de repo terug te vinden zijn en dat de
-# CI-harness ze moet nabouwen. Zet ze dus NIET nog een keer in de
-# hoofdconfig van dit paneel, dat geeft een dubbele id.
+# Entity-ids staan direct in de code, NIET als substitutions. Waar nog
+# een DUMMY-entity staat is dat bewust: die bestaat nog niet in HA en
+# moet later vervangen worden. Zoek op "dummy" om ze te vinden.
+#
+# Verschillen met de Master Bedroom:
+#  * screen_timeout en climate_setpoint_value worden HIER gedeclareerd,
+#    niet in de per-device hoofdconfig. Zet ze daar dus NIET nog een keer
+#    neer, dat geeft een dubbele id.
+#  * Geen bewegingssensor en geen luxsensor in deze kamer. Het scherm
+#    gaat aan bij aanraking of als het kamerlicht aan is, en uit na de
+#    schermtimeout. De helderheid is vast (100%).
 # =====================================================================
- 
+
 # =========================
 # BOOT-TIME UI SYNC
 # =========================
@@ -18,31 +23,21 @@
 # 1. Scherm aan en de normale inactiviteitscyclus starten. De backlight
 #    zelf komt op via restore_mode: ALWAYS_ON (zie LVGL/displayconfig.yml),
 #    maar dat alleen zou hem eeuwig aan laten: update_screen_state draait
-#    uitsluitend vanuit een trigger (beweging, plafondlamp, of het einde
-#    van wake_screen) en niets evalueert hem na een reboot.
+#    uitsluitend vanuit een trigger (plafondlamp of het einde van
+#    wake_screen).
 #
 # 2. De schermtimeout- en nachtmodus-dropdowns terugzetten naar de
 #    globals uit flash. LVGL-widgets bewaren hun eigen state niet over een
 #    reboot; alleen de globals doen dat (restore_value: yes).
 #
-# 3. Controleren of de HA-helpers uberhaupt bestaan, en daarna hun
-#    waarden opnieuw toepassen op de widgets. Zie check_ha_settings.
-#
-#    WAAROM DIE HER-TOEPASSING NODIG IS. LVGL-widgetstate overleeft geen
-#    reboot. Het enige dat de gordijnknoppen ooit kleurde was de on_value
-#    van de bijbehorende homeassistant text_sensor, dus het paneel was
-#    afhankelijk van het opvangen van dat ene event tijdens de
-#    API-handshake - terwijl LVGL nog aan het opstarten was en er geen
-#    tweede kans kwam. Opnieuw toepassen vanuit de gecachete state sluit
-#    dat gat.
+# 3. Controleren of de HA-helpers bestaan, en daarna hun waarden opnieuw
+#    toepassen op de widgets. Zie check_ha_settings.
 #
 # Draait laat (priority -100, na het opzetten van LVGL).
 esphome:
   on_boot:
     priority: -100
     then:
-      # Scherm aan en de screen_timeout-teller starten. Voor de delay
-      # hieronder, zodat het aftellen meteen begint.
       - script.execute: wake_screen
       - delay: 2s
       - lvgl.dropdown.update:
@@ -61,21 +56,17 @@ esphome:
           selected_index: !lambda 'return id(night_mode_end_hour);'
       # Eerste gezondheidscheck en de boot-hersync. De extra vertraging is
       # bewust: op 2s kan de API nog niet klaar zijn met het sturen van de
-      # initiele states, en elke helper dan als ontbrekend markeren leert
-      # mensen de waarschuwing negeren. sync_settings_from_ha is
-      # has_state()-gated, dus te vroeg draaien zou simpelweg elke widget
-      # overslaan.
+      # initiele states.
       - delay: 20s
       - script.execute: check_ha_settings
- 
+
 # =========================
 # GLOBALS
 # =========================
 globals:
   # Voorkomt de feedback-loop uit esphome/esphome#17161:
   # lvgl.widget.update op een widget vuurt ook zijn on_value af, ook als
-  # de wijziging puur programmatisch is. Zonder guard wordt elke
-  # HA-statuswijziging meteen als nieuwe gebruikersactie teruggekaatst.
+  # de wijziging puur programmatisch is.
   #
   # Alleen de lichtschakelaars hebben dit nodig: de gordijn- en
   # ventilatorknoppen zijn buttons met on_click, en die vuren niet af bij
@@ -84,125 +75,89 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'false'
- 
+
   # Of de backlight UIT was op het moment dat de huidige aanraking
   # binnenkwam, bemonsterd door wake_screen VOORDAT die de backlight
-  # aanzet. Dit onderscheidt een "wek-aanraking" van een normale
-  # aanraking op een al verlicht scherm. Een wek-aanraking brengt de UI
-  # terug naar de hoofdpagina; een normale niet, zodat de
-  # instellingenpagina niet onder je vinger vandaan springt.
-  #
-  # Moet voor light.turn_on bemonsterd worden, anders is de state al
-  # omgeslagen en lijkt elke aanraking een wek-aanraking.
+  # aanzet. Een wek-aanraking brengt de UI terug naar de hoofdpagina; een
+  # normale niet.
   - id: screen_was_off
     type: bool
     restore_value: no
     initial_value: 'false'
- 
-  # Hoeveel van de HA-helpers op dit moment helemaal geen state hebben
-  # (zie evaluate_helper_health). Start op -1 en niet op 0, zodat "nog
-  # niet gekeken" te onderscheiden is van "gekeken en alles in orde".
+
+  # Hoeveel van de HA-helpers op dit moment geen state hebben. Start op
+  # -1 zodat "nog niet gekeken" te onderscheiden is van "alles in orde".
   - id: helpers_missing_count
     type: int
     restore_value: no
     initial_value: '-1'
- 
+
   - id: helpers_status_text
     type: std::string
     restore_value: no
     initial_value: '"HA-instellingen controleren..."'
- 
-  # Nachtmodus: venster (uur van de dag, 0-23) waarin PIR-beweging het
-  # scherm niet wekt. Wrapt over middernacht als start > eind.
+
+  # Nachtmodus: venster (uur van de dag, 0-23). Heeft zonder
+  # bewegingssensor op dit moment geen effect; blijft staan voor als die
+  # er later bijkomt.
   - id: night_mode_start_hour
     type: int
     restore_value: yes
     initial_value: '22'
- 
+
   - id: night_mode_end_hour
     type: int
     restore_value: yes
     initial_value: '7'
- 
-  # Hoe lang het scherm aanblijft na de laatste aanraking. Bewerkbaar via
-  # de dropdown op de instellingenpagina.
+
+  # Hoe lang het scherm aanblijft na de laatste aanraking.
   - id: screen_timeout
     type: int
     restore_value: yes
     initial_value: '300'  # 5 min, komt overeen met de standaardindex
- 
+
   # Lokale setpoint-teller voor de +/- knoppen. Wordt bij elke HA-update
-  # overschreven met de werkelijke waarde, zodat snel tikken niet
-  # wegloopt van wat de thermostaat echt doet.
+  # overschreven met de werkelijke waarde.
   - id: climate_setpoint_value
     type: float
     restore_value: no
     initial_value: '21.0'
- 
+
 # =========================
 # BUTTONS
 # =========================
 button:
-  # Herstart het paneel. Aangestuurd door de Reboot-knop op de
-  # instellingenpagina, en ook als gewone button-entity in HA zodat het
-  # paneel op afstand herstart kan worden.
   - platform: restart
     name: "${friendly_name} Restart"
     id: btn_restart
     entity_category: "diagnostic"
- 
+
 # =========================
 # SCRIPTS
 # =========================
 script:
-  # Backlight aan/uit op basis van beweging OF plafondlamp. Scherm is aan
-  # als de plafondlamp aan is, OF er beweging is buiten het ingestelde
-  # nachtvenster.
+  # Backlight aan/uit. Zonder bewegingssensor is de regel simpel: aan
+  # zolang de plafondlamp aan is, anders uit. Aanraken wekt het scherm
+  # los hiervan via wake_screen, en wake_screen roept dit script aan na
+  # afloop van de timeout.
   - id: update_screen_state
     then:
       - if:
           condition:
-            lambda: |-
-              // De plafondlamp wekt/houdt het scherm altijd aan,
-              // ongeacht nachtmodus.
-              if (id(ceiling_light_on).state) return true;
-              // Geen licht en geen beweging -> scherm uit.
-              if (!id(motion_occupancy).state) return false;
-              // Beweging: onderdruk het automatisch wekken tijdens de
-              // ingestelde nachturen. Als de HA-tijd nog niet
-              // gesynchroniseerd is, fail open (wel wekken) in plaats van
-              // het scherm uit te laten hangen.
-              auto t = id(time_homeassistant).now();
-              if (!t.is_valid()) return true;
-              int hour = t.hour;
-              int start = id(night_mode_start_hour);
-              int end = id(night_mode_end_hour);
-              bool is_night;
-              if (start == end) {
-                is_night = false;
-              } else if (start < end) {
-                is_night = (hour >= start && hour < end);
-              } else {
-                is_night = (hour >= start || hour < end);
-              }
-              return !is_night;
+            lambda: 'return id(ceiling_light_on).state;'
           then:
-            - light.turn_on: back_light
-            # Veilig om hier aan te roepen: apply_brightness past alleen
-            # de helderheid aan terwijl back_light al aan is, hij zet hem
-            # nooit aan of uit, dus hij kan het besluit hierboven niet
-            # overrulen.
-            - script.execute: apply_brightness
+            - light.turn_on:
+                id: back_light
+                brightness: 100%
           else:
             - light.turn_off: back_light
- 
+
   # Wek het scherm bij aanraking en houd het aan gedurende de ingestelde
   # timeout. mode: restart, dus elke aanraking herstart de teller.
   - id: wake_screen
     mode: restart
     then:
-      # STAP 1 - bemonster de backlight-state VOORDAT je hem aanraakt.
-      # Volgorde is hier essentieel.
+      # STAP 1: bemonster de backlight-state VOORDAT je hem aanraakt.
       - if:
           condition:
             light.is_on: back_light
@@ -214,117 +169,89 @@ script:
             - globals.set:
                 id: screen_was_off
                 value: 'true'
- 
-      - light.turn_on: back_light
-      - script.execute: apply_brightness
- 
-      # STAP 2 - een aanraking die het scherm uit stand-by haalde brengt
-      # de UI ook terug naar de hoofdpagina, zodat het paneel altijd in
-      # een bekende toestand wordt aangetroffen. Een aanraking op een al
-      # verlicht scherm wordt bewust met rust gelaten.
+
+      - light.turn_on:
+          id: back_light
+          brightness: 100%
+
+      # STAP 2: een aanraking die het scherm uit stand-by haalde brengt de
+      # UI ook terug naar de hoofdpagina.
       - if:
           condition:
             lambda: 'return id(screen_was_off);'
           then:
             - script.execute: return_to_main_page_now
- 
+
       - script.execute: return_to_main_page
- 
+
       - delay: !lambda 'return id(screen_timeout) * 1000;'
       - script.execute: update_screen_state
- 
+
   # Automatische terugkeer: 30s na de laatste aanraking terug van de
   # instellingenpagina naar de hoofdpagina.
-  #
-  # Bewust onafhankelijk van screen_timeout: de pagina keert na 30s
-  # inactiviteit terug, terwijl de backlight veel langer aan mag blijven.
-  # Een pagina terugzetten is gratis en onzichtbaar als er niemand kijkt;
-  # de backlight uitzetten is dat niet.
   - id: return_to_main_page
     mode: restart
     then:
       - delay: 30s
-      # Alleen handelen als de hoofdpagina NIET al getoond wordt. Zonder
-      # deze guard roept de timer 30s na elke aanraking lvgl.page.show aan
-      # op de al actieve pagina, wat een zinloze volledige 800x480
-      # schermopbouw en mogelijk zichtbaar flikkeren oplevert.
-      #
-      # is_showing() is de eigen accessor van LvPageType hiervoor. Let op:
-      # lv_scr_act() vergelijken met id(main_page) compileert NIET -
-      # id(main_page) is een esphome::lvgl::LvPageType*, niet de ruwe
-      # lv_obj_t* die lv_scr_act() teruggeeft.
+      # is_showing() is de eigen accessor van LvPageType. lv_scr_act()
+      # vergelijken met id(main_page) compileert NIET.
       - if:
           condition:
             lambda: 'return !id(main_page)->is_showing();'
           then:
             - script.execute: return_to_main_page_now
- 
+
   - id: return_to_main_page_now
     then:
       - lvgl.page.show: main_page
- 
-  # Helderheid op basis van omgevingslicht. Lineaire ramp tussen twee
-  # klemwaarden:
-  #   <= 5 lux   -> 20%
-  #   >= 200 lux -> 100%
-  #
-  # BELANGRIJK: dit past alleen de helderheid aan terwijl back_light al
-  # AAN is. Het zet de backlight nooit aan of uit, zodat
-  # update_screen_state de enige eigenaar van dat besluit blijft.
-  - id: apply_brightness
-    mode: restart
+
+  # Kleurt de ventilatorknoppen. Donkerblauw = actieve stand.
+  #   - ventilator uit            -> knop 0
+  #   - aan, "Level 1".."Level 4" -> knop 1..4
+  # Zolang de aan/uit-state nog onbekend is (vlak na boot) wordt alleen
+  # naar de level gekeken.
+  - id: update_vent_buttons
     then:
-      - if:
-          condition:
-            light.is_on: back_light
-          then:
-            - light.turn_on:
-                id: back_light
-                brightness: !lambda |-
-                  // Als de sensor nog niets gerapporteerd heeft (NaN),
-                  // laat de backlight dan op vol staan in plaats van te
-                  // gokken.
-                  float lux = id(ha_room_illuminance).state;
-                  if (isnan(lux)) return 1.0f;
-                  const float lux_min = 5.0f;
-                  const float lux_max = 200.0f;
-                  const float b_min = 0.20f;
-                  const float b_max = 1.00f;
-                  if (lux <= lux_min) return b_min;
-                  if (lux >= lux_max) return b_max;
-                  float frac = (lux - lux_min) / (lux_max - lux_min);
-                  return b_min + frac * (b_max - b_min);
- 
+      - lvgl.widget.update:
+          id: btn_vent_0
+          bg_color: !lambda |-
+            bool off = id(ha_vent_power).has_state() && !id(ha_vent_power).state;
+            return lv_color_hex(off ? 0x005782 : 0x2F8CD8);
+      - lvgl.widget.update:
+          id: btn_vent_1
+          bg_color: !lambda |-
+            bool off = id(ha_vent_power).has_state() && !id(ha_vent_power).state;
+            return lv_color_hex(!off && id(ha_vent_level).state == "Level 1" ? 0x005782 : 0x2F8CD8);
+      - lvgl.widget.update:
+          id: btn_vent_2
+          bg_color: !lambda |-
+            bool off = id(ha_vent_power).has_state() && !id(ha_vent_power).state;
+            return lv_color_hex(!off && id(ha_vent_level).state == "Level 2" ? 0x005782 : 0x2F8CD8);
+      - lvgl.widget.update:
+          id: btn_vent_3
+          bg_color: !lambda |-
+            bool off = id(ha_vent_power).has_state() && !id(ha_vent_power).state;
+            return lv_color_hex(!off && id(ha_vent_level).state == "Level 3" ? 0x005782 : 0x2F8CD8);
+      - lvgl.widget.update:
+          id: btn_vent_4
+          bg_color: !lambda |-
+            bool off = id(ha_vent_power).has_state() && !id(ha_vent_power).state;
+            return lv_color_hex(!off && id(ha_vent_level).state == "Level 4" ? 0x005782 : 0x2F8CD8);
+
   # =========================
   # HA HELPER GEZONDHEIDSCHECK
   # =========================
-  # WAAROM DIT BESTAAT. Op de Master Bedroom verwijderde een corrupte
-  # HA-database ooit een aantal input_* helpers. Het paneel liet daar
-  # niets van zien: elke dropdown viel terug op de standaardwaarde uit
-  # zijn eigen widgetdefinitie, dus het scherm toonde zelfverzekerde,
-  # plausibele waarden voor entities die niet meer bestonden. Mensen
-  # wijzigden instellingen, er gebeurde niets, en er was geen manier om
-  # te zien waarom. De API was de hele tijd verbonden, dus het HA-icoon
-  # in de header bleef wit.
+  # Op de Master Bedroom verwijderde een corrupte HA-database ooit een
+  # aantal input_* helpers, zonder dat het paneel dat liet zien. Dit
+  # script rapporteert ontbrekende helpers op de instellingenpagina en
+  # als diagnostische binary_sensor in HA.
   #
-  # WAAROM EEN HER-SYNC-KNOP DAT NIET OPLOST. Opnieuw kopieren van de
-  # HA-waarde veronderstelt dat er EEN waarde is. Als de helper weg is
-  # valt er niets te kopieren, en een knop die stilletjes slaagt is
-  # slechter dan geen knop: die fabriceert vertrouwen dat het probleem
-  # net opgelost is. Rapporteren, niet kopieren, is hier de hoofdtaak.
-  #
-  # BEPERKING, en een echte: has_state() vangt alleen helpers die NOOIT
-  # gerapporteerd hebben. Een helper die verdwijnt terwijl het paneel
-  # draait wordt niet gevangen, want de homeassistant sensor houdt zijn
-  # laatst ontvangen waarde vast en has_state() blijft true. Het
-  # boot-geval is het geval dat zich daadwerkelijk voordeed.
+  # BEPERKING: has_state() vangt alleen helpers die NOOIT gerapporteerd
+  # hebben, niet een helper die verdwijnt terwijl het paneel draait.
   - id: evaluate_helper_health
     mode: restart
     then:
       - lambda: |-
-          // De namen zijn de labels zoals ze op het scherm staan, niet
-          // de entity_ids, zodat de waarschuwing wijst naar wat de
-          // gebruiker daadwerkelijk kan zien.
           struct HelperCheck {
             const char *label;
             bool present;
@@ -334,7 +261,7 @@ script:
             {"Dicht", id(ha_cover_close_time).has_state()},
           };
           const int total = sizeof(checks) / sizeof(checks[0]);
- 
+
           int missing = 0;
           std::string names;
           for (int i = 0; i < total; i++) {
@@ -345,7 +272,7 @@ script:
             }
           }
           id(helpers_missing_count) = missing;
- 
+
           char buf[48];
           if (missing == 0) {
             snprintf(buf, sizeof(buf), "Instellingen OK (%d/%d)", total, total);
@@ -360,40 +287,24 @@ script:
           id: lbl_settings_status
           text: !lambda 'return id(helpers_status_text);'
           text_color: !lambda 'return lv_color_hex(id(helpers_missing_count) > 0 ? 0xC62828 : 0x4CAF50);'
- 
+
   # Wat de Check-knop draait: eerst rapporteren, dan opnieuw toepassen.
-  # De volgorde is het punt. evaluate_helper_health bepaalt en toont wat
-  # er werkelijk mis is; sync_settings_from_ha doet daarna zijn best met
-  # de state die er wel is.
   - id: check_ha_settings
     mode: restart
     then:
       - script.execute: evaluate_helper_health
       - script.execute: sync_settings_from_ha
- 
-  # Pas de gecachete HA-state opnieuw toe op de widgets.
-  #
-  # HOME ASSISTANT WINT, ALTIJD. Dit schrijft alleen HA-state naar de
-  # widgets, nooit een widgetwaarde terug naar HA.
-  #
-  # WAAROM HET GECACHETE STATE LEEST IN PLAATS VAN HA OM EEN HERZENDING
-  # TE VRAGEN: ESPHome's homeassistant sensors vuren on_value alleen af
-  # als de ontvangen waarde VERSCHILT van wat ze al hebben. Een
-  # identieke state opnieuw pushen vuurt dus helemaal niets af - en
-  # identieke-state-maar-verkeerde-widget is precies het geval waarvoor
-  # je een handmatige her-toepassing zou willen. De gecachete state
-  # lezen kost geen round-trip en kan niet stilletjes niets doen.
+
+  # Pas de gecachete HA-state opnieuw toe op de widgets. HOME ASSISTANT
+  # WINT, ALTIJD: dit schrijft alleen HA-state naar de widgets, nooit
+  # andersom.
   - id: sync_settings_from_ha
     mode: restart
     then:
       - script.execute: update_close_time_buttons
       - script.execute: update_open_time_buttons
- 
-      # Klimaat-setpoint. Geen mirror-loop-risico: de +/- knoppen
-      # schrijven climate_setpoint_value rechtstreeks en vuren geen
-      # on_value af die naar HA doorstuurt. Alleen opnieuw toegepast
-      # zodat het label en de global niet de eerste seconden na een
-      # reboot op de 21.0 uit de YAML blijven staan.
+      - script.execute: update_vent_buttons
+
       - if:
           condition:
             lambda: 'return id(ha_climate_setpoint).has_state();'
@@ -407,7 +318,7 @@ script:
                   char buf[16];
                   snprintf(buf, sizeof(buf), "%.1f °C", id(ha_climate_setpoint).state);
                   return buf;
- 
+
       # Lichtschakelaars. Onder de guard, want lvgl.widget.update vuurt
       # hun on_value af (esphome/esphome#17161).
       - lambda: 'id(mirroring_light_switches) = true;'
@@ -430,14 +341,9 @@ script:
                   checked: !lambda 'return id(ha_licht_bed).state;'
                 shadow_width: !lambda 'return id(ha_licht_bed).state ? 15 : 0;'
       - lambda: 'id(mirroring_light_switches) = false;'
- 
+
   # Kleurt de gordijn-sluittijdknoppen. Donkerblauw = de tijd die in Home
   # Assistant geselecteerd staat, standaardblauw = de rest.
-  #
-  # Idempotent en zonder guard: dit zijn buttons met alleen on_click, dus
-  # een programmatische kleurwijziging kaatst niets terug naar HA. Wordt
-  # aangeroepen vanuit ha_cover_close_time en vanuit sync_settings_from_ha
-  # bij het opstarten.
   - id: update_close_time_buttons
     then:
       - lvgl.widget.update:
@@ -452,7 +358,7 @@ script:
       - lvgl.widget.update:
           id: btn_dicht_2230
           bg_color: !lambda 'return lv_color_hex(id(ha_cover_close_time).state == "22:30" ? 0x005782 : 0x2F8CD8);'
- 
+
   - id: update_open_time_buttons
     then:
       - lvgl.widget.update:
@@ -473,23 +379,11 @@ script:
       - lvgl.widget.update:
           id: btn_open_0930
           bg_color: !lambda 'return lv_color_hex(id(ha_cover_open_time).state == "9:30" ? 0x005782 : 0x2F8CD8);'
- 
+
   # Stuurt de twee statusiconen in de header op beide pagina's, en de
   # enabled-state van de Check-knop.
-  #
-  # De Check-knop hangt aan dezelfde conditie als het HA-icoon, zodat de
-  # twee nooit iets anders kunnen beweren terwijl ze een paar centimeter
-  # uit elkaar staan. Met de API plat is er geen gecachete state om te
-  # beoordelen, dus een knop die er levend uitziet zou een leugen zijn.
-  #
-  # LET OP: dit is een ANDER soort storing dan waar de helpercheck over
-  # gaat. api.connected bewijst dat het TRANSPORT werkt; het zegt niets
-  # over de vraag of de entities daarachter nog bestaan.
   - id: update_connectivity_icons
     then:
-      # Wifi: lvgl.label.update, want `text` (de glyph) is een
-      # label-eigenschap, geen generieke stijleigenschap die
-      # lvgl.widget.update begrijpt.
       - if:
           condition:
             wifi.connected:
@@ -536,7 +430,7 @@ script:
                 id: btn_check_settings
                 state:
                   disabled: true
- 
+
 # =========================
 # INTERVALS
 # =========================
@@ -544,25 +438,20 @@ interval:
   - interval: 5s
     then:
       - script.execute: update_connectivity_icons
- 
-  # Proactieve helpercheck. Het hele punt is dat niemand een knop hoeft
-  # in te drukken om te ontdekken dat een helper verdwenen is.
-  #
-  # Bewust evaluate_helper_health en NIET check_ha_settings: dit mag niet
-  # naar de widgets schrijven. Elke 60s de HA-state opnieuw toepassen zou
-  # met de gebruiker vechten terwijl die zit te bedienen; de hersync bij
-  # boot is een eenmalige actie op een moment dat niemand bezig kan zijn.
+
+  # Proactieve helpercheck. Bewust evaluate_helper_health en NIET
+  # check_ha_settings: dit mag niet naar de widgets schrijven.
   - interval: 60s
     then:
       - script.execute: evaluate_helper_health
- 
+
 # =========================
 # TEXT SENSORS
 # =========================
 text_sensor:
   - platform: homeassistant
     id: ha_weather_condition
-    entity_id: ${ent_weer}
+    entity_id: weather.openweathermap
     on_value:
       then:
         - lvgl.label.update:
@@ -588,7 +477,7 @@ text_sensor:
               std::string c = x;
               if (namen.count(c)) return namen[c];
               return c;
- 
+
         - lvgl.label.update:
             id: lbl_weather_icon
             text: !lambda |-
@@ -612,98 +501,95 @@ text_sensor:
               std::string c = x;
               if (weather_icons.count(c)) return weather_icons[c];
               return std::string("\U000F0599");
- 
+
   # Gordijnen: geselecteerde openingstijd.
   - platform: homeassistant
     id: ha_cover_open_time
-    entity_id: ${ent_tijd_open}
+    entity_id: input_select.cover_bedroom_tim_open_time
     on_value:
       then:
         - script.execute: update_open_time_buttons
- 
+
   # Gordijnen: geselecteerde sluitingstijd.
   - platform: homeassistant
     id: ha_cover_close_time
-    entity_id: ${ent_tijd_dicht}
+    entity_id: input_select.cover_bedroom_tim_close_time
     on_value:
       then:
         - script.execute: update_close_time_buttons
- 
-  # Agenda. Maak in HA vijf template sensors met de tekst per regel.
+
+  # Ventilator: huidige stand ("Level 1".."Level 4").
+  - platform: homeassistant
+    id: ha_vent_level
+    entity_id: select.zhimi_za4_f804_gear_fan_level
+    on_value:
+      then:
+        - script.execute: update_vent_buttons
+
+  # Agenda. !! DUMMY: sensor.dummy_agenda_tim_1..5 bestaan nog niet.
+  # Later te vervangen door vijf HA template sensors die via
+  # calendar.get_events de komende afspraken uit calendar.gijs_tim halen.
   - platform: homeassistant
     id: ha_agenda_1
-    entity_id: ${ent_agenda_1}
+    entity_id: sensor.dummy_agenda_tim_1
     on_value:
       - lvgl.label.update:
           id: lbl_agenda_1
           text: !lambda 'return x;'
- 
+
   - platform: homeassistant
     id: ha_agenda_2
-    entity_id: ${ent_agenda_2}
+    entity_id: sensor.dummy_agenda_tim_2
     on_value:
       - lvgl.label.update:
           id: lbl_agenda_2
           text: !lambda 'return x;'
- 
+
   - platform: homeassistant
     id: ha_agenda_3
-    entity_id: ${ent_agenda_3}
+    entity_id: sensor.dummy_agenda_tim_3
     on_value:
       - lvgl.label.update:
           id: lbl_agenda_3
           text: !lambda 'return x;'
- 
+
   - platform: homeassistant
     id: ha_agenda_4
-    entity_id: ${ent_agenda_4}
+    entity_id: sensor.dummy_agenda_tim_4
     on_value:
       - lvgl.label.update:
           id: lbl_agenda_4
           text: !lambda 'return x;'
- 
+
   - platform: homeassistant
     id: ha_agenda_5
-    entity_id: ${ent_agenda_5}
+    entity_id: sensor.dummy_agenda_tim_5
     on_value:
       - lvgl.label.update:
           id: lbl_agenda_5
           text: !lambda 'return x;'
- 
+
 # =========================
 # BINARY SENSORS
 # =========================
 binary_sensor:
   - platform: status
     name: "${friendly_name} Status"
- 
-  # Maakt de helpercheck zichtbaar in Home Assistant, zodat een
-  # ontbrekende helper een melding kan geven in plaats van te wachten
-  # tot iemand het paneel bekijkt. device_class: problem laat HA dit
-  # renderen als OK / Probleem in plaats van uit / aan.
-  #
-  # Rapporteert false tot de eerste evaluatie klaar is
-  # (helpers_missing_count start op -1), zodat een normale boot geen
-  # loos alarm afvuurt.
+
+  # Maakt de helpercheck zichtbaar in Home Assistant. Rapporteert false
+  # tot de eerste evaluatie klaar is (helpers_missing_count start op -1).
   - platform: template
     name: "${friendly_name} HA Helpers Missing"
     id: ha_helpers_missing
     device_class: problem
     entity_category: "diagnostic"
     lambda: 'return id(helpers_missing_count) > 0;'
- 
-  # Bewegingssensor - stuurt de backlight aan.
-  - platform: homeassistant
-    id: motion_occupancy
-    entity_id: ${ent_beweging}
-    on_state:
-      then:
-        - script.execute: update_screen_state
- 
-  # Plafondlamp. Stuurt de schakelaar, het lampicoon en het scherm.
+
+  # Plafondlamp (Shelly). Stuurt de schakelaar, het lampicoon en het
+  # scherm.
   - platform: homeassistant
     id: ceiling_light_on
-    entity_id: ${ent_licht_kamer}
+    entity_id: switch.shelly1_tim_shelly1_shelly1_tim
     on_state:
       then:
         - lambda: 'id(mirroring_light_switches) = true;'
@@ -718,11 +604,11 @@ binary_sensor:
             text_color: !lambda 'return lv_color_hex(x ? 0xFDB813 : 0xBBBBBB);'
         - lambda: 'id(mirroring_light_switches) = false;'
         - script.execute: update_screen_state
- 
-  # Bedlamp.
+
+  # Bedlamp (Sonoff).
   - platform: homeassistant
     id: ha_licht_bed
-    entity_id: ${ent_licht_bed}
+    entity_id: switch.sonoff_tim_sonoff_tim
     on_state:
       then:
         - lambda: 'id(mirroring_light_switches) = true;'
@@ -736,74 +622,22 @@ binary_sensor:
             text: !lambda 'return std::string(x ? "\U000F0335" : "\U000F0336");'
             text_color: !lambda 'return lv_color_hex(x ? 0xFDB813 : 0xBBBBBB);'
         - lambda: 'id(mirroring_light_switches) = false;'
- 
+
+  # Ventilator aan/uit.
+  - platform: homeassistant
+    id: ha_vent_power
+    entity_id: fan.zhimi_za4_f804_fan
+    on_state:
+      then:
+        - script.execute: update_vent_buttons
+
 # =========================
 # SENSORS
 # =========================
 sensor:
-  # Omgevingslicht (lux). Stuurt de helderheid van de backlight via
-  # apply_brightness.
-  - platform: homeassistant
-    id: ha_room_illuminance
-    entity_id: ${ent_lux}
-    on_value:
-      then:
-        - script.execute: apply_brightness
- 
-  # Ventilatorsnelheid uit het percentage-attribuut van de fan zelf, NIET
-  # uit een off/low/mid/high text sensor - deze ventilator kent alleen
-  # 0/25/50/75/100%. Kleurt de actieve knop, ongeacht wie de fan
-  # schakelde: het paneel, de fysieke afstandsbediening of een
-  # HA-automatisering.
-  - platform: homeassistant
-    id: ha_vent_percentage
-    entity_id: ${ent_ventilator}
-    attribute: percentage
-    on_value:
-      then:
-        - lvgl.widget.update:
-            id: [btn_vent_0, btn_vent_1, btn_vent_2, btn_vent_3, btn_vent_4]
-            bg_color: 0x2F8CD8
-            bg_opa: COVER
-        - if:
-            condition:
-              lambda: 'return x == 0;'
-            then:
-              - lvgl.widget.update:
-                  id: btn_vent_0
-                  bg_color: 0x005782
-        - if:
-            condition:
-              lambda: 'return x > 0 && x <= 25;'
-            then:
-              - lvgl.widget.update:
-                  id: btn_vent_1
-                  bg_color: 0x005782
-        - if:
-            condition:
-              lambda: 'return x > 25 && x <= 50;'
-            then:
-              - lvgl.widget.update:
-                  id: btn_vent_2
-                  bg_color: 0x005782
-        - if:
-            condition:
-              lambda: 'return x > 50 && x <= 75;'
-            then:
-              - lvgl.widget.update:
-                  id: btn_vent_3
-                  bg_color: 0x005782
-        - if:
-            condition:
-              lambda: 'return x > 75;'
-            then:
-              - lvgl.widget.update:
-                  id: btn_vent_4
-                  bg_color: 0x005782
- 
   - platform: homeassistant
     id: ha_weather_temp_now
-    entity_id: ${ent_weer}
+    entity_id: weather.openweathermap
     attribute: temperature
     on_value:
       then:
@@ -813,10 +647,10 @@ sensor:
               char buf[16];
               snprintf(buf, sizeof(buf), "%.1f °C", x);
               return buf;
- 
+
   - platform: homeassistant
     id: ha_weather_feels_like
-    entity_id: ${ent_weer}
+    entity_id: weather.openweathermap
     attribute: apparent_temperature
     on_value:
       then:
@@ -826,13 +660,13 @@ sensor:
               char buf[24];
               snprintf(buf, sizeof(buf), "voelt als %.1f °C", x);
               return buf;
- 
+
   # Setpoint van HA naar het display. Overschrijft ook
   # climate_setpoint_value, zodat de +/- knoppen altijd verder rekenen
   # vanaf wat de thermostaat werkelijk doet.
   - platform: homeassistant
     id: ha_climate_setpoint
-    entity_id: ${ent_klimaat}
+    entity_id: climate.virtual_thermostat_room_tim
     attribute: temperature
     on_value:
       then:
@@ -845,10 +679,10 @@ sensor:
               char buf[16];
               snprintf(buf, sizeof(buf), "%.1f °C", x);
               return buf;
- 
+
   - platform: homeassistant
     id: ha_climate_current_temp
-    entity_id: ${ent_klimaat}
+    entity_id: climate.virtual_thermostat_room_tim
     attribute: current_temperature
     on_value:
       then:
