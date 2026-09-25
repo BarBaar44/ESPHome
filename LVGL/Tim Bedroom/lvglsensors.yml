@@ -524,71 +524,194 @@ text_sensor:
       then:
         - script.execute: update_vent_buttons
 
-  # Agenda: zeven regels uit de attributen regel_1..regel_7 van de HA
-  # template sensor sensor.agenda_tim (vandaag en morgen uit
-  # calendar.gijs_tim). Een lege regel is gewoon een lege string.
+  # Agenda: zes slots uit de attributen item_1..item_6 van de HA
+  # template sensor sensor.agenda_tim. Elk item is "dag|titel|tijd"; dag
+  # is leeg als de afspraak op dezelfde dag valt als de vorige. Een leeg
+  # item maakt de slot leeg.
   - platform: homeassistant
     id: ha_agenda_1
     entity_id: sensor.agenda_tim
-    attribute: regel_1
+    attribute: item_1
     on_value:
       - lvgl.label.update:
-          id: lbl_agenda_1
-          text: !lambda 'return x;'
+          id: lbl_ag_dag_1
+          text: !lambda |-
+            size_t a = x.find('|');
+            return a == std::string::npos ? std::string("") : x.substr(0, a);
+      - lvgl.label.update:
+          id: lbl_ag_titel_1
+          text: !lambda |-
+            size_t a = x.find('|');
+            size_t b = x.rfind('|');
+            if (a == std::string::npos || a == b) return x;
+            return x.substr(a + 1, b - a - 1);
+      - lvgl.label.update:
+          id: lbl_ag_sub_1
+          text: !lambda |-
+            size_t a = x.find('|');
+            size_t b = x.rfind('|');
+            if (b == std::string::npos || a == b) return std::string("");
+            return x.substr(b + 1);
+      # Scheidingslijn boven een nieuwe dag (niet bij de eerste slot).
+      - lvgl.widget.update:
+          id: ag_slot_1
+          border_width: !lambda |-
+            return 0;
 
   - platform: homeassistant
     id: ha_agenda_2
     entity_id: sensor.agenda_tim
-    attribute: regel_2
+    attribute: item_2
     on_value:
       - lvgl.label.update:
-          id: lbl_agenda_2
-          text: !lambda 'return x;'
+          id: lbl_ag_dag_2
+          text: !lambda |-
+            size_t a = x.find('|');
+            return a == std::string::npos ? std::string("") : x.substr(0, a);
+      - lvgl.label.update:
+          id: lbl_ag_titel_2
+          text: !lambda |-
+            size_t a = x.find('|');
+            size_t b = x.rfind('|');
+            if (a == std::string::npos || a == b) return x;
+            return x.substr(a + 1, b - a - 1);
+      - lvgl.label.update:
+          id: lbl_ag_sub_2
+          text: !lambda |-
+            size_t a = x.find('|');
+            size_t b = x.rfind('|');
+            if (b == std::string::npos || a == b) return std::string("");
+            return x.substr(b + 1);
+      # Scheidingslijn boven een nieuwe dag (niet bij de eerste slot).
+      - lvgl.widget.update:
+          id: ag_slot_2
+          border_width: !lambda |-
+            size_t a = x.find('|');
+            return (a != std::string::npos && a > 0) ? 1 : 0;
 
   - platform: homeassistant
     id: ha_agenda_3
     entity_id: sensor.agenda_tim
-    attribute: regel_3
+    attribute: item_3
     on_value:
       - lvgl.label.update:
-          id: lbl_agenda_3
-          text: !lambda 'return x;'
+          id: lbl_ag_dag_3
+          text: !lambda |-
+            size_t a = x.find('|');
+            return a == std::string::npos ? std::string("") : x.substr(0, a);
+      - lvgl.label.update:
+          id: lbl_ag_titel_3
+          text: !lambda |-
+            size_t a = x.find('|');
+            size_t b = x.rfind('|');
+            if (a == std::string::npos || a == b) return x;
+            return x.substr(a + 1, b - a - 1);
+      - lvgl.label.update:
+          id: lbl_ag_sub_3
+          text: !lambda |-
+            size_t a = x.find('|');
+            size_t b = x.rfind('|');
+            if (b == std::string::npos || a == b) return std::string("");
+            return x.substr(b + 1);
+      # Scheidingslijn boven een nieuwe dag (niet bij de eerste slot).
+      - lvgl.widget.update:
+          id: ag_slot_3
+          border_width: !lambda |-
+            size_t a = x.find('|');
+            return (a != std::string::npos && a > 0) ? 1 : 0;
 
   - platform: homeassistant
     id: ha_agenda_4
     entity_id: sensor.agenda_tim
-    attribute: regel_4
+    attribute: item_4
     on_value:
       - lvgl.label.update:
-          id: lbl_agenda_4
-          text: !lambda 'return x;'
+          id: lbl_ag_dag_4
+          text: !lambda |-
+            size_t a = x.find('|');
+            return a == std::string::npos ? std::string("") : x.substr(0, a);
+      - lvgl.label.update:
+          id: lbl_ag_titel_4
+          text: !lambda |-
+            size_t a = x.find('|');
+            size_t b = x.rfind('|');
+            if (a == std::string::npos || a == b) return x;
+            return x.substr(a + 1, b - a - 1);
+      - lvgl.label.update:
+          id: lbl_ag_sub_4
+          text: !lambda |-
+            size_t a = x.find('|');
+            size_t b = x.rfind('|');
+            if (b == std::string::npos || a == b) return std::string("");
+            return x.substr(b + 1);
+      # Scheidingslijn boven een nieuwe dag (niet bij de eerste slot).
+      - lvgl.widget.update:
+          id: ag_slot_4
+          border_width: !lambda |-
+            size_t a = x.find('|');
+            return (a != std::string::npos && a > 0) ? 1 : 0;
 
   - platform: homeassistant
     id: ha_agenda_5
     entity_id: sensor.agenda_tim
-    attribute: regel_5
+    attribute: item_5
     on_value:
       - lvgl.label.update:
-          id: lbl_agenda_5
-          text: !lambda 'return x;'
+          id: lbl_ag_dag_5
+          text: !lambda |-
+            size_t a = x.find('|');
+            return a == std::string::npos ? std::string("") : x.substr(0, a);
+      - lvgl.label.update:
+          id: lbl_ag_titel_5
+          text: !lambda |-
+            size_t a = x.find('|');
+            size_t b = x.rfind('|');
+            if (a == std::string::npos || a == b) return x;
+            return x.substr(a + 1, b - a - 1);
+      - lvgl.label.update:
+          id: lbl_ag_sub_5
+          text: !lambda |-
+            size_t a = x.find('|');
+            size_t b = x.rfind('|');
+            if (b == std::string::npos || a == b) return std::string("");
+            return x.substr(b + 1);
+      # Scheidingslijn boven een nieuwe dag (niet bij de eerste slot).
+      - lvgl.widget.update:
+          id: ag_slot_5
+          border_width: !lambda |-
+            size_t a = x.find('|');
+            return (a != std::string::npos && a > 0) ? 1 : 0;
 
   - platform: homeassistant
     id: ha_agenda_6
     entity_id: sensor.agenda_tim
-    attribute: regel_6
+    attribute: item_6
     on_value:
       - lvgl.label.update:
-          id: lbl_agenda_6
-          text: !lambda 'return x;'
-
-  - platform: homeassistant
-    id: ha_agenda_7
-    entity_id: sensor.agenda_tim
-    attribute: regel_7
-    on_value:
+          id: lbl_ag_dag_6
+          text: !lambda |-
+            size_t a = x.find('|');
+            return a == std::string::npos ? std::string("") : x.substr(0, a);
       - lvgl.label.update:
-          id: lbl_agenda_7
-          text: !lambda 'return x;'
+          id: lbl_ag_titel_6
+          text: !lambda |-
+            size_t a = x.find('|');
+            size_t b = x.rfind('|');
+            if (a == std::string::npos || a == b) return x;
+            return x.substr(a + 1, b - a - 1);
+      - lvgl.label.update:
+          id: lbl_ag_sub_6
+          text: !lambda |-
+            size_t a = x.find('|');
+            size_t b = x.rfind('|');
+            if (b == std::string::npos || a == b) return std::string("");
+            return x.substr(b + 1);
+      # Scheidingslijn boven een nieuwe dag (niet bij de eerste slot).
+      - lvgl.widget.update:
+          id: ag_slot_6
+          border_width: !lambda |-
+            size_t a = x.find('|');
+            return (a != std::string::npos && a > 0) ? 1 : 0;
 
 # =========================
 # BINARY SENSORS
