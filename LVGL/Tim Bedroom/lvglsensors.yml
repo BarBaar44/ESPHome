@@ -2,9 +2,7 @@
 # Scripts, globals en Home Assistant koppelingen voor het wandpaneel
 # Kamer Tim. Overgenomen van LVGL/Masterbedroom/lvglsensors.yml.
 #
-# Entity-ids staan direct in de code, NIET als substitutions. Waar nog
-# een DUMMY-entity staat is dat bewust: die bestaat nog niet in HA en
-# moet later vervangen worden. Zoek op "dummy" om ze te vinden.
+# Entity-ids staan direct in de code, NIET als substitutions.
 #
 # Verschillen met de Master Bedroom:
 #  * screen_timeout en climate_setpoint_value worden HIER gedeclareerd,
@@ -526,12 +524,13 @@ text_sensor:
       then:
         - script.execute: update_vent_buttons
 
-  # Agenda. !! DUMMY: sensor.dummy_agenda_tim_1..5 bestaan nog niet.
-  # Later te vervangen door vijf HA template sensors die via
-  # calendar.get_events de komende afspraken uit calendar.gijs_tim halen.
+  # Agenda: zeven regels uit de attributen regel_1..regel_7 van de HA
+  # template sensor sensor.agenda_tim (vandaag en morgen uit
+  # calendar.gijs_tim). Een lege regel is gewoon een lege string.
   - platform: homeassistant
     id: ha_agenda_1
-    entity_id: sensor.dummy_agenda_tim_1
+    entity_id: sensor.agenda_tim
+    attribute: regel_1
     on_value:
       - lvgl.label.update:
           id: lbl_agenda_1
@@ -539,7 +538,8 @@ text_sensor:
 
   - platform: homeassistant
     id: ha_agenda_2
-    entity_id: sensor.dummy_agenda_tim_2
+    entity_id: sensor.agenda_tim
+    attribute: regel_2
     on_value:
       - lvgl.label.update:
           id: lbl_agenda_2
@@ -547,7 +547,8 @@ text_sensor:
 
   - platform: homeassistant
     id: ha_agenda_3
-    entity_id: sensor.dummy_agenda_tim_3
+    entity_id: sensor.agenda_tim
+    attribute: regel_3
     on_value:
       - lvgl.label.update:
           id: lbl_agenda_3
@@ -555,7 +556,8 @@ text_sensor:
 
   - platform: homeassistant
     id: ha_agenda_4
-    entity_id: sensor.dummy_agenda_tim_4
+    entity_id: sensor.agenda_tim
+    attribute: regel_4
     on_value:
       - lvgl.label.update:
           id: lbl_agenda_4
@@ -563,10 +565,29 @@ text_sensor:
 
   - platform: homeassistant
     id: ha_agenda_5
-    entity_id: sensor.dummy_agenda_tim_5
+    entity_id: sensor.agenda_tim
+    attribute: regel_5
     on_value:
       - lvgl.label.update:
           id: lbl_agenda_5
+          text: !lambda 'return x;'
+
+  - platform: homeassistant
+    id: ha_agenda_6
+    entity_id: sensor.agenda_tim
+    attribute: regel_6
+    on_value:
+      - lvgl.label.update:
+          id: lbl_agenda_6
+          text: !lambda 'return x;'
+
+  - platform: homeassistant
+    id: ha_agenda_7
+    entity_id: sensor.agenda_tim
+    attribute: regel_7
+    on_value:
+      - lvgl.label.update:
+          id: lbl_agenda_7
           text: !lambda 'return x;'
 
 # =========================
