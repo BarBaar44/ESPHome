@@ -15,9 +15,7 @@
 #   |               | Open   [Open nu]    7:00 ..  9:30|
 #   +---------------+----------------------------------+
 #
-# Entity-ids staan direct in de code, NIET als substitutions. Waar nog
-# een DUMMY-entity staat is dat bewust: die bestaat nog niet in HA en
-# moet later vervangen worden. Zoek op "dummy" om ze te vinden.
+# Entity-ids staan direct in de code, NIET als substitutions.
 #
 # Ontwerpkeuzes, met reden:
 #
@@ -316,8 +314,17 @@ lvgl:
                     # =========================
                     # AGENDA
                     #
-                    # Vijf regels uit vijf HA template sensors (gevoed
-                    # door calendar.gijs_tim via calendar.get_events).
+                    # Zeven regels: alle afspraken van vandaag en morgen uit
+                    # calendar.gijs_tim, per regel "vr 15:30 Zwemmen". Zijn
+                    # het er meer dan zeven, dan wordt regel 7 "+N meer".
+                    # De tekst wordt in HA opgebouwd door de template
+                    # sensor sensor.agenda_tim (zie het HA-bestand
+                    # agenda_tim_template.yaml), zodat het paneel alleen
+                    # kant-en-klare regels hoeft te tonen.
+                    #
+                    # Hoogte: 7 regels van ~17px + 6px tussenruimte + titel
+                    # past ruim in de ~265px van dit vak. Montserrat 14 in
+                    # plaats van 16 omdat de kolom maar ~190px breed is.
                     # long_mode DOT vereist een expliciete breedte, vandaar
                     # de width: 100% op elk label.
                     # =========================
@@ -339,7 +346,7 @@ lvgl:
                           flex_flow: COLUMN
                           flex_align_main: START
                           flex_align_cross: START
-                          pad_row: 14
+                          pad_row: 6
 
                         widgets:
                           - label:
@@ -351,39 +358,55 @@ lvgl:
                               id: lbl_agenda_1
                               width: 100%
                               text: "-"
-                              text_font: montserrat_16
+                              text_font: montserrat_14
                               text_color: 0x0B0A0A
                               long_mode: DOT
 
                           - label:
                               id: lbl_agenda_2
                               width: 100%
-                              text: "-"
-                              text_font: montserrat_16
+                              text: ""
+                              text_font: montserrat_14
                               text_color: 0x0B0A0A
                               long_mode: DOT
 
                           - label:
                               id: lbl_agenda_3
                               width: 100%
-                              text: "-"
-                              text_font: montserrat_16
+                              text: ""
+                              text_font: montserrat_14
                               text_color: 0x0B0A0A
                               long_mode: DOT
 
                           - label:
                               id: lbl_agenda_4
                               width: 100%
-                              text: "-"
-                              text_font: montserrat_16
+                              text: ""
+                              text_font: montserrat_14
                               text_color: 0x0B0A0A
                               long_mode: DOT
 
                           - label:
                               id: lbl_agenda_5
                               width: 100%
-                              text: "-"
-                              text_font: montserrat_16
+                              text: ""
+                              text_font: montserrat_14
+                              text_color: 0x0B0A0A
+                              long_mode: DOT
+
+                          - label:
+                              id: lbl_agenda_6
+                              width: 100%
+                              text: ""
+                              text_font: montserrat_14
+                              text_color: 0x0B0A0A
+                              long_mode: DOT
+
+                          - label:
+                              id: lbl_agenda_7
+                              width: 100%
+                              text: ""
+                              text_font: montserrat_14
                               text_color: 0x0B0A0A
                               long_mode: DOT
 
