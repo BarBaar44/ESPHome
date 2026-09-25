@@ -6,9 +6,6 @@
 #   schedule_last_run: '2026-09-22T08:00:00.725281+00:00'
 
 substitutions:
-  # NOTE: these were both "display" in the recovered copy. Set them to
-  # whatever you settled on during the rename - friendly_name is the one
-  # that shapes HA entity ids (e.g. "Master Bedroom Panel Restart").
   device_name: mbrdisplay
   friendly_name: Master Bedroom Display
   device_description: lvgl display
@@ -71,7 +68,7 @@ packages:
     files: [
       generic/wifi.yml,
       generic/generic_sensors.yml,
-      LVGL/displayconfig.yml,
+      LVGL/displayconfig5inch.yml,
       LVGL/Masterbedroom/lvglconfig.yml,
       LVGL/Masterbedroom/lvglsensors.yml
     ]
