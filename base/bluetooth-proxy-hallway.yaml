@@ -30,12 +30,21 @@ logger:
 api:
   encryption:
     key: !secret bluetooth-proxy-hallway_key
-  on_client_connected:
+
+# ha_led on only while Home Assistant (a state-subscribing API client) is
+# connected. on_client_connected/disconnected fired for every API client,
+# so a log viewer or Fleet check disconnecting turned the LED off.
+interval:
+  - interval: 5s
     then:
-      - output.turn_on: ha_led
-  on_client_disconnected:
-    then:
-      - output.turn_off: ha_led
+      - if:
+          condition:
+            api.connected:
+              state_subscription_only: true
+          then:
+            - output.turn_on: ha_led
+          else:
+            - output.turn_off: ha_led
 
 ota:
   password: !secret bluetooth-proxy-hallway_ota
