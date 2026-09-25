@@ -394,8 +394,16 @@ lvgl:
               # rij 0 passen, terwijl Ventilator en Gordijnen beide
               # kolommen overspannen.
               #
-              # FR(11)/FR(7)/FR(22) is ongeveer 116 / 74 / 234 px binnen de
-              # 424px die na de header overblijft.
+              # Rijhoogtes: Ventilator en Gordijnen hebben een vaste hoogte
+              # die precies op hun inhoud is afgestemd, Licht/Temperatuur
+              # (FR(1)) krijgt de rest. Met FR-verhoudingen kreeg de
+              # ventilator minder hoogte dan zijn inhoud nodig had (titel
+              # plus knoppen, ongeveer 85px) en liep hij over het
+              # gordijnenvak heen.
+              #
+              # Rekensom: main_grid 440 - 2x8 pad = 424. right_col heeft de
+              # standaard LVGL-thema-padding (20) en rand (2) = 380 binnen.
+              # Min 2x8 pad_row = 364. 364 - 86 - 176 = 102 voor Licht.
               # =========================
               - obj:
                   id: right_col
@@ -412,9 +420,9 @@ lvgl:
                     pad_row: 8
                     pad_column: 8
                     grid_rows:
-                      - FR(11)
-                      - FR(7)
-                      - FR(22)
+                      - FR(1)
+                      - 86
+                      - 176
                     grid_columns:
                       - FR(1)
                       - FR(1)
@@ -758,7 +766,7 @@ lvgl:
                                 - button:
                                     id: btn_vent_0
                                     flex_grow: 1
-                                    height: 46
+                                    height: 42
                                     bg_color: 0x2F8CD8
                                     bg_opa: COVER
                                     widgets:
@@ -775,7 +783,7 @@ lvgl:
                                 - button:
                                     id: btn_vent_1
                                     flex_grow: 1
-                                    height: 46
+                                    height: 42
                                     bg_color: 0x2F8CD8
                                     bg_opa: COVER
                                     widgets:
@@ -797,7 +805,7 @@ lvgl:
                                 - button:
                                     id: btn_vent_2
                                     flex_grow: 1
-                                    height: 46
+                                    height: 42
                                     bg_color: 0x2F8CD8
                                     bg_opa: COVER
                                     widgets:
@@ -819,7 +827,7 @@ lvgl:
                                 - button:
                                     id: btn_vent_3
                                     flex_grow: 1
-                                    height: 46
+                                    height: 42
                                     bg_color: 0x2F8CD8
                                     bg_opa: COVER
                                     widgets:
@@ -841,7 +849,7 @@ lvgl:
                                 - button:
                                     id: btn_vent_4
                                     flex_grow: 1
-                                    height: 46
+                                    height: 42
                                     bg_color: 0x2F8CD8
                                     bg_opa: COVER
                                     widgets:
@@ -863,10 +871,14 @@ lvgl:
                     # =========================
                     # GORDIJNEN
                     #
-                    # Een gedeeld vak: dicht boven, een dunne
-                    # scheidingslijn, open onder. Elke helft heeft een
-                    # directe bedieningsknop (Sluit nu / Open nu) los van
+                    # Een gedeeld vak: open boven, een dunne
+                    # scheidingslijn, dicht onder. Elke helft heeft een
+                    # directe bedieningsknop (Open nu / Sluit nu) los van
                     # het tijdschema, plus de tijdknoppen zelf.
+                    #
+                    # Compact opgezet zodat het in de vaste rijhoogte van
+                    # 176px past (zie right_col): pad 8, tijdknoppen 34px
+                    # hoog. Samen ongeveer 171px inclusief rand.
                     #
                     # De tijdknoppen zijn bewust NIET checkable. Een tik
                     # stuurt alleen de input_select-actie, en de HA-state
@@ -877,14 +889,14 @@ lvgl:
                     #
                     # De optielijsten van de input_selects MOETEN exact
                     # deze teksten bevatten:
-                    #   dicht: 21:00, 21:30, 22:00, 22:30
                     #   open:  7:00, 7:30, 8:00, 8:30, 9:00, 9:30
+                    #   dicht: 21:00, 21:30, 22:00, 22:30
                     # =========================
                     - obj:
                         id: cover_obj
                         bg_color: 0xFFFFFF
                         radius: 6
-                        pad_all: 10
+                        pad_all: 8
                         scrollable: false
                         scrollbar_mode: "off"
 
@@ -899,163 +911,13 @@ lvgl:
                           flex_flow: COLUMN
                           flex_align_main: START
                           flex_align_cross: STRETCH
-                          pad_row: 6
+                          pad_row: 4
 
                         widgets:
                           - label:
                               text: "Gordijnen"
                               text_font: montserrat_16
                               text_color: 0x0B0A0A
-
-                          # ---- groep: dicht ----
-                          - obj:
-                              width: 100%
-                              flex_grow: 1
-                              bg_opa: TRANSP
-                              border_width: 0
-                              pad_all: 0
-                              scrollable: false
-                              scrollbar_mode: "off"
-                              layout:
-                                type: FLEX
-                                flex_flow: COLUMN
-                                flex_align_main: SPACE_BETWEEN
-                                flex_align_cross: STRETCH
-                                pad_row: 4
-
-                              widgets:
-                                - obj:
-                                    width: 100%
-                                    height: 22
-                                    bg_opa: TRANSP
-                                    border_width: 0
-                                    pad_all: 0
-                                    scrollable: false
-                                    scrollbar_mode: "off"
-                                    layout:
-                                      type: FLEX
-                                      flex_flow: ROW
-                                      flex_align_main: SPACE_BETWEEN
-                                      flex_align_cross: CENTER
-                                    widgets:
-                                      - label:
-                                          text: "dicht"
-                                          text_font: montserrat_14
-                                          text_color: 0x666666
-                                      - button:
-                                          id: btn_gordijn_sluit_nu
-                                          width: 96
-                                          height: 22
-                                          bg_color: 0x005782
-                                          bg_opa: COVER
-                                          widgets:
-                                            - label:
-                                                text: "Sluit nu"
-                                                align: CENTER
-                                                text_font: montserrat_12
-                                          on_click:
-                                            - homeassistant.action:
-                                                action: cover.close_cover
-                                                data:
-                                                  entity_id: cover.cover_tim
-
-                                - obj:
-                                    width: 100%
-                                    flex_grow: 1
-                                    bg_opa: TRANSP
-                                    border_width: 0
-                                    pad_all: 0
-                                    scrollable: false
-                                    scrollbar_mode: "off"
-                                    layout:
-                                      type: FLEX
-                                      flex_flow: ROW
-                                      flex_align_main: SPACE_EVENLY
-                                      flex_align_cross: CENTER
-                                      pad_column: 6
-                                    widgets:
-                                      - button:
-                                          id: btn_dicht_2100
-                                          flex_grow: 1
-                                          height: 40
-                                          bg_color: 0x2F8CD8
-                                          bg_opa: COVER
-                                          widgets:
-                                            - label:
-                                                text: "21:00"
-                                                align: CENTER
-                                                text_font: montserrat_16
-                                          on_click:
-                                            - homeassistant.action:
-                                                action: input_select.select_option
-                                                data:
-                                                  entity_id: input_select.cover_bedroom_tim_close_time
-                                                  option: "21:00"
-
-                                      - button:
-                                          id: btn_dicht_2130
-                                          flex_grow: 1
-                                          height: 40
-                                          bg_color: 0x2F8CD8
-                                          bg_opa: COVER
-                                          widgets:
-                                            - label:
-                                                text: "21:30"
-                                                align: CENTER
-                                                text_font: montserrat_16
-                                          on_click:
-                                            - homeassistant.action:
-                                                action: input_select.select_option
-                                                data:
-                                                  entity_id: input_select.cover_bedroom_tim_close_time
-                                                  option: "21:30"
-
-                                      - button:
-                                          id: btn_dicht_2200
-                                          flex_grow: 1
-                                          height: 40
-                                          bg_color: 0x2F8CD8
-                                          bg_opa: COVER
-                                          widgets:
-                                            - label:
-                                                text: "22:00"
-                                                align: CENTER
-                                                text_font: montserrat_16
-                                          on_click:
-                                            - homeassistant.action:
-                                                action: input_select.select_option
-                                                data:
-                                                  entity_id: input_select.cover_bedroom_tim_close_time
-                                                  option: "22:00"
-
-                                      - button:
-                                          id: btn_dicht_2230
-                                          flex_grow: 1
-                                          height: 40
-                                          bg_color: 0x2F8CD8
-                                          bg_opa: COVER
-                                          widgets:
-                                            - label:
-                                                text: "22:30"
-                                                align: CENTER
-                                                text_font: montserrat_16
-                                          on_click:
-                                            - homeassistant.action:
-                                                action: input_select.select_option
-                                                data:
-                                                  entity_id: input_select.cover_bedroom_tim_close_time
-                                                  option: "22:30"
-
-                          # ---- dunne scheidingslijn tussen dicht en open ----
-                          - obj:
-                              width: 100%
-                              height: 1
-                              bg_color: 0xE5E7EA
-                              bg_opa: COVER
-                              border_width: 0
-                              pad_all: 0
-                              scrollable: false
-                              scrollbar_mode: "off"
 
                           # ---- groep: open ----
                           - obj:
@@ -1071,7 +933,7 @@ lvgl:
                                 flex_flow: COLUMN
                                 flex_align_main: SPACE_BETWEEN
                                 flex_align_cross: STRETCH
-                                pad_row: 4
+                                pad_row: 3
 
                               widgets:
                                 - obj:
@@ -1111,7 +973,7 @@ lvgl:
 
                                 - obj:
                                     width: 100%
-                                    flex_grow: 1
+                                    height: 34
                                     bg_opa: TRANSP
                                     border_width: 0
                                     pad_all: 0
@@ -1127,7 +989,7 @@ lvgl:
                                       - button:
                                           id: btn_open_0700
                                           flex_grow: 1
-                                          height: 40
+                                          height: 34
                                           bg_color: 0x2F8CD8
                                           bg_opa: COVER
                                           widgets:
@@ -1145,7 +1007,7 @@ lvgl:
                                       - button:
                                           id: btn_open_0730
                                           flex_grow: 1
-                                          height: 40
+                                          height: 34
                                           bg_color: 0x2F8CD8
                                           bg_opa: COVER
                                           widgets:
@@ -1163,7 +1025,7 @@ lvgl:
                                       - button:
                                           id: btn_open_0800
                                           flex_grow: 1
-                                          height: 40
+                                          height: 34
                                           bg_color: 0x2F8CD8
                                           bg_opa: COVER
                                           widgets:
@@ -1181,7 +1043,7 @@ lvgl:
                                       - button:
                                           id: btn_open_0830
                                           flex_grow: 1
-                                          height: 40
+                                          height: 34
                                           bg_color: 0x2F8CD8
                                           bg_opa: COVER
                                           widgets:
@@ -1199,7 +1061,7 @@ lvgl:
                                       - button:
                                           id: btn_open_0900
                                           flex_grow: 1
-                                          height: 40
+                                          height: 34
                                           bg_color: 0x2F8CD8
                                           bg_opa: COVER
                                           widgets:
@@ -1217,7 +1079,7 @@ lvgl:
                                       - button:
                                           id: btn_open_0930
                                           flex_grow: 1
-                                          height: 40
+                                          height: 34
                                           bg_color: 0x2F8CD8
                                           bg_opa: COVER
                                           widgets:
@@ -1231,6 +1093,156 @@ lvgl:
                                                 data:
                                                   entity_id: input_select.cover_bedroom_tim_open_time
                                                   option: "9:30"
+
+                          # ---- dunne scheidingslijn tussen open en dicht ----
+                          - obj:
+                              width: 100%
+                              height: 1
+                              bg_color: 0xE5E7EA
+                              bg_opa: COVER
+                              border_width: 0
+                              pad_all: 0
+                              scrollable: false
+                              scrollbar_mode: "off"
+
+                          # ---- groep: dicht ----
+                          - obj:
+                              width: 100%
+                              flex_grow: 1
+                              bg_opa: TRANSP
+                              border_width: 0
+                              pad_all: 0
+                              scrollable: false
+                              scrollbar_mode: "off"
+                              layout:
+                                type: FLEX
+                                flex_flow: COLUMN
+                                flex_align_main: SPACE_BETWEEN
+                                flex_align_cross: STRETCH
+                                pad_row: 3
+
+                              widgets:
+                                - obj:
+                                    width: 100%
+                                    height: 22
+                                    bg_opa: TRANSP
+                                    border_width: 0
+                                    pad_all: 0
+                                    scrollable: false
+                                    scrollbar_mode: "off"
+                                    layout:
+                                      type: FLEX
+                                      flex_flow: ROW
+                                      flex_align_main: SPACE_BETWEEN
+                                      flex_align_cross: CENTER
+                                    widgets:
+                                      - label:
+                                          text: "dicht"
+                                          text_font: montserrat_14
+                                          text_color: 0x666666
+                                      - button:
+                                          id: btn_gordijn_sluit_nu
+                                          width: 96
+                                          height: 22
+                                          bg_color: 0x005782
+                                          bg_opa: COVER
+                                          widgets:
+                                            - label:
+                                                text: "Sluit nu"
+                                                align: CENTER
+                                                text_font: montserrat_12
+                                          on_click:
+                                            - homeassistant.action:
+                                                action: cover.close_cover
+                                                data:
+                                                  entity_id: cover.cover_tim
+
+                                - obj:
+                                    width: 100%
+                                    height: 34
+                                    bg_opa: TRANSP
+                                    border_width: 0
+                                    pad_all: 0
+                                    scrollable: false
+                                    scrollbar_mode: "off"
+                                    layout:
+                                      type: FLEX
+                                      flex_flow: ROW
+                                      flex_align_main: SPACE_EVENLY
+                                      flex_align_cross: CENTER
+                                      pad_column: 6
+                                    widgets:
+                                      - button:
+                                          id: btn_dicht_2100
+                                          flex_grow: 1
+                                          height: 34
+                                          bg_color: 0x2F8CD8
+                                          bg_opa: COVER
+                                          widgets:
+                                            - label:
+                                                text: "21:00"
+                                                align: CENTER
+                                                text_font: montserrat_16
+                                          on_click:
+                                            - homeassistant.action:
+                                                action: input_select.select_option
+                                                data:
+                                                  entity_id: input_select.cover_bedroom_tim_close_time
+                                                  option: "21:00"
+
+                                      - button:
+                                          id: btn_dicht_2130
+                                          flex_grow: 1
+                                          height: 34
+                                          bg_color: 0x2F8CD8
+                                          bg_opa: COVER
+                                          widgets:
+                                            - label:
+                                                text: "21:30"
+                                                align: CENTER
+                                                text_font: montserrat_16
+                                          on_click:
+                                            - homeassistant.action:
+                                                action: input_select.select_option
+                                                data:
+                                                  entity_id: input_select.cover_bedroom_tim_close_time
+                                                  option: "21:30"
+
+                                      - button:
+                                          id: btn_dicht_2200
+                                          flex_grow: 1
+                                          height: 34
+                                          bg_color: 0x2F8CD8
+                                          bg_opa: COVER
+                                          widgets:
+                                            - label:
+                                                text: "22:00"
+                                                align: CENTER
+                                                text_font: montserrat_16
+                                          on_click:
+                                            - homeassistant.action:
+                                                action: input_select.select_option
+                                                data:
+                                                  entity_id: input_select.cover_bedroom_tim_close_time
+                                                  option: "22:00"
+
+                                      - button:
+                                          id: btn_dicht_2230
+                                          flex_grow: 1
+                                          height: 34
+                                          bg_color: 0x2F8CD8
+                                          bg_opa: COVER
+                                          widgets:
+                                            - label:
+                                                text: "22:30"
+                                                align: CENTER
+                                                text_font: montserrat_16
+                                          on_click:
+                                            - homeassistant.action:
+                                                action: input_select.select_option
+                                                data:
+                                                  entity_id: input_select.cover_bedroom_tim_close_time
+                                                  option: "22:30"
 
     # =========================
     # TWEEDE PAGINA - SYSTEEM EN INSTELLINGEN
