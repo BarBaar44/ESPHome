@@ -1,0 +1,150 @@
+# Define a PWM output on the ESP32
+output:
+  - platform: ledc
+    pin: 2
+    frequency: 1220
+    id: gpio_backlight_pwm
+
+light:
+  - platform: monochromatic # Define a monochromatic, dimmable light for the backlight
+    output: gpio_backlight_pwm
+    name: ${device_name} Display Backlight
+    id: back_light
+    # Screen ON after every boot / power cycle. The on_boot automation in
+    # LVGL/Masterbedroom/lvglsensors.yml then runs wake_screen, which keeps
+    # it on for screen_timeout seconds and afterwards hands control back to
+    # update_screen_state (motion / ceiling light / night-mode rules).
+    # Previously this was ALWAYS_OFF, which left the panel dark after a
+    # reboot until motion or the ceiling light happened to trigger it.
+    restore_mode: ALWAYS_ON
+
+# NOTE: the red power LED on this panel is NOT software-controllable. A
+# temporary gpio switch on GPIO38 (the candidate pin from the Elecrow
+# CrowPanel pinout) was flashed and toggling it did nothing, so the LED
+# is hardwired to the 3V3 rail as a plain power indicator. Only a
+# physical fix works - tape over it or desolder it. Don't retry this in
+# YAML.
+
+display:
+    # Migrated from the deprecated 'rpi_dpi_rgb' platform.
+    #
+    # 'mipi_rgb' is model-driven, so 'model' is now required. RPI is the
+    # model registered with an empty init sequence, which makes it the
+    # direct equivalent of the old rpi_dpi_rgb component: no SPI bus, no
+    # cs_pin / dc_pin and no init sequence. The other mipi_rgb models
+    # (ST7701S, Guition, Sunton, Waveshare) do need an spi: section - RPI
+    # does not, which is why none is defined here.
+    #
+    # This is correct for this board: the Elecrow 7" panel's EK9716B
+    # driver chip is a plain RGB/TTL timing controller with no command
+    # interface, exactly like the panels the RPI model targets.
+  - platform: mipi_rgb
+    model: RPI
+    id: main_display
+    # Default flipped from BGR (rpi_dpi_rgb) to RGB (mipi_rgb), so this is
+    # kept explicit to stay independent of the platform default.
+    color_order: RGB
+    invert_colors: True
+    update_interval: never
+    auto_clear_enabled: false # takes 2.8 seconds to clear the display
+    # Kept at 1 purely for parity with the old rpi_dpi_rgb behaviour,
+    # which had no draw-rounding concept (effectively 1). mipi_rgb
+    # defaults it to 2, which rounds redraw areas to even pixel
+    # boundaries and can produce 1px artifacts on a layout tuned with
+    # manual odd x/width offsets like the one in lvglconfig.yml.
+    #
+    # NOTE: an earlier version of this comment claimed draw_rounding was
+    # the cause of the fan MID button triggering HIGH. That was wrong.
+    # The real cause was percentage: "67" in fan_mid_button. HA's ESPHome
+    # fan integration maps a percentage to a speed with
+    #   speed_level = ceil(percentage_to_ranged_value((1, speed_count), pct))
+    # so with speed_count: 3, percentage 67 gives ceil(2.01) = 3 = high,
+    # while 66 gives ceil(1.98) = 2 = mid. Fixed by sending 66. Touch
+    # coordinates and widget geometry were never at fault; do not
+    # revisit that theory.
+    draw_rounding: 1
+    dimensions:
+      width: 800
+      height: 480
+    # =====================================================================
+    # FIX (2026-09-25): white-screen-on-boot on the Elecrow 7" EK9716B
+    # board. de_pin and vsync_pin were swapped, all six porch/pulse
+    # timing values were generic round-number placeholders instead of
+    # this panel's real timing, and pclk_inverted was missing entirely -
+    # any one of these can leave an RGB-parallel panel unable to lock
+    # onto a valid frame, which typically shows as solid white rather
+    # than black or noise. Corrected values below are cross-confirmed
+    # from two independent working configs for this exact board
+    # (Elecrow 7" ESP32-S3, EK9716B driver, GT911 touch):
+    #   - https://www.espboards.dev/blog/esphome-configuring-elecrow-7-inch-display/
+    #   - https://community.home-assistant.io/t/elecrow-crowpanel-7-with-esphome/768501
+    #
+    # de_pin and vsync_pin were swapped in the previous version
+    # (de_pin: 40, vsync_pin: 41) - corrected to the board's real wiring.
+    de_pin: 41
+    hsync_pin: 39
+    vsync_pin: 40
+    pclk_pin: 0
+    pclk_frequency: 12MHz
+    # Missing before. Without this the panel samples data on the wrong
+    # clock edge, which alone can be enough to prevent a valid image.
+    pclk_inverted: true
+    # These six were previously generic placeholders (10/10/20, 10/10/10)
+    # carried over as "parity with the old rpi_dpi_rgb defaults" - they
+    # were never this panel's actual timing. Replaced with the EK9716B
+    # board's real porch/pulse values from the sources above.
+    hsync_pulse_width: 48
+    hsync_back_porch: 13
+    hsync_front_porch: 40
+    vsync_pulse_width: 31
+    vsync_back_porch: 13
+    vsync_front_porch: 1
+    # Pin order is unchanged on purpose. rpi_dpi_rgb ordered the bus
+    # conditionally on color_order (red->green->blue for BGR,
+    # blue->green->red otherwise); mipi_rgb always uses blue->green->red.
+    # Because color_order is RGB, the old code already took the
+    # blue->green->red branch, so the resulting bus order - and therefore
+    # the colours - stay the same.
+    #
+    # red: unchanged, this set/order already matched the confirmed board
+    # config. green/blue: the previous version used the same 16 GPIOs
+    # overall but split across the wrong channel - several pins that
+    # belong to green were listed under blue and vice versa. Corrected
+    # to the confirmed per-channel sets below.
+    #
+    # One caveat: the sources confirm WHICH pins belong to green and
+    # which to blue, but not each source's internal g0..g5 / b0..b4
+    # bit ordering. If the screen comes up but colours look wrong (e.g.
+    # a red tint where blue should be), the fix is complete on the
+    # white-screen front - only the bit order within green/blue below
+    # would still need adjusting.
+    data_pins:
+      red:
+        - 45 #r1
+        - 48 #r2
+        - 47 #r3
+        - 21 #r4
+        - 14 #r5
+      green:
+        - 9  #g0
+        - 46 #g1
+        - 3  #g2
+        - 8  #g3
+        - 16 #g4
+        - 1  #g5
+      blue:
+        - 15 #b1
+        - 7  #b2
+        - 6  #b3
+        - 5  #b4
+        - 4  #b5
+
+i2c:
+  sda: GPIO19
+  scl: GPIO20
+  scan: true
+
+touchscreen:
+  platform: gt911
+  on_touch:
+    - script.execute: wake_screen
