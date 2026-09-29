@@ -3,7 +3,7 @@
 #   schedule: 0 10 * * 1
 #   schedule_enabled: true
 #   schedule_tz: Europe/Amsterdam
-#   schedule_last_run: '2026-09-22T08:00:00.725281+00:00'
+#   schedule_last_run: '2026-09-29T08:00:00.675773+00:00'
 
 substitutions:
   device_name: mbrdisplay
