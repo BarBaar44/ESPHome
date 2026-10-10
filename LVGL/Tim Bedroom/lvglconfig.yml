@@ -712,7 +712,19 @@ lvgl:
                     # switches gegarandeerd onder elkaar.
                     #
                     # Beide lampen zijn switch-entities (Shelly en
-                    # Sonoff), geen light-entities, dus switch.toggle.
+                    # Sonoff), geen light-entities.
+                    #
+                    # BEWUST switch.turn_on / switch.turn_off op basis van
+                    # de nieuwe stand van de schakelaar, en NIET
+                    # switch.toggle. Na een herstart van Home Assistant
+                    # ging het licht direct weer uit als het met de
+                    # fysieke knop werd aangezet: een terugkoppeling van de
+                    # HA-state naar het scherm vuurde on_value af langs de
+                    # mirror-guard heen, en toggle draaide het licht dan om.
+                    # Met turn_on/turn_off stuurt zo'n terugkoppeling
+                    # precies de stand die HA al heeft, en gebeurt er
+                    # niets. Een gemiste guard kan het licht zo nooit meer
+                    # omdraaien.
                     # =========================
                     - obj:
                         id: light_obj
@@ -779,15 +791,26 @@ lvgl:
                                 # esphome/esphome#17161: lvgl.widget.update
                                 # vuurt on_value ook af als de wijziging
                                 # programmatisch is. Alleen doorsturen naar
-                                # HA bij een echte aanraking.
+                                # HA bij een echte aanraking. Glipt er toch
+                                # iets door, dan is turn_on/turn_off met de
+                                # huidige stand onschadelijk (zie boven).
                                 - if:
                                     condition:
                                       lambda: 'return !id(mirroring_light_switches);'
                                     then:
-                                      - homeassistant.action:
-                                          action: switch.toggle
-                                          data:
-                                            entity_id: switch.shelly1_tim_shelly1_shelly1_tim
+                                      - if:
+                                          condition:
+                                            lambda: 'return x;'
+                                          then:
+                                            - homeassistant.action:
+                                                action: switch.turn_on
+                                                data:
+                                                  entity_id: switch.shelly1_tim_shelly1_shelly1_tim
+                                          else:
+                                            - homeassistant.action:
+                                                action: switch.turn_off
+                                                data:
+                                                  entity_id: switch.shelly1_tim_shelly1_shelly1_tim
 
                           # ---- Bed ----
                           - label:
@@ -823,10 +846,19 @@ lvgl:
                                     condition:
                                       lambda: 'return !id(mirroring_light_switches);'
                                     then:
-                                      - homeassistant.action:
-                                          action: switch.toggle
-                                          data:
-                                            entity_id: switch.sonoff_tim_sonoff_tim
+                                      - if:
+                                          condition:
+                                            lambda: 'return x;'
+                                          then:
+                                            - homeassistant.action:
+                                                action: switch.turn_on
+                                                data:
+                                                  entity_id: switch.sonoff_tim_sonoff_tim
+                                          else:
+                                            - homeassistant.action:
+                                                action: switch.turn_off
+                                                data:
+                                                  entity_id: switch.sonoff_tim_sonoff_tim
 
                     # =========================
                     # TEMPERATUUR
