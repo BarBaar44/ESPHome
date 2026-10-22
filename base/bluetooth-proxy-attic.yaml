@@ -3,7 +3,7 @@
 #   schedule: 0 10 */7 * *
 #   schedule_enabled: true
 #   schedule_tz: Europe/Amsterdam
-#   schedule_last_run: '2026-10-15T08:00:00.112005+00:00'
+#   schedule_last_run: '2026-10-22T08:00:00.092902+00:00'
 
 substitutions:
   device_name: bluetooth-proxy-attic
