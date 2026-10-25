@@ -52,6 +52,6 @@ packages:
   # only exists once generic_sensors.yml is also included below.
   wifi: !include ../../generic/wifi.yml
   generic_sensors: !include ../../generic/generic_sensors.yml
-  display: !include ../displayconfig.yml
+  display: !include ../displayconfig5inch.yml
   panel: !include lvglconfig.yml
   sensors: !include lvglsensors.yml
