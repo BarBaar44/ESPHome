@@ -56,3 +56,18 @@ jobs:
 
       - name: Validate ${{ matrix.harness }}
         run: esphome config ${{ matrix.harness }}
+
+  # Compiles the DBE control_fans lambda on the host and runs behaviour
+  # scenarios through it. Catches C++ errors and logic regressions that
+  # the schema check above cannot. See .ci/dbe-logic/harness.cpp.
+  dbe-logic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Run DBE logic test
+        run: .ci/dbe-logic/run.sh
