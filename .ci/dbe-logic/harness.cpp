@@ -34,6 +34,7 @@ struct Globals {
   string last_reason;
   Val temp_1, temp_2, manual_fanspeed, max_fanspeed;
   Sel fan_mode;
+  Sel speed_curve;
   Txt fan_reason;
 } G;
 
@@ -66,45 +67,60 @@ static void step(const char *name, float t1, float t2, bool expect_on, const cha
 
 int main() {
   G.max_fanspeed.state = 80;
+  G.speed_curve.option = "Rising";
 
   // --- Gate ---
   step("Cold pipes, boiler off", 19, 18.5, false, "not warm");
-  step("Summer: pipes 29 C, no deltaT: must not start", 29, 28.8, false, "not warm");
-  step("Warm water arriving 30/22: start", 30, 22, true, "below target");
+  step("Summer: pipes 27 C, no deltaT: must not start", 27, 26.8, false, "not warm");
+  step("Sensor offset on cold pipe 21/19.5: must not start", 21, 19.5, false, "not warm");
+  step("Low supply 26/22 (mild day): start", 26, 22, true, "rising curve");
 
-  // --- Speed follows deltaT, inverted ---
-  step("40/28 (dT 12): on target, minimum speed", 40, 28, true, "on target");
-  float at_target = G.fanspeed;
-  step("40/34 (dT 6): faster", 40, 34, true, "below target");
-  float mid = G.fanspeed;
-  step("40/39 (dT 1): Max Fan Speed", 40, 39, true, "below target");
-  float full = G.fanspeed;
-  bool order = at_target < mid && mid < full && fabsf(at_target - 25.0f) < 0.01f &&
-               fabsf(full - 80.0f) < 0.01f;
-  if (!order) failures++;
-  printf("%s %-50s %.1f%% < %.1f%% < %.1f%% (25 at target, 80 at full)\n", order ? "PASS" : "FAIL",
-         "Speed rises as deltaT falls", at_target, mid, full);
+  // --- Rising curve (default, original behaviour): faster as deltaT grows ---
+  step("Rising, dT 2: minimum speed", 40, 38, true, "rising curve");
+  float r_lo = G.fanspeed;
+  step("Rising, dT 11: faster", 40, 29, true, "rising curve");
+  float r_mid = G.fanspeed;
+  step("Rising, dT 20: Max Fan Speed", 42, 22, true, "rising curve");
+  float r_hi = G.fanspeed;
+  bool r_ok = r_lo < r_mid && r_mid < r_hi && fabsf(r_lo - 25.0f) < 0.01f && fabsf(r_hi - 80.0f) < 0.01f;
+  if (!r_ok) failures++;
+  printf("%s %-50s %.1f%% < %.1f%% < %.1f%%\n", r_ok ? "PASS" : "FAIL", "Rising: speed grows with deltaT", r_lo, r_mid, r_hi);
+
+  // --- Falling curve: faster as deltaT shrinks ---
+  G.speed_curve.option = "Falling";
+  step("Falling, dT 12: minimum speed", 40, 28, true, "falling curve");
+  float f_lo = G.fanspeed;
+  step("Falling, dT 6: faster", 40, 34, true, "falling curve");
+  float f_mid = G.fanspeed;
+  step("Falling, dT 1: Max Fan Speed", 40, 39, true, "falling curve");
+  float f_hi = G.fanspeed;
+  bool f_ok = f_lo < f_mid && f_mid < f_hi && fabsf(f_lo - 25.0f) < 0.01f && fabsf(f_hi - 80.0f) < 0.01f;
+  if (!f_ok) failures++;
+  printf("%s %-50s %.1f%% < %.1f%% < %.1f%%\n", f_ok ? "PASS" : "FAIL", "Falling: speed grows as deltaT shrinks", f_lo, f_mid, f_hi);
 
   // Sensor order does not matter: return on Dallas 1, supply on Dallas 2.
-  step("Swapped sensors 34/40 gives the same speed", 34, 40, true, "below target");
-  if (fabsf(G.fanspeed - mid) > 0.01f) { failures++; printf("FAIL swapped speed differs\n"); }
+  step("Swapped sensors 34/40 gives the same speed", 34, 40, true, "falling curve");
+  if (fabsf(G.fanspeed - f_mid) > 0.01f) { failures++; printf("FAIL swapped speed differs\n"); }
 
-  // --- Residual heat after the boiler stops ---
-  step("Boiler stops, cooling 30/29: keeps running", 30, 29, true, "below target");
-  step("Cooling 25/24.5: still above 24, running", 25, 24.5, true, "below target");
+  // --- Residual heat after the boiler stops (both curves keep running) ---
+  step("Falling: boiler stops, cooling 30/29: running", 30, 29, true, "falling curve");
+  G.speed_curve.option = "Rising";
+  step("Rising: cooling 28/27.5: running at minimum", 28, 27.5, true, "rising curve");
+  if (fabsf(G.fanspeed - 25.0f) > 0.01f) { failures++; printf("FAIL rising residual not at minimum\n"); }
+  step("Cooling 24.5/24.2: still above 24, running", 24.5, 24.2, true, "rising curve");
   step("Cooling 23.8/23.5: below 24, stop", 23.8, 23.5, false, "not warm");
-  step("Back to 26/25 without new start: stays off", 26, 25, false, "not warm");
+  step("Back to 26/25.5 without water moving: stays off", 26, 25.5, false, "not warm");
 
   // --- Speed cap ---
-  step("Warm water again 42/30: start", 42, 30, true, "on target");
+  step("Warm water again 42/22: start", 42, 22, true, "rising curve");
   G.max_fanspeed.state = 40;
-  step("Max Fan Speed 40 at dT 1", 42, 41, true, "below target");
+  step("Max Fan Speed 40 at dT 20", 42, 22, true, "rising curve");
   if (G.fanspeed > 40.01f) { failures++; printf("FAIL cap not applied (%.1f)\n", G.fanspeed); }
   G.max_fanspeed.state = 80;
 
   // --- Sensor faults ---
   step("DS18B20 power on reset value 85", 85, 30, false, "sensor fault");
-  step("Recovery after fault needs a fresh start 42/30", 42, 30, true, "on target");
+  step("Recovery after fault needs a fresh start 42/30", 42, 30, true, "rising curve");
   NOW += 100000;  // no fresh readings for 100s
   control_fans();
   check(G.fanspeed == 0 && G.last_reason.find("sensor fault") != string::npos,

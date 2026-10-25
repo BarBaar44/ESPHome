@@ -7,15 +7,16 @@
 # 45 C) a radiator gives off little heat by natural convection alone.
 #
 # Signal: deltaT = supply minus return, from the two Dallas sensors.
-#   - deltaT small: the water leaves almost as warm as it came in, the
-#     radiator is not shedding enough heat. Fan FASTER.
-#   - deltaT at or above the 10 C target: the radiator already cools the
-#     water well. Fan at minimum speed.
-# The fan cooling the return raises deltaT, which slows the fan again,
-# so the loop settles by itself.
+# The Speed Curve setting picks how speed follows deltaT:
+#   - Rising (default, the original behaviour): faster as deltaT grows.
+#     25 % at deltaT 2 C up to Max Fan Speed at 20 C.
+#   - Falling: faster as deltaT shrinks, aiming for a colder return.
+#     Max Fan Speed at deltaT 2 C down to 25 % at the 10 C target.
+# Both are kept so they can be compared on the same radiator by
+# switching the setting (e.g. on alternate days). See README.md.
 #
 # Gate: the fan only runs while the supply pipe is warm. It starts when
-# warm water arrives (supply >= 28 C and a measurable deltaT) and keeps
+# warm water arrives (supply >= 25 C and a measurable deltaT) and keeps
 # running until the supply pipe drops below 24 C, so residual heat after
 # the boiler stops is still blown into the room.
 #
@@ -216,6 +217,17 @@ select:
     initial_option: AUTO
     restore_value: true
 
+  # How AUTO speed follows deltaT. Rising = original behaviour.
+  - platform: template
+    name: "${device_name} Speed Curve"
+    id: speed_curve
+    optimistic: true
+    options:
+      - Rising
+      - Falling
+    initial_option: Rising
+    restore_value: true
+
 number:
   - platform: template
     name: "${device_name} Manual Fan Speed"
@@ -260,12 +272,18 @@ script:
           // ==============================
           // Gate: start when warm water arrives, stop when the supply
           // pipe has cooled off (residual heat is used until then).
-          const float supply_on     = 28.0f;  // supply must reach this to start
+          // supply_on sits above supply_off so that two sensors reading
+          // slightly differently (DS18B20: +/-0.5 C) on a cold pipe can't
+          // fake a deltaT and start the fan.
+          const float supply_on     = 25.0f;  // supply must reach this to start
           const float delta_on      =  1.5f;  // ...with at least this deltaT (water moving)
           const float supply_off    = 24.0f;  // stop below this supply temperature
-          // Speed over deltaT: the smaller deltaT, the faster the fan.
-          const float delta_target  = 10.0f;  // at or above: minimum speed
-          const float delta_full    =  2.0f;  // at or below: Max Fan Speed
+          // Rising curve: faster as deltaT grows (original behaviour).
+          const float rise_low      =  2.0f;  // at or below: minimum speed
+          const float rise_high     = 20.0f;  // at or above: Max Fan Speed
+          // Falling curve: faster as deltaT shrinks.
+          const float fall_target   = 10.0f;  // at or above: minimum speed
+          const float fall_full     =  2.0f;  // at or below: Max Fan Speed
           const float speed_min     = 25.0f;
           const float exponent      =  1.1f;
 
@@ -337,16 +355,18 @@ script:
                 id(fanspeed) = 0.0f;
                 reason = "Off (supply pipe not warm)";
               } else {
-                // --- Speed: smaller deltaT, faster fan ---
+                // --- Speed from deltaT, per the selected curve ---
                 float cap = id(max_fanspeed).state;
                 if (!isfinite(cap)) cap = 80.0f;
                 cap = fmaxf(speed_min, fminf(100.0f, cap));
 
-                float x = (delta_target - delta) / (delta_target - delta_full);
+                // x: 0 = minimum speed, 1 = Max Fan Speed
+                bool falling = (std::string(id(speed_curve).current_option()) == "Falling");
+                float x = falling ? (fall_target - delta) / (fall_target - fall_full)
+                                  : (delta - rise_low) / (rise_high - rise_low);
                 x = fmaxf(0.0f, fminf(1.0f, x));
                 id(fanspeed) = speed_min + powf(x, exponent) * (cap - speed_min);
-                reason = (delta >= delta_target) ? "Running (deltaT on target)"
-                                                 : "Running (deltaT below target)";
+                reason = falling ? "Running (falling curve)" : "Running (rising curve)";
               }
             }
           }
@@ -379,9 +399,10 @@ script:
             lambda: 'return fabsf(id(fanspeed) - id(last_log_speed)) >= 1.0f;'
           then:
             - logger.log:
-                format: "Mode=%s Supply=%.1f Return=%.1f DeltaT=%.1f Fanspeed=%.1f (%s)"
+                format: "Mode=%s Curve=%s Supply=%.1f Return=%.1f DeltaT=%.1f Fanspeed=%.1f (%s)"
                 args:
                   - 'id(fan_mode).current_option().c_str()'
+                  - 'id(speed_curve).current_option().c_str()'
                   - 'id(calc_supply)'
                   - 'id(calc_return)'
                   - 'id(calc_delta)'

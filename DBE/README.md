@@ -13,10 +13,11 @@ This is one part of the broader multi-room heating system documented in the [**t
 ## Contents
 
 - [How the fan decides (short version)](#how-the-fan-decides-short-version)
-- [Why delta T, and why inverted](#why-delta-t-and-why-inverted)
+- [The two speed curves](#the-two-speed-curves)
 - [What changed in this version](#what-changed-in-this-version)
 - [How it works in detail](#how-it-works-in-detail)
 - [Worked examples](#worked-examples)
+- [Comparing the curves](#comparing-the-curves)
 - [What appears in Home Assistant](#what-appears-in-home-assistant)
 - [Tuning](#tuning)
 - [Testing](#testing)
@@ -26,34 +27,35 @@ This is one part of the broader multi-room heating system documented in the [**t
 
 Every 5 seconds the controller compares its two pipe temperatures: **supply** (water going into the radiator) and **return** (water going back to the boiler). The difference between them is **delta T**.
 
-1. **Is there warm water?** The fan starts when the supply pipe reaches 28 °C while warm water is actually arriving (delta T at least 1.5 °C). Once running, it keeps going until the supply pipe drops below 24 °C, so the heat left in the radiator after the boiler stops is still blown into the room.
-2. **How fast?** The smaller delta T, the faster the fan. At a delta T of 10 °C or more the radiator already cools the water well and the fan runs at its quiet minimum (25 %). As delta T shrinks towards 2 °C the fan speeds up to the **Max Fan Speed** (80 % by default).
+1. **Is there warm water?** The fan starts when the supply pipe reaches 25 °C while warm water is actually arriving (delta T at least 1.5 °C). Once running, it keeps going until the supply pipe drops below 24 °C, so the heat left in the radiator after the boiler stops is still blown into the room.
+2. **How fast?** That depends on the **Speed Curve** setting:
+   - **Rising** (default, the original behaviour): faster as delta T grows.
+   - **Falling**: faster as delta T shrinks, aiming for a colder return.
 
 The board works entirely on its own. Home Assistant only shows what it is doing and holds its settings; the fan behaves the same when HA is down.
 
-## Why delta T, and why inverted
+## The two speed curves
 
-**The goal is a cold return.** The boiler (Atag, max supply 45 °C, modulated by the [thermostat](https://github.com/BarBaar44/thermostat) PID) works most efficiently when the water coming back is well below the water going out. The design target is a delta T of at least 10 °C.
+**Rising** is how the board has always worked: a large delta T means the radiator is busy shedding heat (typically right after hot water reaches a cold radiator), so the fan helps most then. Speed goes from 25 % at a delta T of 2 °C up to **Max Fan Speed** (80 % by default) at 20 °C.
 
-**At low supply temperatures radiators struggle.** Radiators are rated at 75/65 °C. At 45 °C or lower they give off only a fraction of that by natural convection, so water can pass through and come back almost as warm as it left. A fan forcing air across the fins makes the radiator shed much more of that heat.
+**Falling** follows a different idea: the boiler (Atag, max supply 45 °C, modulated by the [thermostat](https://github.com/BarBaar44/thermostat) PID) is most efficient with a cold return, and the design target is a delta T of at least 10 °C. At these low supply temperatures radiators give off only a fraction of their rated output (rated at 75/65 °C), so water can come back almost as warm as it left. A small delta T then means the radiator isn't taking enough heat out of the water, so the fan speeds up: Max Fan Speed at a delta T of 2 °C or less, down to 25 % at 10 °C or more. The fan's own effect (a colder return, so a larger delta T) slows it again, so the loop settles by itself.
 
-**So the fan works hardest when delta T is small.** A small delta T means the radiator is not taking enough heat out of the water. Speeding up the fan pulls more heat into the room, the return gets colder, and delta T grows. As delta T approaches the 10 °C target the fan slows to its minimum again. The loop settles by itself: the fan's own effect (a colder return) is what slows it down.
+**Which is better is not known yet.** With supply capped at 45 °C the boiler condenses either way, so the efficiency difference from a colder return is small; the bigger effect is probably how much heat reaches the room at low supply temperatures. Falling runs the fans faster more often, so it is also louder. That's why both curves are in the firmware and can be compared on the same radiator (see [Comparing the curves](#comparing-the-curves)).
 
-**Why the extra start condition is needed.** A small delta T also occurs when there is no heat at all: with the boiler off, both pipes sit at room temperature and delta T is near zero. On its own, an inverted delta T would then run the fan at full speed on a cold radiator. The supply temperature gate prevents that, and requiring a measurable delta T to *start* prevents a pipe that is merely warm (a hot summer day) from starting the fan.
+**Why the start condition matters for Falling.** Delta T is also near zero when there is no heat at all: with the boiler off both pipes sit at room temperature. Without the gate, Falling would run the fan at full speed on a cold radiator. The supply temperature gate prevents that, and requiring a measurable delta T to *start* prevents a pipe that is merely warm (a hot summer day) from starting the fan.
 
 ## What changed in this version
 
-The previous firmware had the speed curve the wrong way round compared to the design intent: speed **rose** with delta T (25 % at 2 °C up to 80 % at 20 °C), and the fan switched off below 0.8 °C. So it slowed down exactly when the return was too warm. This version:
-
 | | Before | Now |
 |---|---|---|
-| Speed vs delta T | faster as delta T grows | **faster as delta T shrinks**, minimum at 10 °C or more |
-| Starts when | delta T above 1.5 °C | supply at least 28 °C **and** delta T at least 1.5 °C |
+| Speed vs delta T | faster as delta T grows | selectable: **Rising** (same as before, default) or **Falling** |
+| Starts when | delta T above 1.5 °C | supply at least 25 °C **and** delta T at least 1.5 °C |
 | Stops when | delta T below 0.8 °C | supply below 24 °C (uses residual heat) |
-| Cold radiator | fan off (delta T near zero) | fan off (supply gate) |
 | Modes | AUTO, MANUAL | AUTO, MANUAL, **OFF**; mode remembered across reboots |
 | Speed limit | fixed 80 % | **Max Fan Speed** setting, 25 to 100 % |
 | Diagnostics | fan RPM only | supply, return, delta T, fan speed, reason |
+
+**The one change in normal heating behaviour** (with Speed Curve left on Rising) is the stop condition. Before, the fan stopped once delta T fell below 0.8 °C. After the boiler stops, both pipes cool together and delta T collapses, so the fan used to stop while the radiator was still warm. Now it keeps running (at minimum speed on the Rising curve) until the supply pipe drops below 24 °C.
 
 Unchanged: sensor fault handling, the relay hard off, PWM output and pins, and the existing entity names.
 
@@ -69,20 +71,22 @@ Two DS18B20 temperature sensors, one clamped on the supply pipe and one on the r
 
 | | Value |
 |---|---|
-| Start | supply 28 °C or more **and** delta T 1.5 °C or more |
+| Start | supply 25 °C or more **and** delta T 1.5 °C or more |
 | Stop | supply below 24 °C |
 
-The gap between start and stop (hysteresis) keeps the fan from flicking on and off. After a stop, the fan only restarts when the start condition is met again.
+The start threshold sits 1 °C above the stop threshold so that two sensors reading slightly differently on a cold pipe (DS18B20s are accurate to about ±0.5 °C) can't fake a delta T and start the fan. After a stop, the fan only restarts when the start condition is met again.
 
-### Speed: smaller delta T, faster fan
+### Speed
 
-| Delta T | Fan speed |
-|---|---|
-| 10 °C or more | 25 % (minimum) |
-| between 10 and 2 °C | rises gradually (slight curve, exponent 1.1) |
-| 2 °C or less | Max Fan Speed (default 80 %) |
+| Delta T | Rising | Falling |
+|---|---|---|
+| 1 °C | 25 % | Max Fan Speed (80 %) |
+| 6 °C | 36 % | 51 % |
+| 10 °C | 48 % | 25 % |
+| 15 °C | 64 % | 25 % |
+| 20 °C or more | Max Fan Speed (80 %) | 25 % |
 
-The PWM output is additionally limited to 90 % duty in hardware config (`max_power: 90%`), as before.
+Both curves rise gradually between their end points (slight curve, exponent 1.1). Values above assume Max Fan Speed at 80 %. The PWM output is additionally limited to 90 % duty in hardware config (`max_power: 90%`), as before.
 
 ### Safety
 
@@ -105,14 +109,45 @@ These come straight from the automated test (see [Testing](#testing)):
 | Situation | Supply / return | Delta T | Fan |
 |---|---|---|---|
 | Boiler off, cold pipes | 19 / 18.5 | 0.5 | off |
-| Summer, warm pipes, no water moving | 29 / 28.8 | 0.2 | off (no start) |
-| Warm water arriving | 30 / 22 | 8 | 37 % |
-| Radiator cools the water well | 40 / 28 | 12 | 25 % (minimum) |
-| Return too warm | 40 / 34 | 6 | 51 % |
-| Return almost as warm as supply | 40 / 39 | 1 | 80 % |
-| Boiler stopped, radiator still warm | 30 / 29 | 1 | 80 % (residual heat) |
-| Still cooling | 25 / 24.5 | 0.5 | 80 % |
+| Summer, warm pipes, no water moving | 27 / 26.8 | 0.2 | off (no start) |
+| Sensor offset on a cold pipe | 21 / 19.5 | 1.5 | off (supply below 25) |
+| Mild day, low supply | 26 / 22 | 4 | Rising 30 % |
+| Return almost as warm as supply | 40 / 39 | 1 | Rising 25 %, Falling 80 % |
+| Radiator cools the water well | 40 / 28 | 12 | Rising 54 %, Falling 25 % |
+| Boiler stopped, radiator still warm | 28 / 27.5 | 0.5 | Rising 25 %, Falling 80 % |
 | Supply below 24 °C | 23.8 / 23.5 | 0.3 | off |
+
+## Comparing the curves
+
+With one radiator doing most of the heating, comparing curves across radiators doesn't work. Instead, switch the curve on the same radiator **in time**: alternate Rising and Falling day by day, then compare days with similar outdoor temperatures.
+
+An HA automation that does this (copy it into your own config; check the entity IDs in HA first, they depend on each device's name):
+
+```yaml
+alias: DBE speed curve comparison
+description: Alternates the DBE Speed Curve between Rising and Falling every day, to compare them on the same radiators.
+triggers:
+  - trigger: time
+    at: "00:00:30"
+  - trigger: homeassistant
+    event: start
+actions:
+  - action: select.select_option
+    target:
+      entity_id:
+        - select.dbe_livingroom_front_speed_curve  # example, use your own IDs
+    data:
+      option: "{{ 'Falling' if (now().strftime('%j') | int) % 2 == 1 else 'Rising' }}"
+mode: single
+```
+
+It sets the curve from the day of the year (odd days Falling, even days Rising), so a missed run or a restart can't leave units out of step. Disable the automation when you're done and set the winning curve.
+
+**What to compare** (all already in HA):
+- Return temperature and delta T on that radiator while the boiler runs.
+- How long that room takes to reach setpoint after the morning warm up.
+- Gas use per degree day for the house.
+- Fan noise.
 
 ## What appears in Home Assistant
 
@@ -122,37 +157,17 @@ New entities:
 
 | Entity | What it tells you |
 |---|---|
-| `Fan Speed` | The commanded speed in %. |
+| `Speed Curve` (select) | `Rising` (default) or `Falling`. Stored on the device. |
 | `Max Fan Speed` (number) | Upper limit in AUTO mode, 25 to 100, default 80. Stored on the device. |
-| `Fan Reason` (diagnostic) | Why the fan is on or off right now, e.g. `Running (deltaT below target)`. |
+| `Fan Speed` | The commanded speed in %. |
+| `Fan Reason` (diagnostic) | Why the fan is on or off right now, e.g. `Running (falling curve)`. |
 | `Supply Temperature` (diagnostic) | The warmer pipe sensor: water going into the radiator. |
 | `Return Temperature` (diagnostic) | The cooler pipe sensor: water leaving the radiator. |
 | `Delta T` (diagnostic) | Supply minus return. The main control signal. |
 
 Diagnostics update every 30 s; the control loop itself runs every 5 s. All settings are stored on the device, so they survive a reboot even when HA is unavailable.
 
-**Quiet nights in bedrooms** (optional, the board doesn't need it): lower Max Fan Speed from an HA automation, for example:
-
-```yaml
-alias: DBE bedrooms quiet at night
-triggers:
-  - trigger: time
-    at: "22:00:00"
-    id: night
-  - trigger: time
-    at: "07:00:00"
-    id: day
-actions:
-  - action: number.set_value
-    target:
-      entity_id:
-        - number.dbemasleft_max_fan_speed
-        - number.dbemasright_max_fan_speed
-    data:
-      value: "{{ 40 if trigger.id == 'night' else 80 }}"
-```
-
-Check the actual number entity IDs in HA before using this.
+**Quiet nights in bedrooms** (optional): lower Max Fan Speed from an HA automation at night, the same way as the curve comparison above but with `number.set_value`.
 
 ## Tuning
 
@@ -160,27 +175,24 @@ All thresholds are constants at the top of the `control_fans` script in `DBEmain
 
 | Constant | Default | Raise it to... | Lower it to... |
 |---|---|---|---|
-| `supply_on` | 28 °C | start only on warmer water | start sooner when the PID runs a low supply |
+| `supply_on` | 25 °C | start only on warmer water | start sooner when the PID runs a very low supply |
 | `delta_on` | 1.5 °C | demand clearer evidence of water moving before starting | start on smaller signs of warm water |
 | `supply_off` | 24 °C | stop earlier (less residual run time, less noise) | squeeze out more residual heat |
-| `delta_target` | 10 °C | aim for a colder return (fan runs faster for longer) | accept a warmer return (quieter) |
-| `delta_full` | 2 °C | reach full speed sooner | reach full speed only when delta T is very small |
+| `rise_low` / `rise_high` | 2 / 20 °C | Rising: need a larger delta T for the same speed | Rising: reach high speed sooner |
+| `fall_target` | 10 °C | Falling: aim for a colder return (fan faster for longer) | Falling: accept a warmer return (quieter) |
+| `fall_full` | 2 °C | Falling: reach full speed sooner | Falling: reach full speed only at a very small delta T |
 | `speed_min` | 25 % | if fans stall at low speed | if 25 % is audible |
 
-Keep `supply_off` below `supply_on`, and `delta_full` below `delta_target`. After changing a constant, run the test (next section) and update its expectations if behaviour changed on purpose.
+Keep `supply_off` below `supply_on`. After changing a constant, run the test (next section) and update its expectations if behaviour changed on purpose.
 
-**Two things to watch in practice:**
-- **Mild days:** the PID may hold the supply below 28 °C for long periods. If the fans then never start, lower `supply_on`.
-- **Residual run time:** after the boiler stops, delta T is small, so the fan runs at Max Fan Speed until the supply drops below 24 °C. If that is too long or too loud, raise `supply_off` or use the Max Fan Speed setting.
-
-**Watching it work:** in HA, put `Supply Temperature`, `Return Temperature`, `Delta T` and `Fan Speed` on one history graph. While the boiler runs, delta T should settle near 10 °C at a moderate fan speed. If the fan regularly starts and stops within a few minutes, widen the gap between `supply_on` and `supply_off`.
+**Residual run time:** after the boiler stops, delta T is small. On Rising the fan then runs at its minimum, on Falling at Max Fan Speed, until the supply drops below 24 °C. If that is too long or too loud, raise `supply_off` or lower Max Fan Speed.
 
 ## Testing
 
 Two checks run in GitHub Actions on every change to `DBE/`:
 
 1. **Schema check** (`.ci/dbe.yaml`): `esphome config`, catches YAML and component errors.
-2. **Logic test** (`.ci/dbe-logic/`): copies the `control_fans` lambda out of `DBEmain.yml`, compiles it on the build machine against small stand-ins for ESPHome, and runs the scenarios from the [Worked examples](#worked-examples) table plus speed ordering, swapped sensors, the speed cap, sensor faults and modes. This catches C++ mistakes in the lambda and changes in behaviour, neither of which the schema check sees.
+2. **Logic test** (`.ci/dbe-logic/`): copies the `control_fans` lambda out of `DBEmain.yml`, compiles it on the build machine against small stand-ins for ESPHome, and runs scenarios: the gate (cold pipes, summer, sensor offset, mild day), both curves, swapped sensors, residual heat, the speed cap, sensor faults and modes. This catches C++ mistakes in the lambda and changes in behaviour, neither of which the schema check sees.
 
 Run the logic test locally with `.ci/dbe-logic/run.sh` (needs `g++` and `python3` with PyYAML).
 
