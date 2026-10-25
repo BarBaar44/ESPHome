@@ -85,6 +85,6 @@ packages:
   # time_homeassistant (voor update_screen_state).
   wifi: !include ../../generic/wifi.yml
   generic_sensors: !include ../../generic/generic_sensors.yml
-  display: !include ../displayconfig.yml
+  display: !include ../displayconfig7inch.yml
   panel: !include lvglconfig.yml
   sensors: !include lvglsensors.yml
