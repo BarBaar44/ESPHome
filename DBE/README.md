@@ -24,7 +24,7 @@ This is one part of the broader multi-room heating system documented in the [**t
 
 Every 5 seconds the controller asks two questions:
 
-1. **Is there heat in the radiator worth moving?** The radiator's average temperature has to be clearly above the room temperature (at least 10 °C), and the flow pipe at least 28 °C. Jaga uses the same 28 °C rule in its own DBE units.
+1. **Is there heat in the radiator worth moving?** The radiator's average temperature has to be clearly above the room temperature (at least 10 °C), and the supply pipe at least 28 °C. Jaga uses the same 28 °C rule in its own DBE units.
 2. **Does the room want heat?** The room temperature, read from the room's climate entity in Home Assistant, has to be below its setpoint.
 
 Only when both answers are yes does the fan run. How fast depends on how much heat is available: a radiator that is only a little warmer than the room gets a quiet 25 %, a radiator that is much warmer gets up to the **Max Fan Speed** (80 % by default).
@@ -33,10 +33,10 @@ If Home Assistant is unreachable, or no room is configured yet, question 2 is sk
 
 ## Why the control logic changed
 
-The previous firmware used one signal: **deltaT, the difference between the two pipe sensors** (flow minus return). Small deltaT meant fan off, large deltaT meant fan fast. The reasoning was that a large drop across the radiator means lots of heat is available. That turns out to be backwards, and it caused three problems.
+The previous firmware used one signal: **deltaT, the difference between the two pipe sensors** (supply minus return). Small deltaT meant fan off, large deltaT meant fan fast. The reasoning was that a large drop across the radiator means lots of heat is available. That turns out to be backwards, and it caused three problems.
 
 **1. A large deltaT means low water flow, not lots of heat.**
-The temperature drop across a radiator depends mainly on how fast water moves through it. When the valve is wide open and hot water rushes through, the whole radiator is hot and the return is only a few degrees cooler than the flow: deltaT is *small*, yet this is exactly when there is the most heat to move. When a TRV throttles the valve because the room is nearly warm enough, water creeps through and cools on the way: deltaT becomes *large*, while there is little heat left and the room doesn't need it. The old logic ran the fan hardest in that second situation.
+The temperature drop across a radiator depends mainly on how fast water moves through it. When the valve is wide open and hot water rushes through, the whole radiator is hot and the return is only a few degrees cooler than the supply: deltaT is *small*, yet this is exactly when there is the most heat to move. When a TRV throttles the valve because the room is nearly warm enough, water creeps through and cools on the way: deltaT becomes *large*, while there is little heat left and the room doesn't need it. The old logic ran the fan hardest in that second situation.
 
 **2. It fed itself.**
 A running fan pulls heat out of the radiator, so the return pipe gets colder, so deltaT grows, so the fan speeds up, which cools the return further. The fan's own effect pushed it towards full speed.
@@ -54,13 +54,15 @@ Note that inverting deltaT (small gap = fast fan) doesn't fix it either: when th
 
 | Input | Source | Notes |
 |---|---|---|
-| Pipe temperatures | Two DS18B20 sensors on the radiator pipes (`Dallas 1`, `Dallas 2`), read every 30 s | The **warmer** of the two is taken as the flow pipe, the cooler as the return. You don't need to know which sensor sits on which pipe. |
+| Pipe temperatures | Two DS18B20 sensors on the radiator pipes (`Dallas 1`, `Dallas 2`), read every 30 s | The **warmer** of the two is taken as the supply pipe, the cooler as the return. You don't need to know which sensor sits on which pipe. |
 | Room temperature | Attribute `current_temperature` of the room's climate entity in HA | Set per device with the `room_climate` substitution. |
 | Room setpoint | Attribute `temperature` of that same climate entity | Empty when the room climate is Off, which counts as "no demand". |
 
+**Terminology:** *supply* is the pipe bringing hot water into the radiator (heating installers often call it the *flow* pipe), *return* is the pipe taking the cooled water back to the boiler. Both are temperatures measured by the Dallas sensors; nothing here measures how much water flows.
+
 From the pipe temperatures the controller computes:
 
-- **Mean radiator temperature** = (flow + return) / 2
+- **Mean radiator temperature** = (supply + return) / 2
 - **Headroom** = mean radiator temperature minus room temperature
 
 ### Gate 1: heat available (with hysteresis)
@@ -68,7 +70,7 @@ From the pipe temperatures the controller computes:
 | | Fan allowed | Fan stops |
 |---|---|---|
 | Headroom | 10 °C or more | below 6 °C |
-| Flow pipe | 28 °C or more | below 25 °C |
+| Supply pipe | 28 °C or more | below 25 °C |
 
 Both conditions are needed to switch on; either one dropping below its lower value switches off. The gap between the on and off values (hysteresis) keeps the fan from flicking on and off when a temperature hovers around a threshold.
 
@@ -121,7 +123,7 @@ The selected mode now survives a reboot (`restore_value: true`).
 
 These come straight from the automated test (see [Testing](#testing)), room setpoint 20 °C unless noted:
 
-| Situation | Flow / return | Room | Headroom | Fan |
+| Situation | Supply / return | Room | Headroom | Fan |
 |---|---|---|---|---|
 | Boiler off, pipes near room temperature | 20 / 19.5 | 19 | 0.8 | off, no heat |
 | Boiler fires, room cold | 55 / 48 | 18 | 33.5 | 76 % |
@@ -174,8 +176,8 @@ New entities:
 | `Fan Speed` | The commanded speed in %. |
 | `Max Fan Speed` (number) | Upper limit in AUTO mode, 25 to 100, default 80. Remembered across reboots. |
 | `Fan Reason` (diagnostic) | Why the fan is on or off right now, e.g. `Off (room at setpoint)`. |
-| `Flow Temperature` (diagnostic) | The warmer pipe sensor. |
-| `Return Temperature` (diagnostic) | The cooler pipe sensor. |
+| `Supply Temperature` (diagnostic) | The warmer pipe sensor: water going into the radiator. |
+| `Return Temperature` (diagnostic) | The cooler pipe sensor: water leaving the radiator. |
 | `Room Temperature Used` (diagnostic) | The room temperature the logic is using (from HA, or 20 in standalone). |
 | `Heat Headroom` (diagnostic) | Radiator mean minus room temperature. The main control signal. |
 
@@ -211,7 +213,7 @@ All thresholds are constants at the top of the `control_fans` script in `DBEmain
 | Constant | Default | Raise it to... | Lower it to... |
 |---|---|---|---|
 | `headroom_on` / `headroom_off` | 10 / 6 °C | run the fan only on hotter radiators | run it longer on cooling radiators |
-| `flow_min_on` / `flow_min_off` | 28 / 25 °C | same, as an absolute floor | same |
+| `supply_min_on` / `supply_min_off` | 28 / 25 °C | same, as an absolute floor | same |
 | `gap_on` / `gap_off` | 0.1 / -0.2 °C | start the fan only when the room is further below target | keep it running further past target |
 | `hr_min` / `hr_max` | 10 / 35 °C | need more heat for higher speeds (quieter) | reach high speed sooner |
 | `speed_min` | 25 % | if fans stall at low speed | if 25 % is audible |

@@ -32,7 +32,7 @@ struct Globals {
   float fanspeed = 0;
   uint32_t temp_1_last_update = 0, temp_2_last_update = 0;
   bool heat_ok = false, demand_ok = false;
-  float calc_flow = NAN, calc_return = NAN, calc_headroom = NAN, calc_room = NAN;
+  float calc_supply = NAN, calc_return = NAN, calc_headroom = NAN, calc_room = NAN;
   string last_reason;
   Val temp_1, temp_2, room_temp, room_setpoint, manual_fanspeed, max_fanspeed;
   Sel fan_mode;
@@ -82,7 +82,7 @@ int main() {
   step("Cooling 25/23: below off threshold", 25, 23, 19, 20, false, "no heat");
   step("Warming 32/28: headroom 11, back on", 32, 28, 19, 20, true, "heating room");
 
-  // Old logic's failure case: large flow/return gap from a throttled valve.
+  // Old logic's failure case: large supply/return gap from a throttled valve.
   // New logic: driven by headroom and demand, not by the gap.
   step("Throttled TRV 50/30, room still below target", 50, 30, 19.8, 20, true, "heating room");
   step("Throttled TRV 50/30, room above target", 50, 30, 20.3, 20, false, "room at setpoint");

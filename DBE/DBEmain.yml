@@ -7,8 +7,8 @@
 #   2. DEMAND: the room is below its setpoint (read from Home Assistant).
 # Fan speed then follows how much heat is available (radiator vs room).
 #
-# The old logic used deltaT = |Dallas 1 - Dallas 2| (flow minus return)
-# as the signal. That was backwards: a large flow/return gap means LOW
+# The old logic used deltaT = |Dallas 1 - Dallas 2| (supply minus return)
+# as the signal. That was backwards: a large supply/return gap means LOW
 # water flow (e.g. a TRV throttling), not lots of heat. See README.md,
 # section "Why the control logic changed".
 #
@@ -61,7 +61,7 @@ globals:
 
   # Values computed by control_fans, published by the diagnostic
   # sensors below every 30s (not every 5s, to keep HA history light).
-  - id: calc_flow
+  - id: calc_supply
     type: float
     restore_value: false
     initial_value: 'NAN'
@@ -106,8 +106,8 @@ one_wire:
 # Sensors
 ######################################################
 sensor:
-  # The two pipe sensors. Which one is flow and which is return does
-  # not matter: the control logic takes the warmer one as flow.
+  # The two pipe sensors. Which one is supply and which is return does
+  # not matter: the control logic takes the warmer one as supply.
   - platform: dallas_temp
     address: '${dallas_1_ID}'
     name: '${device_name} Dallas 1'
@@ -153,13 +153,13 @@ sensor:
 
   # --- Diagnostics: what the control loop is working with ---
   - platform: template
-    name: '${device_name} Flow Temperature'
+    name: '${device_name} Supply Temperature'
     unit_of_measurement: '°C'
     device_class: temperature
     accuracy_decimals: 1
     entity_category: diagnostic
     update_interval: 30s
-    lambda: 'return id(calc_flow);'
+    lambda: 'return id(calc_supply);'
 
   - platform: template
     name: '${device_name} Return Temperature'
@@ -296,8 +296,8 @@ script:
           // HEAT gate. Headroom = radiator mean temp minus room temp.
           const float headroom_on   = 10.0f;  // fan allowed above this
           const float headroom_off  =  6.0f;  // fan stops below this
-          const float flow_min_on   = 28.0f;  // Jaga's own threshold
-          const float flow_min_off  = 25.0f;
+          const float supply_min_on   = 28.0f;  // Jaga's own threshold
+          const float supply_min_off  = 25.0f;
           // DEMAND gate. Gap = setpoint minus room temp.
           const float gap_on        =  0.1f;  // room this far below setpoint: fan on
           const float gap_off       = -0.2f;  // room this far above setpoint: fan off
@@ -348,17 +348,17 @@ script:
             if (!t1_ok || !t2_ok) {
               id(fanspeed) = 0.0f;
               id(heat_ok) = false;
-              id(calc_flow) = NAN;
+              id(calc_supply) = NAN;
               id(calc_return) = NAN;
               id(calc_headroom) = NAN;
               reason = "Off (pipe sensor fault)";
             } else {
-              // --- Flow / return ---
-              // The warmer pipe is the flow. No per-device mapping needed.
-              float t_flow = fmaxf(t1, t2);
+              // --- Supply / return ---
+              // The warmer pipe is the supply. No per-device mapping needed.
+              float t_supply = fmaxf(t1, t2);
               float t_ret  = fminf(t1, t2);
-              float t_mean = (t_flow + t_ret) / 2.0f;
-              id(calc_flow) = t_flow;
+              float t_mean = (t_supply + t_ret) / 2.0f;
+              id(calc_supply) = t_supply;
               id(calc_return) = t_ret;
 
               // --- Room temperature and setpoint from HA ---
@@ -373,9 +373,9 @@ script:
               id(calc_headroom) = headroom;
 
               // --- HEAT gate (hysteresis) ---
-              if (!id(heat_ok) && headroom >= headroom_on && t_flow >= flow_min_on) {
+              if (!id(heat_ok) && headroom >= headroom_on && t_supply >= supply_min_on) {
                 id(heat_ok) = true;
-              } else if (id(heat_ok) && (headroom < headroom_off || t_flow < flow_min_off)) {
+              } else if (id(heat_ok) && (headroom < headroom_off || t_supply < supply_min_off)) {
                 id(heat_ok) = false;
               }
 
@@ -440,10 +440,10 @@ script:
             lambda: 'return fabsf(id(fanspeed) - id(last_log_speed)) >= 1.0f;'
           then:
             - logger.log:
-                format: "Mode=%s Flow=%.1f Return=%.1f Room=%.1f Headroom=%.1f Fanspeed=%.1f (%s)"
+                format: "Mode=%s Supply=%.1f Return=%.1f Room=%.1f Headroom=%.1f Fanspeed=%.1f (%s)"
                 args:
                   - 'id(fan_mode).current_option().c_str()'
-                  - 'id(calc_flow)'
+                  - 'id(calc_supply)'
                   - 'id(calc_return)'
                   - 'id(calc_room)'
                   - 'id(calc_headroom)'
