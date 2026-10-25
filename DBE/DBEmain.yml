@@ -1,6 +1,33 @@
 ######################################################
-# ESPHome: Interval-based fan control with HARD OFF
+# DBE radiator booster fan controller
+#
+# The fan runs only when BOTH are true:
+#   1. HEAT:   the radiator is clearly warmer than the room, so blowing
+#              air through it actually moves heat into the room.
+#   2. DEMAND: the room is below its setpoint (read from Home Assistant).
+# Fan speed then follows how much heat is available (radiator vs room).
+#
+# The old logic used deltaT = |Dallas 1 - Dallas 2| (flow minus return)
+# as the signal. That was backwards: a large flow/return gap means LOW
+# water flow (e.g. a TRV throttling), not lots of heat. See README.md,
+# section "Why the control logic changed".
+#
+# Without Home Assistant (no API connection, or no room_climate
+# configured) the unit falls back to standalone mode: it assumes a
+# room temperature of 20 C and treats the room as always wanting heat,
+# so only the HEAT condition decides.
 ######################################################
+
+######################################################
+# Defaults for substitutions. A device config (base/dbe-*.yaml) can
+# override any of these; values set there always win.
+######################################################
+substitutions:
+  # Room climate entity in Home Assistant that this radiator heats.
+  # Its attributes current_temperature and temperature (the setpoint)
+  # are read. The default points at an entity that does not exist,
+  # which puts the unit in standalone mode until a real one is set.
+  room_climate: "climate.dbe_room_not_configured"
 
 globals:
   - id: fanspeed
@@ -10,7 +37,7 @@ globals:
 
   # millis() timestamp of the last GOOD reading from each Dallas sensor.
   # filter_out: nan means a dropped reading is never published, so .state
-  # stays pinned to the last value - these let control_fans notice a
+  # stays pinned to the last value. These let control_fans notice a
   # sensor that has silently stopped reporting.
   - id: temp_1_last_update
     type: uint32_t
@@ -21,16 +48,49 @@ globals:
     restore_value: false
     initial_value: '0'
 
-  # Last fan speed we emitted a log line for, so the 5s control loop only
-  # logs when something actually changed instead of every cycle.
+  # Hysteresis state: remembered between control cycles so the fan
+  # does not flicker when a value sits right at a threshold.
+  - id: heat_ok
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  - id: demand_ok
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+
+  # Values computed by control_fans, published by the diagnostic
+  # sensors below every 30s (not every 5s, to keep HA history light).
+  - id: calc_flow
+    type: float
+    restore_value: false
+    initial_value: 'NAN'
+  - id: calc_return
+    type: float
+    restore_value: false
+    initial_value: 'NAN'
+  - id: calc_headroom
+    type: float
+    restore_value: false
+    initial_value: 'NAN'
+  - id: calc_room
+    type: float
+    restore_value: false
+    initial_value: 'NAN'
+
+  # Last state we logged/published, so the 5s loop only reports changes.
   - id: last_log_speed
     type: float
     restore_value: false
     initial_value: '-1'
+  - id: last_reason
+    type: std::string
+    restore_value: false
+    initial_value: '""'
 
 logger:
   # INFO by default. NOTE: each base/dbe-*.yaml wrapper currently sets
-  # `logger: level: DEBUG`, which overrides this - drop those to INFO too
+  # `logger: level: DEBUG`, which overrides this. Drop those to INFO too
   # for a quiet production device.
   level: INFO
 
@@ -46,6 +106,8 @@ one_wire:
 # Sensors
 ######################################################
 sensor:
+  # The two pipe sensors. Which one is flow and which is return does
+  # not matter: the control logic takes the warmer one as flow.
   - platform: dallas_temp
     address: '${dallas_1_ID}'
     name: '${device_name} Dallas 1'
@@ -75,6 +137,70 @@ sensor:
     update_interval: 5s
     filters:
       - multiply: 0.5
+
+  # --- Inputs from Home Assistant (room climate attributes) ---
+  - platform: homeassistant
+    id: room_temp
+    entity_id: '${room_climate}'
+    attribute: current_temperature
+    internal: true
+
+  - platform: homeassistant
+    id: room_setpoint
+    entity_id: '${room_climate}'
+    attribute: temperature
+    internal: true
+
+  # --- Diagnostics: what the control loop is working with ---
+  - platform: template
+    name: '${device_name} Flow Temperature'
+    unit_of_measurement: '°C'
+    device_class: temperature
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    update_interval: 30s
+    lambda: 'return id(calc_flow);'
+
+  - platform: template
+    name: '${device_name} Return Temperature'
+    unit_of_measurement: '°C'
+    device_class: temperature
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    update_interval: 30s
+    lambda: 'return id(calc_return);'
+
+  - platform: template
+    name: '${device_name} Room Temperature Used'
+    unit_of_measurement: '°C'
+    device_class: temperature
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    update_interval: 30s
+    lambda: 'return id(calc_room);'
+
+  - platform: template
+    name: '${device_name} Heat Headroom'
+    unit_of_measurement: '°C'
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    update_interval: 30s
+    lambda: 'return id(calc_headroom);'
+
+  - platform: template
+    name: '${device_name} Fan Speed'
+    unit_of_measurement: '%'
+    accuracy_decimals: 0
+    update_interval: 30s
+    lambda: 'return id(fanspeed);'
+
+text_sensor:
+  # Why the fan is doing what it is doing, in plain words.
+  - platform: template
+    name: '${device_name} Fan Reason'
+    id: fan_reason
+    entity_category: diagnostic
+    update_interval: never
 
 ######################################################
 # Physical power relay (HARD OFF)
@@ -121,7 +247,9 @@ select:
     options:
       - AUTO
       - MANUAL
+      - "OFF"
     initial_option: AUTO
+    restore_value: true
 
 number:
   - platform: template
@@ -133,6 +261,18 @@ number:
     optimistic: true
     restore_value: true
     initial_value: 0
+
+  # Upper limit for AUTO mode. Lower it from an HA automation at night
+  # in bedrooms for a quieter fan. Does not affect MANUAL.
+  - platform: template
+    name: "${device_name} Max Fan Speed"
+    id: max_fanspeed
+    min_value: 25
+    max_value: 100
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 80
 
 ######################################################
 # Interval trigger
@@ -151,79 +291,133 @@ script:
     then:
       - lambda: |-
           // ==============================
-          // MANUAL MODE
+          // Tuning constants (all in degrees C or percent)
           // ==============================
-          if (strcmp(id(fan_mode).current_option().c_str(), "MANUAL") == 0) {
+          // HEAT gate. Headroom = radiator mean temp minus room temp.
+          const float headroom_on   = 10.0f;  // fan allowed above this
+          const float headroom_off  =  6.0f;  // fan stops below this
+          const float flow_min_on   = 28.0f;  // Jaga's own threshold
+          const float flow_min_off  = 25.0f;
+          // DEMAND gate. Gap = setpoint minus room temp.
+          const float gap_on        =  0.1f;  // room this far below setpoint: fan on
+          const float gap_off       = -0.2f;  // room this far above setpoint: fan off
+          // Speed curve over headroom.
+          const float hr_min        = 10.0f;  // headroom for minimum speed
+          const float hr_max        = 35.0f;  // headroom for full (capped) speed
+          const float speed_min     = 25.0f;
+          const float exponent      =  1.1f;
+          // Standalone fallback room temperature.
+          const float room_default  = 20.0f;
+
+          std::string reason;
+
+          // ==============================
+          // OFF / MANUAL MODES
+          // ==============================
+          std::string mode = id(fan_mode).current_option();
+          if (mode == "OFF") {
+            id(fanspeed) = 0.0f;
+            reason = "Off (mode OFF)";
+          } else if (mode == "MANUAL") {
             float manual = id(manual_fanspeed).state;
-            if (!isfinite(manual)) {
-              id(fanspeed) = 0.0f;
-            } else {
-              id(fanspeed) = (manual < 1.0f) ? 0.0f : manual;
-            }
-            return;
-          }
-
-          // ==============================
-          // AUTOMATIC MODE
-          // ==============================
-          float t1 = id(temp_1).state;
-          float t2 = id(temp_2).state;
-
-          // --- Sensor sanity ---
-          // Reject non-finite readings, the DS18B20 power-on-reset
-          // sentinel (85.0), bus-error values (-127), and anything
-          // outside a plausible radiator-pipe range. Any bad reading
-          // fails safe to fan OFF.
-          const float t_lo = 0.0f;
-          const float t_hi = 95.0f;
-          bool t1_ok = isfinite(t1) && t1 > t_lo && t1 < t_hi && t1 != 85.0f;
-          bool t2_ok = isfinite(t2) && t2 > t_lo && t2 < t_hi && t2 != 85.0f;
-
-          // --- Staleness ---
-          // filter_out: nan keeps .state at the last good value when a
-          // sensor drops out, so without this a sustained failure would
-          // freeze deltaT and leave the fan running indefinitely. Fail
-          // if a sensor has not produced a fresh value in 3x its 30s
-          // update interval. (millis() wraps after ~49 days; the
-          // unsigned subtraction stays correct across a single wrap.)
-          const uint32_t max_age_ms = 90000;
-          uint32_t now = millis();
-          if (t1_ok && (now - id(temp_1_last_update)) > max_age_ms) t1_ok = false;
-          if (t2_ok && (now - id(temp_2_last_update)) > max_age_ms) t2_ok = false;
-
-          if (!t1_ok || !t2_ok) {
-            id(fanspeed) = 0;
-            return;
-          }
-
-          float deltaT = fabsf(t1 - t2);
-
-          // --- HARD OFF hysteresis ---
-          const float off_threshold = 0.8f;
-          const float on_threshold  = 1.5f;
-
-          bool fan_is_on = id(fancontrol).state;
-
-          if (!fan_is_on && deltaT < on_threshold) {
-            id(fanspeed) = 0;
-          } else if (fan_is_on && deltaT < off_threshold) {
-            id(fanspeed) = 0;
+            id(fanspeed) = (!isfinite(manual) || manual < 1.0f) ? 0.0f : manual;
+            reason = "Manual";
           } else {
-            // --- Exponential fan curve ---
-            const float dt_min = 2.0f;
-            const float dt_max = 20.0f;
-            const float speed_min = 25.0f;
-            const float speed_max = 80.0f;
-            const float exponent = 1.1f;
+            // ==============================
+            // AUTOMATIC MODE
+            // ==============================
+            float t1 = id(temp_1).state;
+            float t2 = id(temp_2).state;
 
-            float x = (deltaT - dt_min) / (dt_max - dt_min);
-            x = fmaxf(0.0f, fminf(1.0f, x));
+            // --- Sensor sanity ---
+            // Reject non-finite readings, the DS18B20 power-on-reset
+            // sentinel (85.0), bus-error values (-127), and anything
+            // outside a plausible radiator-pipe range.
+            bool t1_ok = isfinite(t1) && t1 > 0.0f && t1 < 95.0f && t1 != 85.0f;
+            bool t2_ok = isfinite(t2) && t2 > 0.0f && t2 < 95.0f && t2 != 85.0f;
 
-            float curve = powf(x, exponent);
-            id(fanspeed) = speed_min + curve * (speed_max - speed_min);
+            // --- Staleness ---
+            // Fail if a sensor has not produced a fresh value in 3x its
+            // 30s update interval. (millis() wraps after ~49 days; the
+            // unsigned subtraction stays correct across a single wrap.)
+            const uint32_t max_age_ms = 90000;
+            uint32_t now = millis();
+            if (t1_ok && (now - id(temp_1_last_update)) > max_age_ms) t1_ok = false;
+            if (t2_ok && (now - id(temp_2_last_update)) > max_age_ms) t2_ok = false;
+
+            if (!t1_ok || !t2_ok) {
+              id(fanspeed) = 0.0f;
+              id(heat_ok) = false;
+              id(calc_flow) = NAN;
+              id(calc_return) = NAN;
+              id(calc_headroom) = NAN;
+              reason = "Off (pipe sensor fault)";
+            } else {
+              // --- Flow / return ---
+              // The warmer pipe is the flow. No per-device mapping needed.
+              float t_flow = fmaxf(t1, t2);
+              float t_ret  = fminf(t1, t2);
+              float t_mean = (t_flow + t_ret) / 2.0f;
+              id(calc_flow) = t_flow;
+              id(calc_return) = t_ret;
+
+              // --- Room temperature and setpoint from HA ---
+              float rt = id(room_temp).state;
+              float sp = id(room_setpoint).state;
+              bool ha_ok = api::global_api_server->is_connected()
+                           && isfinite(rt) && rt > 5.0f && rt < 35.0f;
+              float t_room = ha_ok ? rt : room_default;
+              id(calc_room) = t_room;
+
+              float headroom = t_mean - t_room;
+              id(calc_headroom) = headroom;
+
+              // --- HEAT gate (hysteresis) ---
+              if (!id(heat_ok) && headroom >= headroom_on && t_flow >= flow_min_on) {
+                id(heat_ok) = true;
+              } else if (id(heat_ok) && (headroom < headroom_off || t_flow < flow_min_off)) {
+                id(heat_ok) = false;
+              }
+
+              // --- DEMAND gate (hysteresis) ---
+              // Standalone: always demand. HA with no setpoint (room
+              // climate off, attribute empty): no demand.
+              if (!ha_ok) {
+                id(demand_ok) = true;
+              } else if (!isfinite(sp)) {
+                id(demand_ok) = false;
+              } else {
+                float gap = sp - rt;
+                if (!id(demand_ok) && gap >= gap_on) id(demand_ok) = true;
+                else if (id(demand_ok) && gap <= gap_off) id(demand_ok) = false;
+              }
+
+              if (!id(heat_ok)) {
+                id(fanspeed) = 0.0f;
+                reason = "Off (no heat in radiator)";
+              } else if (!id(demand_ok)) {
+                id(fanspeed) = 0.0f;
+                reason = isfinite(sp) ? "Off (room at setpoint)" : "Off (room heating off in HA)";
+              } else {
+                // --- Speed curve ---
+                float cap = id(max_fanspeed).state;
+                if (!isfinite(cap)) cap = 80.0f;
+                cap = fmaxf(speed_min, fminf(100.0f, cap));
+
+                float x = (headroom - hr_min) / (hr_max - hr_min);
+                x = fmaxf(0.0f, fminf(1.0f, x));
+                id(fanspeed) = speed_min + powf(x, exponent) * (cap - speed_min);
+                reason = ha_ok ? "Running (heating room)" : "Running (standalone, no HA room data)";
+              }
+            }
           }
 
           id(fanspeed) = fmaxf(0.0f, fminf(100.0f, id(fanspeed)));
+
+          if (reason != id(last_reason)) {
+            id(last_reason) = reason;
+            id(fan_reason).publish_state(reason);
+          }
 
       # ==============================
       # APPLY FAN STATE
@@ -234,22 +428,25 @@ script:
           then:
             - fan.turn_on:
                 id: fancontrol
-                speed: !lambda 'return id(fanspeed);'
+                speed: !lambda 'return (int) roundf(id(fanspeed));'
           else:
             - fan.turn_off: fancontrol
 
       # ==============================
-      # LOGGING - only when the commanded speed actually changed, so a
-      # steady-state fan doesn't emit a line every 5s.
+      # LOGGING: only when the commanded speed actually changed.
       # ==============================
       - if:
           condition:
             lambda: 'return fabsf(id(fanspeed) - id(last_log_speed)) >= 1.0f;'
           then:
             - logger.log:
-                format: "Mode=%s ΔT=%.2f Fanspeed=%.1f"
+                format: "Mode=%s Flow=%.1f Return=%.1f Room=%.1f Headroom=%.1f Fanspeed=%.1f (%s)"
                 args:
                   - 'id(fan_mode).current_option().c_str()'
-                  - 'fabs(id(temp_1).state - id(temp_2).state)'
+                  - 'id(calc_flow)'
+                  - 'id(calc_return)'
+                  - 'id(calc_room)'
+                  - 'id(calc_headroom)'
                   - 'id(fanspeed)'
+                  - 'id(last_reason).c_str()'
             - lambda: 'id(last_log_speed) = id(fanspeed);'
