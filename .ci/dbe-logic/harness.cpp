@@ -1,8 +1,8 @@
 // Host test for the DBE control logic (DBE/DBEmain.yml, script control_fans).
 //
 // extract.py copies the lambda out of the YAML into body.inc. This file mocks
-// just enough of ESPHome (id() globals, sensors, select, API server, millis)
-// to compile that lambda with the host compiler and run scenarios through it.
+// just enough of ESPHome (id() globals, sensors, select, millis) to compile
+// that lambda with the host compiler and run scenarios through it.
 //
 // It catches two things the schema check (esphome config) cannot:
 //   1. C++ errors inside the lambda.
@@ -22,8 +22,6 @@ using namespace std;
 struct Val { float state = NAN; };
 struct Sel { string option = "AUTO"; string current_option() const { return option; } };
 struct Txt { void publish_state(const string &) {} };
-struct ApiServer { bool connected = true; bool is_connected() const { return connected; } };
-namespace api { ApiServer *global_api_server; }
 
 static uint32_t NOW = 0;
 uint32_t millis() { return NOW; }
@@ -31,15 +29,13 @@ uint32_t millis() { return NOW; }
 struct Globals {
   float fanspeed = 0;
   uint32_t temp_1_last_update = 0, temp_2_last_update = 0;
-  bool heat_ok = false, demand_ok = false;
-  float calc_supply = NAN, calc_return = NAN, calc_headroom = NAN, calc_room = NAN;
+  bool heat_ok = false;
+  float calc_supply = NAN, calc_return = NAN, calc_delta = NAN;
   string last_reason;
-  Val temp_1, temp_2, room_temp, room_setpoint, manual_fanspeed, max_fanspeed;
+  Val temp_1, temp_2, manual_fanspeed, max_fanspeed;
   Sel fan_mode;
   Txt fan_reason;
 } G;
-
-static ApiServer API;
 
 // The lambda, wrapped so its early `return;` statements work.
 static void control_fans() {
@@ -51,73 +47,75 @@ static void control_fans() {
 // ---- Scenario runner ----
 static int failures = 0;
 
-static void step(const char *name, float t1, float t2, float room, float setpoint,
-                 bool expect_on, const char *expect_reason, bool ha = true) {
+static void check(bool ok, const char *name) {
+  if (!ok) failures++;
+  printf("%s %-50s supply %4.1f return %4.1f dT %4.1f -> fan %5.1f%%  %s\n", ok ? "PASS" : "FAIL",
+         name, G.calc_supply, G.calc_return, G.calc_delta, G.fanspeed, G.last_reason.c_str());
+}
+
+// One control cycle with fresh readings. expect_on: fan running or not.
+static void step(const char *name, float t1, float t2, bool expect_on, const char *expect_reason) {
   NOW += 5000;
-  API.connected = ha;
   G.temp_1.state = t1;
   G.temp_2.state = t2;
   G.temp_1_last_update = G.temp_2_last_update = NOW;
-  G.room_temp.state = room;
-  G.room_setpoint.state = setpoint;
-
   control_fans();
-
   bool on = G.fanspeed > 0;
-  bool ok = on == expect_on && G.last_reason.find(expect_reason) != string::npos;
-  if (!ok) failures++;
-  printf("%s %-44s head %5.1f -> fan %5.1f%%  %s\n", ok ? "PASS" : "FAIL", name,
-         G.calc_headroom, G.fanspeed, G.last_reason.c_str());
+  check(on == expect_on && G.last_reason.find(expect_reason) != string::npos, name);
 }
 
 int main() {
-  api::global_api_server = &API;
   G.max_fanspeed.state = 80;
 
-  // Heat gate
-  step("Boiler off, pipes near room temp", 20, 19.5, 19, 20, false, "no heat");
-  step("Boiler fires, radiator hot, room cold", 55, 48, 18, 20, true, "heating room");
-  step("Low temperature water 35/30", 35, 30, 19, 20, true, "heating room");
-  step("Cooling 30/27: still above off threshold", 30, 27, 19, 20, true, "heating room");
-  step("Cooling 25/23: below off threshold", 25, 23, 19, 20, false, "no heat");
-  step("Warming 32/28: headroom 11, back on", 32, 28, 19, 20, true, "heating room");
+  // --- Gate ---
+  step("Cold pipes, boiler off", 19, 18.5, false, "not warm");
+  step("Summer: pipes 29 C, no deltaT: must not start", 29, 28.8, false, "not warm");
+  step("Warm water arriving 30/22: start", 30, 22, true, "below target");
 
-  // Old logic's failure case: large supply/return gap from a throttled valve.
-  // New logic: driven by headroom and demand, not by the gap.
-  step("Throttled TRV 50/30, room still below target", 50, 30, 19.8, 20, true, "heating room");
-  step("Throttled TRV 50/30, room above target", 50, 30, 20.3, 20, false, "room at setpoint");
+  // --- Speed follows deltaT, inverted ---
+  step("40/28 (dT 12): on target, minimum speed", 40, 28, true, "on target");
+  float at_target = G.fanspeed;
+  step("40/34 (dT 6): faster", 40, 34, true, "below target");
+  float mid = G.fanspeed;
+  step("40/39 (dT 1): Max Fan Speed", 40, 39, true, "below target");
+  float full = G.fanspeed;
+  bool order = at_target < mid && mid < full && fabsf(at_target - 25.0f) < 0.01f &&
+               fabsf(full - 80.0f) < 0.01f;
+  if (!order) failures++;
+  printf("%s %-50s %.1f%% < %.1f%% < %.1f%% (25 at target, 80 at full)\n", order ? "PASS" : "FAIL",
+         "Speed rises as deltaT falls", at_target, mid, full);
 
-  // Demand gate with hysteresis
-  step("Room back to 19.95: stays off (hysteresis)", 55, 48, 19.95, 20, false, "room at setpoint");
-  step("Room 19.8: back on", 55, 48, 19.8, 20, true, "heating room");
-  step("Room climate off in HA (no setpoint)", 55, 48, 18, NAN, false, "heating off in HA");
+  // Sensor order does not matter: return on Dallas 1, supply on Dallas 2.
+  step("Swapped sensors 34/40 gives the same speed", 34, 40, true, "below target");
+  if (fabsf(G.fanspeed - mid) > 0.01f) { failures++; printf("FAIL swapped speed differs\n"); }
 
-  // Standalone fallback
-  step("HA disconnected, hot radiator", 55, 48, 18, 20, true, "standalone", false);
-  step("HA disconnected, cold radiator", 21, 20, 18, 20, false, "no heat", false);
+  // --- Residual heat after the boiler stops ---
+  step("Boiler stops, cooling 30/29: keeps running", 30, 29, true, "below target");
+  step("Cooling 25/24.5: still above 24, running", 25, 24.5, true, "below target");
+  step("Cooling 23.8/23.5: below 24, stop", 23.8, 23.5, false, "not warm");
+  step("Back to 26/25 without new start: stays off", 26, 25, false, "not warm");
 
-  // Speed cap
+  // --- Speed cap ---
+  step("Warm water again 42/30: start", 42, 30, true, "on target");
   G.max_fanspeed.state = 40;
-  step("Max Fan Speed 40", 70, 65, 18, 20, true, "heating room");
+  step("Max Fan Speed 40 at dT 1", 42, 41, true, "below target");
   if (G.fanspeed > 40.01f) { failures++; printf("FAIL cap not applied (%.1f)\n", G.fanspeed); }
   G.max_fanspeed.state = 80;
 
-  // Sensor faults
-  step("DS18B20 power on reset value 85", 85, 48, 18, 20, false, "sensor fault");
+  // --- Sensor faults ---
+  step("DS18B20 power on reset value 85", 85, 30, false, "sensor fault");
+  step("Recovery after fault needs a fresh start 42/30", 42, 30, true, "on target");
   NOW += 100000;  // no fresh readings for 100s
-  G.temp_1.state = 55; G.temp_2.state = 48;
   control_fans();
-  bool stale_ok = G.fanspeed == 0 && G.last_reason.find("sensor fault") != string::npos;
-  if (!stale_ok) failures++;
-  printf("%s %-44s -> fan %5.1f%%  %s\n", stale_ok ? "PASS" : "FAIL", "Stale readings (100s old)",
-         G.fanspeed, G.last_reason.c_str());
+  check(G.fanspeed == 0 && G.last_reason.find("sensor fault") != string::npos,
+        "Stale readings (100s old)");
 
-  // Modes
+  // --- Modes ---
   G.fan_mode.option = "MANUAL";
   G.manual_fanspeed.state = 40;
-  step("MANUAL 40 ignores sensors", 20, 20, 20, 20, true, "Manual");
+  step("MANUAL 40 ignores sensors", 20, 20, true, "Manual");
   G.fan_mode.option = "OFF";
-  step("OFF ignores demand", 55, 48, 18, 20, false, "mode OFF");
+  step("OFF ignores warm water", 42, 30, false, "mode OFF");
 
   printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "ALL PASSED", failures, failures == 1 ? "" : "s");
   return failures ? 1 : 0;

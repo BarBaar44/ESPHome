@@ -8,13 +8,15 @@ Radiators heat a room mostly by warming the air that passively rises past their 
 
 This is one part of the broader multi-room heating system documented in the [**thermostat**](https://github.com/BarBaar44/thermostat) repo - DBE units are deployed per-room (see the `DBE_*` sensor naming across rooms like Front, Hallway, Master Left/Right, Office, Room Gijs, Room Tim in that repo) to squeeze more usable heat out of the same water temperature the boiler is already producing.
 
+> **Not a Jaga product.** This is a fully custom board. It shares only the name with Jaga's DBE units; the hardware, firmware and control logic are unrelated.
+
 ## Contents
 
 - [How the fan decides (short version)](#how-the-fan-decides-short-version)
-- [Why the control logic changed](#why-the-control-logic-changed)
+- [Why delta T, and why inverted](#why-delta-t-and-why-inverted)
+- [What changed in this version](#what-changed-in-this-version)
 - [How it works in detail](#how-it-works-in-detail)
 - [Worked examples](#worked-examples)
-- [Setting it up per device](#setting-it-up-per-device)
 - [What appears in Home Assistant](#what-appears-in-home-assistant)
 - [Tuning](#tuning)
 - [Testing](#testing)
@@ -22,148 +24,95 @@ This is one part of the broader multi-room heating system documented in the [**t
 
 ## How the fan decides (short version)
 
-Every 5 seconds the controller asks two questions:
+Every 5 seconds the controller compares its two pipe temperatures: **supply** (water going into the radiator) and **return** (water going back to the boiler). The difference between them is **delta T**.
 
-1. **Is there heat in the radiator worth moving?** The radiator's average temperature has to be clearly above the room temperature (at least 10 °C), and the supply pipe at least 28 °C. Jaga uses the same 28 °C rule in its own DBE units.
-2. **Does the room want heat?** The room temperature, read from the room's climate entity in Home Assistant, has to be below its setpoint.
+1. **Is there warm water?** The fan starts when the supply pipe reaches 28 °C while warm water is actually arriving (delta T at least 1.5 °C). Once running, it keeps going until the supply pipe drops below 24 °C, so the heat left in the radiator after the boiler stops is still blown into the room.
+2. **How fast?** The smaller delta T, the faster the fan. At a delta T of 10 °C or more the radiator already cools the water well and the fan runs at its quiet minimum (25 %). As delta T shrinks towards 2 °C the fan speeds up to the **Max Fan Speed** (80 % by default).
 
-Only when both answers are yes does the fan run. How fast depends on how much heat is available: a radiator that is only a little warmer than the room gets a quiet 25 %, a radiator that is much warmer gets up to the **Max Fan Speed** (80 % by default).
+The board works entirely on its own. Home Assistant only shows what it is doing and holds its settings; the fan behaves the same when HA is down.
 
-If Home Assistant is unreachable, or no room is configured yet, question 2 is skipped and the room is assumed to be at 20 °C. The unit then works on its own, purely on question 1.
+## Why delta T, and why inverted
 
-## Why the control logic changed
+**The goal is a cold return.** The boiler (Atag, max supply 45 °C, modulated by the [thermostat](https://github.com/BarBaar44/thermostat) PID) works most efficiently when the water coming back is well below the water going out. The design target is a delta T of at least 10 °C.
 
-The previous firmware used one signal: **deltaT, the difference between the two pipe sensors** (supply minus return). Small deltaT meant fan off, large deltaT meant fan fast. The reasoning was that a large drop across the radiator means lots of heat is available. That turns out to be backwards, and it caused three problems.
+**At low supply temperatures radiators struggle.** Radiators are rated at 75/65 °C. At 45 °C or lower they give off only a fraction of that by natural convection, so water can pass through and come back almost as warm as it left. A fan forcing air across the fins makes the radiator shed much more of that heat.
 
-**1. A large deltaT means low water flow, not lots of heat.**
-The temperature drop across a radiator depends mainly on how fast water moves through it. When the valve is wide open and hot water rushes through, the whole radiator is hot and the return is only a few degrees cooler than the supply: deltaT is *small*, yet this is exactly when there is the most heat to move. When a TRV throttles the valve because the room is nearly warm enough, water creeps through and cools on the way: deltaT becomes *large*, while there is little heat left and the room doesn't need it. The old logic ran the fan hardest in that second situation.
+**So the fan works hardest when delta T is small.** A small delta T means the radiator is not taking enough heat out of the water. Speeding up the fan pulls more heat into the room, the return gets colder, and delta T grows. As delta T approaches the 10 °C target the fan slows to its minimum again. The loop settles by itself: the fan's own effect (a colder return) is what slows it down.
 
-**2. It fed itself.**
-A running fan pulls heat out of the radiator, so the return pipe gets colder, so deltaT grows, so the fan speeds up, which cools the return further. The fan's own effect pushed it towards full speed.
+**Why the extra start condition is needed.** A small delta T also occurs when there is no heat at all: with the boiler off, both pipes sit at room temperature and delta T is near zero. On its own, an inverted delta T would then run the fan at full speed on a cold radiator. The supply temperature gate prevents that, and requiring a measurable delta T to *start* prevents a pipe that is merely warm (a hot summer day) from starting the fan.
 
-**3. It didn't know whether the room needed heat.**
-Nothing in the old logic looked at the room. A bedroom already at its target would still get a running fan if the pipes showed a gap. That meant noise for nothing, and the fan working against the TRV that was trying to close.
+## What changed in this version
 
-Note that inverting deltaT (small gap = fast fan) doesn't fix it either: when the boiler is off, both pipes cool to room temperature and the gap is also near zero. An inverted rule would run the fan at full speed on a cold radiator.
+The previous firmware had the speed curve the wrong way round compared to the design intent: speed **rose** with delta T (25 % at 2 °C up to 80 % at 20 °C), and the fan switched off below 0.8 °C. So it slowed down exactly when the return was too warm. This version:
 
-**What the new logic uses instead:** how much warmer the radiator is than the room. That number (called **headroom** below) is large exactly when blowing air through the radiator moves real heat, and it falls naturally as the radiator cools. It doesn't depend on flow rate, and the fan pulling heat out lowers it, so the loop calms itself down instead of winding itself up. The room demand check is the second half: it stops the fan once the room is warm, so the fan and the TRV work together instead of against each other.
+| | Before | Now |
+|---|---|---|
+| Speed vs delta T | faster as delta T grows | **faster as delta T shrinks**, minimum at 10 °C or more |
+| Starts when | delta T above 1.5 °C | supply at least 28 °C **and** delta T at least 1.5 °C |
+| Stops when | delta T below 0.8 °C | supply below 24 °C (uses residual heat) |
+| Cold radiator | fan off (delta T near zero) | fan off (supply gate) |
+| Modes | AUTO, MANUAL | AUTO, MANUAL, **OFF**; mode remembered across reboots |
+| Speed limit | fixed 80 % | **Max Fan Speed** setting, 25 to 100 % |
+| Diagnostics | fan RPM only | supply, return, delta T, fan speed, reason |
+
+Unchanged: sensor fault handling, the relay hard off, PWM output and pins, and the existing entity names.
 
 ## How it works in detail
 
 ### Inputs
 
-| Input | Source | Notes |
-|---|---|---|
-| Pipe temperatures | Two DS18B20 sensors on the radiator pipes (`Dallas 1`, `Dallas 2`), read every 30 s | The **warmer** of the two is taken as the supply pipe, the cooler as the return. You don't need to know which sensor sits on which pipe. |
-| Room temperature | Attribute `current_temperature` of the room's climate entity in HA | Set per device with the `room_climate` substitution. |
-| Room setpoint | Attribute `temperature` of that same climate entity | Empty when the room climate is Off, which counts as "no demand". |
+Two DS18B20 temperature sensors, one clamped on the supply pipe and one on the return pipe (`Dallas 1`, `Dallas 2`), read every 30 s. The **warmer** reading is taken as supply and the cooler as return, so it doesn't matter which sensor sits on which pipe.
 
-**Terminology:** *supply* is the pipe bringing hot water into the radiator (heating installers often call it the *flow* pipe), *return* is the pipe taking the cooled water back to the boiler. Both are temperatures measured by the Dallas sensors; nothing here measures how much water flows.
+**Terminology:** *supply* is the pipe bringing hot water into the radiator (heating installers often call it the *flow* pipe), *return* is the pipe taking the cooled water back to the boiler. Both are temperatures; nothing here measures how much water flows.
 
-From the pipe temperatures the controller computes:
+### Gate: is there warm water? (with hysteresis)
 
-- **Mean radiator temperature** = (supply + return) / 2
-- **Headroom** = mean radiator temperature minus room temperature
-
-### Gate 1: heat available (with hysteresis)
-
-| | Fan allowed | Fan stops |
-|---|---|---|
-| Headroom | 10 °C or more | below 6 °C |
-| Supply pipe | 28 °C or more | below 25 °C |
-
-Both conditions are needed to switch on; either one dropping below its lower value switches off. The gap between the on and off values (hysteresis) keeps the fan from flicking on and off when a temperature hovers around a threshold.
-
-### Gate 2: room demand (with hysteresis)
-
-| | Fan allowed | Fan stops |
-|---|---|---|
-| Setpoint minus room temp | 0.1 °C or more (room below target) | 0.2 °C above target |
-
-This works with the thermostat integration: when the room is the "winner" its TRVs get target + 1 °C overshoot buffer, but the fan stops at target + 0.2 °C. The fan helps the room reach its target quickly and then goes quiet while the TRV finishes the job.
-
-### Speed
-
-Once both gates are open, speed follows headroom:
-
-| Headroom | Fan speed |
+| | Value |
 |---|---|
-| 10 °C or less | 25 % (minimum, quiet) |
-| between 10 and 35 °C | rises gradually (slight curve, exponent 1.1) |
-| 35 °C or more | Max Fan Speed (default 80 %) |
+| Start | supply 28 °C or more **and** delta T 1.5 °C or more |
+| Stop | supply below 24 °C |
 
-The output to the fan is additionally limited to 90 % PWM duty in hardware config (`max_power: 90%`), as before.
+The gap between start and stop (hysteresis) keeps the fan from flicking on and off. After a stop, the fan only restarts when the start condition is met again.
 
-### Standalone fallback
+### Speed: smaller delta T, faster fan
 
-The unit falls back to working on its own when:
+| Delta T | Fan speed |
+|---|---|
+| 10 °C or more | 25 % (minimum) |
+| between 10 and 2 °C | rises gradually (slight curve, exponent 1.1) |
+| 2 °C or less | Max Fan Speed (default 80 %) |
 
-- the HA API connection is down, or
-- the room temperature from HA is missing or implausible (outside 5 to 35 °C), which includes the default when no `room_climate` is configured.
+The PWM output is additionally limited to 90 % duty in hardware config (`max_power: 90%`), as before.
 
-In that case the room temperature is assumed to be 20 °C and gate 2 is treated as always open. The fan still only runs when there is real heat in the radiator, so the worst case is a fan running in a warm room, never a fan running on a cold radiator. The **Fan Reason** sensor shows `Running (standalone, no HA room data)` when this happens.
-
-### Safety (unchanged from before)
+### Safety
 
 - A pipe reading that is not a number, exactly 85 °C (the DS18B20 power on value), below 0 or above 95 °C counts as a fault.
 - A pipe sensor that hasn't delivered a new reading for 90 s counts as a fault.
-- Any fault stops the fan. The relay then cuts fan power completely.
+- Any fault stops the fan, and the relay cuts fan power completely. After a fault the start condition has to be met again.
 
 ### Modes
 
 | Mode | Behaviour |
 |---|---|
 | `AUTO` | The logic above. |
-| `MANUAL` | Runs at **Manual Fan Speed** (below 1 % = off). Ignores sensors and HA. |
-| `OFF` | Fan off, whatever the conditions. New in this version. |
-
-The selected mode now survives a reboot (`restore_value: true`).
+| `MANUAL` | Runs at **Manual Fan Speed** (below 1 % = off). Ignores the sensors. |
+| `OFF` | Fan off, whatever the temperatures. |
 
 ## Worked examples
 
-These come straight from the automated test (see [Testing](#testing)), room setpoint 20 °C unless noted:
+These come straight from the automated test (see [Testing](#testing)):
 
-| Situation | Supply / return | Room | Headroom | Fan |
-|---|---|---|---|---|
-| Boiler off, pipes near room temperature | 20 / 19.5 | 19 | 0.8 | off, no heat |
-| Boiler fires, room cold | 55 / 48 | 18 | 33.5 | 76 % |
-| Low temperature water | 35 / 30 | 19 | 13.5 | 31 % |
-| Radiator cooling down | 30 / 27 | 19 | 9.5 | 25 % (still on, hysteresis) |
-| Radiator nearly cold | 25 / 23 | 19 | 5.0 | off, no heat |
-| Throttled TRV, room still below target | 50 / 30 | 19.8 | 20.2 | 46 % |
-| Throttled TRV, room above target | 50 / 30 | 20.3 | 19.7 | off, room at setpoint |
-| Room climate set to Off in HA | 55 / 48 | 18 | 33.5 | off |
-| HA unreachable, hot radiator | 55 / 48 | (20 assumed) | 31.5 | 72 %, standalone |
-
-The "throttled TRV" rows show the difference with the old firmware. Old logic: a 20 °C gap between the pipes meant about 80 % fan, whether or not the room needed heat. New logic: the fan helps while the room is below target and stops when it isn't.
-
-## Setting it up per device
-
-Each device config in `base/` pulls in this package. To link a device to its room, add one line to its `substitutions:` on the ESPHome dashboard:
-
-```yaml
-substitutions:
-  device_name: dbeoffice
-  # ... existing lines unchanged ...
-  room_climate: "climate.office"   # the room climate entity from the thermostat integration
-```
-
-**Finding the right entity:** in HA go to Developer Tools > States and filter on `climate.`. Use the room climate created by the Cloudless Multiroom Thermostat integration (one per room), not a TRV climate. Its attributes should include `current_temperature` and `temperature`.
-
-Suggested mapping (verify the entity IDs in your HA, they depend on the room names):
-
-| Device config | Room climate |
-|---|---|
-| `dbe-office.yaml` | the Office room |
-| `dbefront.yaml` | the Living Room |
-| `dbe-hallway.yaml` | the Living Room (the hallway TRV follows the living room setpoint) |
-| `dbe-master-left.yaml`, `dbe-master-right.yaml` | the Master Bedroom |
-| `dbe-room-gijs.yaml` | Room Gijs |
-| `dbe-room-tim.yaml` | Room Tim |
-
-**Allow the device to read HA:** ESPHome devices can read HA states by default. If a device shows `Running (standalone, no HA room data)` while HA is up, check that the entity ID is correct.
-
-**Without this line** the device keeps working in standalone mode. Nothing breaks on update; you can add the room links one device at a time.
+| Situation | Supply / return | Delta T | Fan |
+|---|---|---|---|
+| Boiler off, cold pipes | 19 / 18.5 | 0.5 | off |
+| Summer, warm pipes, no water moving | 29 / 28.8 | 0.2 | off (no start) |
+| Warm water arriving | 30 / 22 | 8 | 37 % |
+| Radiator cools the water well | 40 / 28 | 12 | 25 % (minimum) |
+| Return too warm | 40 / 34 | 6 | 51 % |
+| Return almost as warm as supply | 40 / 39 | 1 | 80 % |
+| Boiler stopped, radiator still warm | 30 / 29 | 1 | 80 % (residual heat) |
+| Still cooling | 25 / 24.5 | 0.5 | 80 % |
+| Supply below 24 °C | 23.8 / 23.5 | 0.3 | off |
 
 ## What appears in Home Assistant
 
@@ -174,16 +123,15 @@ New entities:
 | Entity | What it tells you |
 |---|---|
 | `Fan Speed` | The commanded speed in %. |
-| `Max Fan Speed` (number) | Upper limit in AUTO mode, 25 to 100, default 80. Remembered across reboots. |
-| `Fan Reason` (diagnostic) | Why the fan is on or off right now, e.g. `Off (room at setpoint)`. |
+| `Max Fan Speed` (number) | Upper limit in AUTO mode, 25 to 100, default 80. Stored on the device. |
+| `Fan Reason` (diagnostic) | Why the fan is on or off right now, e.g. `Running (deltaT below target)`. |
 | `Supply Temperature` (diagnostic) | The warmer pipe sensor: water going into the radiator. |
 | `Return Temperature` (diagnostic) | The cooler pipe sensor: water leaving the radiator. |
-| `Room Temperature Used` (diagnostic) | The room temperature the logic is using (from HA, or 20 in standalone). |
-| `Heat Headroom` (diagnostic) | Radiator mean minus room temperature. The main control signal. |
+| `Delta T` (diagnostic) | Supply minus return. The main control signal. |
 
-Diagnostics update every 30 s; the control loop itself still runs every 5 s.
+Diagnostics update every 30 s; the control loop itself runs every 5 s. All settings are stored on the device, so they survive a reboot even when HA is unavailable.
 
-**Quiet nights in bedrooms**: lower Max Fan Speed from an HA automation, for example:
+**Quiet nights in bedrooms** (optional, the board doesn't need it): lower Max Fan Speed from an HA automation, for example:
 
 ```yaml
 alias: DBE bedrooms quiet at night
@@ -212,28 +160,31 @@ All thresholds are constants at the top of the `control_fans` script in `DBEmain
 
 | Constant | Default | Raise it to... | Lower it to... |
 |---|---|---|---|
-| `headroom_on` / `headroom_off` | 10 / 6 °C | run the fan only on hotter radiators | run it longer on cooling radiators |
-| `supply_min_on` / `supply_min_off` | 28 / 25 °C | same, as an absolute floor | same |
-| `gap_on` / `gap_off` | 0.1 / -0.2 °C | start the fan only when the room is further below target | keep it running further past target |
-| `hr_min` / `hr_max` | 10 / 35 °C | need more heat for higher speeds (quieter) | reach high speed sooner |
+| `supply_on` | 28 °C | start only on warmer water | start sooner when the PID runs a low supply |
+| `delta_on` | 1.5 °C | demand clearer evidence of water moving before starting | start on smaller signs of warm water |
+| `supply_off` | 24 °C | stop earlier (less residual run time, less noise) | squeeze out more residual heat |
+| `delta_target` | 10 °C | aim for a colder return (fan runs faster for longer) | accept a warmer return (quieter) |
+| `delta_full` | 2 °C | reach full speed sooner | reach full speed only when delta T is very small |
 | `speed_min` | 25 % | if fans stall at low speed | if 25 % is audible |
-| `room_default` | 20 °C | standalone assumes a warmer room (fan runs less) | the opposite |
 
-Keep the `_off` value of each pair below its `_on` value, otherwise the fan will flicker. After changing a constant, run the test (next section) and update its expectations if behaviour changed on purpose.
+Keep `supply_off` below `supply_on`, and `delta_full` below `delta_target`. After changing a constant, run the test (next section) and update its expectations if behaviour changed on purpose.
 
-**Watching it work:** in HA, put `Heat Headroom`, `Fan Speed`, `Fan Reason` and the room temperature on one history graph. If the fan regularly starts and stops within a few minutes, widen the hysteresis gap.
+**Two things to watch in practice:**
+- **Mild days:** the PID may hold the supply below 28 °C for long periods. If the fans then never start, lower `supply_on`.
+- **Residual run time:** after the boiler stops, delta T is small, so the fan runs at Max Fan Speed until the supply drops below 24 °C. If that is too long or too loud, raise `supply_off` or use the Max Fan Speed setting.
+
+**Watching it work:** in HA, put `Supply Temperature`, `Return Temperature`, `Delta T` and `Fan Speed` on one history graph. While the boiler runs, delta T should settle near 10 °C at a moderate fan speed. If the fan regularly starts and stops within a few minutes, widen the gap between `supply_on` and `supply_off`.
 
 ## Testing
 
 Two checks run in GitHub Actions on every change to `DBE/`:
 
 1. **Schema check** (`.ci/dbe.yaml`): `esphome config`, catches YAML and component errors.
-2. **Logic test** (`.ci/dbe-logic/`): copies the `control_fans` lambda out of `DBEmain.yml`, compiles it on the build machine against small stand-ins for ESPHome, and runs the scenarios from the [Worked examples](#worked-examples) table (plus sensor faults, modes and the speed cap). This catches C++ mistakes in the lambda and changes in behaviour, neither of which the schema check sees.
+2. **Logic test** (`.ci/dbe-logic/`): copies the `control_fans` lambda out of `DBEmain.yml`, compiles it on the build machine against small stand-ins for ESPHome, and runs the scenarios from the [Worked examples](#worked-examples) table plus speed ordering, swapped sensors, the speed cap, sensor faults and modes. This catches C++ mistakes in the lambda and changes in behaviour, neither of which the schema check sees.
 
 Run the logic test locally with `.ci/dbe-logic/run.sh` (needs `g++` and `python3` with PyYAML).
 
 Not covered: a full firmware build for the ESP8266. The first real compile happens on the ESPHome dashboard, so check the first device's logs after updating.
-
 
 ## Hardware: relay-switched fan power (not MOSFET)
 

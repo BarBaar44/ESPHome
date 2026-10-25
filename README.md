@@ -10,7 +10,7 @@ This repository contains ESPHome configuration files for various devices integra
 ESPHome/
 ├── base/                          # Primary per-device configs (reference shared files via packages:)
 ├── DBE/
-│   └── DBEmain.yml               # Radiator booster fan controller (heat headroom + HA room demand, hard-off relay)
+│   └── DBEmain.yml               # Radiator booster fan controller (standalone, inverted delta T, hard-off relay)
 ├── LVGL/
 │   ├── displayconfig.yml         # Shared display/touch driver config (ESP32-S3, 800x480 mipi_rgb, GT911)
 │   └── Masterbedroom/
@@ -55,7 +55,7 @@ packages:
 ### 🔵 `DBE/`
 | File | Description |
 |------|-------------|
-| `DBEmain.yml` | Radiator booster fan controller for the DBE (custom) device. Runs the fan only when the radiator is clearly warmer than the room and the room is below its setpoint (read from the room climate entity in HA), with speed following that heat headroom. Falls back to standalone operation without HA. A physical relay gives a hard power cutoff. Modes AUTO, MANUAL and OFF. Details in [DBE/README.md](DBE/README.md). |
+| `DBEmain.yml` | Standalone radiator booster fan controller for the DBE (custom) device. Two Dallas sensors on the supply and return pipes; the fan runs while the supply pipe is warm and speeds up as delta T falls below a 10 °C target, to get a colder return for the condensing boiler. A physical relay gives a hard power cutoff. Modes AUTO, MANUAL and OFF. Details in [DBE/README.md](DBE/README.md). |
 
 ---
 
