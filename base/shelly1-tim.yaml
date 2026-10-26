@@ -20,3 +20,12 @@ packages:
     url: https://github.com/BarBaar44/ESPHome
     files: [generic/generic_sensors.yml, generic/wifi.yml, shelly/one.yml]
     refresh: 1min
+
+# Debounce the wall-switch input. The first switch-on after the light has
+# been off a while turned it straight back off 0.5 s later (the single-click
+# delay): most likely a short spike on the SW wire read as a click. Real
+# presses last 100 ms or more.
+binary_sensor:
+  - id: !extend button
+    filters:
+      - delayed_on: 50ms
