@@ -9,6 +9,7 @@ substitutions:
   device_name: "bluetooth-proxy-garden"
   device_description: Bluetooth Proxy Garden
   area: "Rear Garden"
+  device_key: !secret bluetooth-proxy-garden_key
 
 esphome:
   name: "bluetooth-proxy-garden"
@@ -28,8 +29,6 @@ logger:
 
 # Enable Home Assistant API
 api:
-  encryption:
-    key: !secret bluetooth-proxy-garden_key
   on_client_connected:
     then:
       - output.turn_on: ha_led
@@ -37,12 +36,14 @@ api:
     then:
       - output.turn_off: ha_led
 
+# The one migration upload still needs the old OTA password. Remove
+# this block after it.
 ota:
-  password: !secret bluetooth-proxy-garden_ota
-  platform: esphome
+  - id: !extend ota_esphome
+    password: !secret bluetooth-proxy-garden_ota
 
 packages:
   Generic_config:
     url: https://github.com/BarBaar44/ESPHome
-    files: [bluetooth-proxy/proxy.yml]
+    files: [bluetooth-proxy/proxy.yml, generic/api_ota.yml]
     refresh: 1min

@@ -1,7 +1,9 @@
 # CI validation harness for bluetooth-proxy/proxy.yml — see .ci/README.md
-# Note: proxy.yml uses ethernet:, not wifi:, so no wifi.yml package here.
+# Note: proxy.yml uses ethernet:, not wifi:, so no wifi.yml package here;
+# api_ota.yml carries the API and OTA encryption instead.
 substitutions:
   device_name: "btproxy-ci"
+  device_key: "ZGADVtIpvtmMT0gQEAIiwsZjP8q/s6AuQFxiZI4mxj4="  # CI-only dummy; real devices set device_key via !secret
 
 esphome:
   name: ${device_name}
@@ -11,7 +13,12 @@ esp32:
   framework:
     type: arduino
 
-api:
-
 packages:
   device: !include ../bluetooth-proxy/proxy.yml
+  api_ota: !include ../generic/api_ota.yml
+
+# Same as the hallway and garden proxies during their migration upload:
+# the old OTA password on top of api_ota.yml's encryption.
+ota:
+  - id: !extend ota_esphome
+    password: "ci-dummy-password"
