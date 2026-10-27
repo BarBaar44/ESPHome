@@ -679,6 +679,11 @@ script:
                   snprintf(buf, sizeof(buf), "%.1f", id(ha_climate_setpoint).state);
                   return buf;
 
+      # ---- Heating indicator ----
+      # Read-only display, no guard needed. update_heating_icon is
+      # has_state()-aware itself, so it is safe to run unconditionally.
+      - script.execute: update_heating_icon
+
   # Ambient-light-driven backlight brightness.
   #
   # Maps the room illuminance (sensor.multisensor2_room_bart_illuminance,
@@ -828,6 +833,31 @@ script:
       - lvgl.image.update:
           id: img_bed_right_2
           image_recolor: !lambda 'return lv_color_hex(id(bed_right_occupied).state ? 0x4CAF50 : 0xFFFFFF);'
+
+  # Drives the heating indicator (mdi:fire, climate_heating_icon in
+  # lvglconfig.yml) on the Climate card:
+  #   red    (0xF44336) = room is being heated AND is the leading room
+  #   orange (0xFF9800) = room is being heated, not leading
+  #   grey   (0xBDBDBD) = room is not being heated
+  #
+  # "Not heating" wins over "leading": a leading flag on its own never
+  # lights the flame. Missing state (HA not connected yet, entity
+  # unavailable) counts as not heating / not leading, so the icon fails
+  # to grey rather than showing a heat call that may not exist.
+  #
+  # Runs on every change of either input (see ha_climate_hvac_action and
+  # ha_climate_leading below) and from sync_settings_from_ha.
+  - id: update_heating_icon
+    then:
+      - lvgl.widget.update:
+          id: climate_heating_icon
+          text_color: !lambda |-
+            bool heating = id(ha_climate_hvac_action).has_state() &&
+                           id(ha_climate_hvac_action).state == "heating";
+            bool leading = id(ha_climate_leading).has_state() &&
+                           id(ha_climate_leading).state == "Master Bedroom";
+            if (!heating) return lv_color_hex(0xBDBDBD);
+            return lv_color_hex(leading ? 0xF44336 : 0xFF9800);
 
 # =========================
 # INTERVALS
@@ -1053,6 +1083,28 @@ text_sensor:
             id: climate_warm_button
             state:
               checked: !lambda 'return x == "comfort";'
+
+  # Is the room being heated? Feeds update_heating_icon.
+  # hvac_action of the room's virtual thermostat (generic_thermostat):
+  # "heating" while it switches its heater on, i.e. while the room calls
+  # for heat. Otherwise "idle", or "off" when the thermostat is off.
+  - platform: homeassistant
+    id: ha_climate_hvac_action
+    entity_id: climate.virtual_thermostat_master_bedroom
+    attribute: hvac_action
+    on_value:
+      then:
+        - script.execute: update_heating_icon
+
+  # Which room leads the heating? Feeds update_heating_icon (red flame
+  # when heating + leading). The Virtual Heating Area sensor holds the
+  # area name of the room that drives the boiler, or "Off".
+  - platform: homeassistant
+    id: ha_climate_leading
+    entity_id: sensor.virtual_heating_area
+    on_value:
+      then:
+        - script.execute: update_heating_icon
 
 # =========================
 # HOME ASSISTANT LIGHT STATES

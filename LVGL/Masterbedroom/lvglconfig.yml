@@ -13,6 +13,7 @@ font:
       "\U000F16B5", # wifi-alert
       "\U000F0141", # chevron-left
       "\U000F0142", # chevron-right
+      "\U000F0238", # fire (Climate card heating indicator)
       ]
 
   # Light bulb icons voor Main Light switches
@@ -956,6 +957,22 @@ lvgl:
                               y: 5
                               text_font: montserrat_20
                               text_color: 0x0B0A0A
+
+                          # Heating indicator (mdi:fire), right of the title.
+                          #   red    = room is heating and is the leading room
+                          #   orange = room is heating, not leading
+                          #   grey   = room is not being heated
+                          # Color driven by update_heating_icon (see
+                          # lvglsensors.yml). Starts grey so a panel without
+                          # HA state never claims the room is heating.
+                          - label:
+                              id: climate_heating_icon
+                              text: "\U000F0238"
+                              align: TOP_LEFT
+                              x: 95
+                              y: 4
+                              text_font: icons_24
+                              text_color: 0xBDBDBD
 
                           # Huidige kamertemperatuur - rechterbovenhoek
                           - label:
