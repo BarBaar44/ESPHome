@@ -1,6 +1,10 @@
 # Read by the Fleet for ESPHome add-on. Do not remove.
 # esphome-fleet:
-#   schedule_last_run: '2026-09-08T08:00:01.200716+00:00'
+#   schedule: 0 10 */7 * *
+#   schedule_enabled: true
+#   schedule_tz: Europe/Amsterdam
+#   schedule_last_run: '2026-10-22T08:00:01.327417+00:00'
+
  
 ########################################################################
 # Berkey fill controller
@@ -99,7 +103,7 @@ substitutions:
   WIFI_passwd: !secret wifi_password
   fallback_passwd: !secret wifi_bck
   friendly_name: "Berkey Fill Controller"
-  device_key: !secret berkeyfillcontroller_key
+  device_key: !secret berkey-fill_key
   area: "Kitchen"
 
   # --- Chamber geometry, measured -----------------------------------
@@ -210,6 +214,12 @@ modbus:
   uart_id: modbus_uart
   # No flow_control_pin: the THVD1406 switches direction by itself.
   send_wait_time: 500ms
+  # Quiet time on the bus before each request, for all devices on it.
+  # Replaces command_throttle on the controllers (deprecated, removed in
+  # 2027.2.0). 600 ms is ESPHome's default, written out so it is visible;
+  # the old 200 ms throttle also worked with these probes. Two requests
+  # every 5 s leaves plenty of room either way.
+  turnaround_time: 600ms
  
 modbus_controller:
   - id: probe_upper
@@ -217,17 +227,14 @@ modbus_controller:
     modbus_id: modbus_bus
     setup_priority: -10
     update_interval: 5s
-    # Both probes share one bus. The throttle spaces requests out so
-    # they do not tread on each other. Raise to 300ms if intermittent
-    # timeouts ever appear.
-    command_throttle: 200ms
+    # Both probes share one bus. Request spacing is turnaround_time on
+    # the modbus: block above.
  
   - id: probe_lower
     address: 0x02
     modbus_id: modbus_bus
     setup_priority: -10
     update_interval: 5s
-    command_throttle: 200ms
  
 # --- State ------------------------------------------------------------
  
@@ -243,7 +250,7 @@ globals:
     initial_value: "false"
  
   - id: fill_start_ms
-    type: uint32
+    type: uint32_t
     restore_value: no
     initial_value: "0"
  
@@ -266,12 +273,12 @@ globals:
   # the logic acting on its last known value. A stale reading is worse
   # than no reading, because it looks plausible.
   - id: upper_last_ms
-    type: uint32
+    type: uint32_t
     restore_value: no
     initial_value: "0"
  
   - id: lower_last_ms
-    type: uint32
+    type: uint32_t
     restore_value: no
     initial_value: "0"
  
@@ -313,9 +320,13 @@ binary_sensor:
 # --- Sensors ----------------------------------------------------------
  
 sensor:
-  # force_new_range: true is MANDATORY on every sensor here. These
-  # probes reject multi-register reads with a clean Modbus exception,
-  # and modbus_controller merges adjacent registers by default.
+  # reuse_previous_range: false is MANDATORY on every sensor here,
+  # including the diagnostics below if they are re-enabled. These probes
+  # reject multi-register reads with a clean Modbus exception, and
+  # modbus_controller merges adjacent registers by default. The option
+  # only stops a sensor joining the PREVIOUS one's range, so it has to
+  # be on each sensor, not just the first. (Replaces force_new_range,
+  # deprecated, removed in 2027.3.0.)
   #
   # The /10 divisor comes from register 3 (decimals = 1), confirmed on
   # both units. If a probe is ever swapped, re-enable the diagnostic
@@ -327,7 +338,7 @@ sensor:
     register_type: holding
     address: 0x0004
     value_type: S_WORD
-    force_new_range: true
+    reuse_previous_range: false
     unit_of_measurement: "cm"
     accuracy_decimals: 1
     filters:
@@ -343,7 +354,7 @@ sensor:
     register_type: holding
     address: 0x0004
     value_type: S_WORD
-    force_new_range: true
+    reuse_previous_range: false
     unit_of_measurement: "cm"
     accuracy_decimals: 1
     filters:
@@ -414,7 +425,7 @@ sensor:
   #   register_type: holding
   #   address: 0x0002
   #   value_type: S_WORD
-  #   force_new_range: true
+  #   reuse_previous_range: false
   #   entity_category: diagnostic
   #
   # - platform: modbus_controller
@@ -423,7 +434,7 @@ sensor:
   #   register_type: holding
   #   address: 0x0003
   #   value_type: S_WORD
-  #   force_new_range: true
+  #   reuse_previous_range: false
   #   entity_category: diagnostic
   #
   # - platform: modbus_controller
@@ -432,7 +443,7 @@ sensor:
   #   register_type: holding
   #   address: 0x0002
   #   value_type: S_WORD
-  #   force_new_range: true
+  #   reuse_previous_range: false
   #   entity_category: diagnostic
   #
   # - platform: modbus_controller
@@ -441,7 +452,7 @@ sensor:
   #   register_type: holding
   #   address: 0x0003
   #   value_type: S_WORD
-  #   force_new_range: true
+  #   reuse_previous_range: false
   #   entity_category: diagnostic
  
 # --- Outputs ----------------------------------------------------------
