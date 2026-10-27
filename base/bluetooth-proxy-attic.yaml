@@ -9,6 +9,7 @@ substitutions:
   device_name: bluetooth-proxy-attic
   device_description: Bluetooth Proxy Attic
   area: Hallway
+  device_key: !secret bluetooth-proxy-attic_key
 esphome:
   name: bluetooth-proxy-attic
   comment: ${device_description}
@@ -22,20 +23,16 @@ esp32:
     type: esp-idf
 logger: null
 api:
-  encryption:
-    key: !secret 'bluetooth-proxy-attic_key'
   on_client_connected:
     then:
     - output.turn_on: ha_led
   on_client_disconnected:
     then:
     - output.turn_off: ha_led
-ota:
-#  password: !secret 'bluetooth-proxy-attic_ota'
-  platform: esphome
 packages:
   Generic_config:
     url: https://github.com/BarBaar44/ESPHome
     files:
     - bluetooth-proxy/proxy.yml
+    - generic/api_ota.yml
     refresh: 1min

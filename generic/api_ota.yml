@@ -1,0 +1,23 @@
+# API and OTA encryption for devices that cannot use wifi.yml, such as the
+# Ethernet Bluetooth proxies. Same blocks as in wifi.yml: keep the two in
+# step. Needs the ${device_key} substitution (the API encryption key).
+
+ota:
+  - platform: esphome
+    # id lets a device file extend this entry, e.g. to add its old OTA
+    # password for the one migration upload:
+    #   ota:
+    #     - id: !extend ota_esphome
+    #       password: !secret <device>_ota
+    id: ota_esphome
+    # Encrypt OTA uploads with the API encryption key (device_key below).
+    encryption:
+      # MIGRATION ONLY. Lets the first upload reach devices whose running
+      # firmware cannot decrypt yet. Remove once every device using this
+      # package has been updated once, or plaintext uploads stay allowed.
+      allow_plaintext_upload: true
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "${device_key}"

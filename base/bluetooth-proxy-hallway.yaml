@@ -9,6 +9,7 @@ substitutions:
   device_name: "bluetooth-proxy-hallway"
   device_description: "Bluetooth Proxy Hallway"
   area: "Hallway"
+  device_key: !secret bluetooth-proxy-hallway_key
 
 esphome:
   name: "bluetooth-proxy-hallway"
@@ -26,11 +27,6 @@ esp32:
 # Enable logging
 logger:
 
-# Enable Home Assistant API
-api:
-  encryption:
-    key: !secret bluetooth-proxy-hallway_key
-
 # ha_led on only while Home Assistant (a state-subscribing API client) is
 # connected. on_client_connected/disconnected fired for every API client,
 # so a log viewer or Fleet check disconnecting turned the LED off.
@@ -46,12 +42,14 @@ interval:
           else:
             - output.turn_off: ha_led
 
+# The one migration upload still needs the old OTA password. Remove
+# this block after it.
 ota:
-  password: !secret bluetooth-proxy-hallway_ota
-  platform: esphome
+  - id: !extend ota_esphome
+    password: !secret bluetooth-proxy-hallway_ota
 
 packages:
   Generic_config:
     url: https://github.com/BarBaar44/ESPHome
-    files: [bluetooth-proxy/proxy.yml]
+    files: [bluetooth-proxy/proxy.yml, generic/api_ota.yml]
     refresh: 1min
