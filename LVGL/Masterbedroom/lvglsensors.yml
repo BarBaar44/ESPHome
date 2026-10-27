@@ -855,7 +855,7 @@ script:
             bool heating = id(ha_climate_hvac_action).has_state() &&
                            id(ha_climate_hvac_action).state == "heating";
             bool leading = id(ha_climate_leading).has_state() &&
-                           id(ha_climate_leading).state;
+                           id(ha_climate_leading).state == "Master Bedroom";
             if (!heating) return lv_color_hex(0xBDBDBD);
             return lv_color_hex(leading ? 0xF44336 : 0xFF9800);
 
@@ -1085,15 +1085,23 @@ text_sensor:
               checked: !lambda 'return x == "comfort";'
 
   # Is the room being heated? Feeds update_heating_icon.
-  # ENTITY (verify): assumed to be the hvac_action attribute of the room's
-  # virtual thermostat, where "heating" means an active heat call. If the
-  # real "being heated" signal lives elsewhere (e.g. a valve or zone
-  # binary_sensor), point this at it and adjust the "heating" comparison
-  # in update_heating_icon to match.
+  # hvac_action of the room's virtual thermostat (generic_thermostat):
+  # "heating" while it switches its heater on, i.e. while the room calls
+  # for heat. Otherwise "idle", or "off" when the thermostat is off.
   - platform: homeassistant
     id: ha_climate_hvac_action
     entity_id: climate.virtual_thermostat_master_bedroom
     attribute: hvac_action
+    on_value:
+      then:
+        - script.execute: update_heating_icon
+
+  # Which room leads the heating? Feeds update_heating_icon (red flame
+  # when heating + leading). The Virtual Heating Area sensor holds the
+  # area name of the room that drives the boiler, or "Off".
+  - platform: homeassistant
+    id: ha_climate_leading
+    entity_id: sensor.virtual_heating_area
     on_value:
       then:
         - script.execute: update_heating_icon
@@ -1302,20 +1310,6 @@ binary_sensor:
     on_state:
       then:
         - script.execute: update_bed_occupancy_icons
-
-  # Is this room the leading room for the heating? on = leading.
-  # Feeds update_heating_icon (red flame when heating + leading).
-  # ENTITY (fill in): placeholder id, does not exist in HA. Replace with
-  # the real entity that says the master bedroom is the leading room.
-  # If that is a sensor holding the leading room's NAME rather than a
-  # per-room on/off, move this to text_sensor: and change the "leading"
-  # test in update_heating_icon to compare against the room name.
-  - platform: homeassistant
-    id: ha_climate_leading
-    entity_id: binary_sensor.entity_placeholder_master_bedroom_heating_leading
-    on_state:
-      then:
-        - script.execute: update_heating_icon
 
 # =========================
 # SENSORS FROM HOME ASSISTANT
