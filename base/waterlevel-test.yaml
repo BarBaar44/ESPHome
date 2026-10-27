@@ -92,7 +92,9 @@
 ########################################################################
  
 substitutions:
-  device_name: berkeyfillcontroller
+  device_name: berkey-fill       # max 15 chars: the package builds the
+                                # AP SSID '<device_name> Fallback Hotspot',
+                                # and an SSID is at most 32 characters
   device_description: "Berkey Fill Controller"
   WIFI_passwd: !secret wifi_password
   fallback_passwd: !secret wifi_bck
@@ -144,7 +146,7 @@ esphome:
 esp32:
   board: esp32dev
   framework:
-    type: arduino
+    type: esp-idf   # ESPHome default since 2026.1, matches the other devices
  
 # --- Networking -------------------------------------------------------
  
