@@ -12,21 +12,16 @@ captive_portal:
 
 ota:
   - platform: esphome
-    # id lets a device file extend this entry, e.g. to add its old OTA
-    # password for the one migration upload:
-    #   ota:
-    #     - id: !extend ota_esphome
-    #       password: !secret <device>_ota
+    # id lets a device file extend this entry (ota: - id: !extend ota_esphome).
+    # An OTA password can't be added: ESPHome refuses it next to encryption.
     id: ota_esphome
     # Encrypt OTA uploads with the API encryption key (device_key below).
     # No separate secret. Replaces an OTA password, which ESPHome no
     # longer recommends; without this block uploads are plaintext and
     # unauthenticated.
-    encryption:
-      # MIGRATION ONLY. Lets the first upload reach devices whose running
-      # firmware cannot decrypt yet. Remove once every device using this
-      # package has been updated once, or plaintext uploads stay allowed.
-      allow_plaintext_upload: true
+    # Plaintext uploads are refused: a device whose firmware can't decrypt
+    # yet needs a serial (USB) flash.
+    encryption: {}
 
 # Enable Home Assistant API
 api:

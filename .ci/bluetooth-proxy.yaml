@@ -16,9 +16,3 @@ esp32:
 packages:
   device: !include ../bluetooth-proxy/proxy.yml
   api_ota: !include ../generic/api_ota.yml
-
-# Same as the hallway and garden proxies during their migration upload:
-# the old OTA password on top of api_ota.yml's encryption.
-ota:
-  - id: !extend ota_esphome
-    password: "ci-dummy-password"

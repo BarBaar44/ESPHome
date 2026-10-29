@@ -42,12 +42,6 @@ interval:
           else:
             - output.turn_off: ha_led
 
-# The one migration upload still needs the old OTA password. Remove
-# this block after it.
-ota:
-  - id: !extend ota_esphome
-    password: !secret bluetooth-proxy-hallway_ota
-
 packages:
   Generic_config:
     url: https://github.com/BarBaar44/ESPHome
