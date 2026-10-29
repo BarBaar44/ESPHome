@@ -22,11 +22,9 @@ ota:
     # No separate secret. Replaces an OTA password, which ESPHome no
     # longer recommends; without this block uploads are plaintext and
     # unauthenticated.
-    encryption:
-      # MIGRATION ONLY. Lets the first upload reach devices whose running
-      # firmware cannot decrypt yet. Remove once every device using this
-      # package has been updated once, or plaintext uploads stay allowed.
-      allow_plaintext_upload: true
+    # Plaintext uploads are refused: a device whose firmware can't decrypt
+    # yet needs a serial (USB) flash.
+    encryption: {}
 
 # Enable Home Assistant API
 api:
