@@ -3,15 +3,17 @@
 #   schedule: 0 10 */7 * *
 #   schedule_enabled: true
 #   schedule_tz: Europe/Amsterdam
-#   schedule_last_run: '2026-10-29T09:00:00.090652+00:00'
+#   schedule_last_run: '2026-10-22T08:00:01.327417+00:00'
 
+ 
 ########################################################################
 # Berkey fill controller
 #
-# STATE (26 Oct 2026): PCB REVISION OF THIS FILE. Rev G carrier board
-# fully assembled and power tested (24 V, 5.01 V, 3.28 V). Not yet
-# flashed. The breadboard version is superseded; do not flash this
-# file onto the breadboard build.
+# STATE (29 Oct 2026): PCB REVISION OF THIS FILE, flashed and running
+# on the rev G carrier. Dry run with ball valve and solenoid on J9
+# passed. Fill timeout changed from a fixed 7 min to one sized per
+# fill (see "Three independent stops"). The breadboard version is
+# superseded; do not flash this file onto the breadboard build.
 #
 #   Modbus address 1 = UPPER chamber
 #   Modbus address 2 = LOWER chamber
@@ -49,6 +51,20 @@
 # Whichever fires first closes the valve. Stop 3 is the one that
 # actually saves you, because it depends on no sensor working.
 #
+# Stop 3 is sized PER FILL (29 Oct 2026), not fixed. The old fixed
+# 7 min let ~14 L through at 2 L/min, nearly twice the upper chamber,
+# so it protected nothing. Now:
+#
+#   timeout = allowed_L / expected_flow_lpm * 60 * timeout_factor
+#             + valve_travel_s,  capped at max_fill_seconds
+#
+# A 6 L fill gets ~4.2 min, a 2 L fill ~1.6 min. Reaching it means
+# stops 1 and 2 both failed, so it is an ABORT (latched), not a
+# normal stop. If the real flow is below expected_flow_lpm, fills
+# abort early: the safe direction, and a sign to recalibrate.
+# Limit: if the restrictor fails open (~7.5 L/min) no sane timeout
+# helps; then it is stops 1 and 2 and the float.
+#
 # ── The fourth stop is not in this file ─────────────────────────────
 # On the board the float switch NC contact sits between +5V (J5.1) and
 # FLOAT_OUT (J5.2), and FLOAT_OUT is the coil supply for K1 and K2.
@@ -61,8 +77,8 @@
 # bench test, bridge J5 with a short wire in place of the float.
 #
 # ── VALVE TRAVEL IS 15 SECONDS ──────────────────────────────────────
-# From the label. 10 to 11 s measured on the bench without water
-# pressure. Three numbers below depend on it:
+# From the label. 11 s measured both ways on 29 Oct 2026, dry, with
+# the solenoid on J9. Four numbers below depend on it:
 #   safety_margin_cm    - overshoot after the stop decision
 #   no_flow_grace_ms    - must exceed travel, or the abort fires
 #                         before the valve has finished opening
@@ -70,8 +86,8 @@
 #                         circuit mid-travel and the valve freezes
 #                         part way. The leak check also waits this
 #                         long after a stop (see below)
-# RE-TIME THE ACTUAL CLOSE once the stainless body is on the 8 Nm
-# motor and under water pressure.
+#   valve_travel_s      - added to the fill timeout
+# RE-TIME THE ACTUAL CLOSE once under water pressure.
 #
 # ── Water path (16 Oct 2026) ────────────────────────────────────────
 #   shutoff -> restrictor (90°) -> FLOW SENSOR -> ball valve
@@ -90,7 +106,8 @@
 # ── Numbers that are still placeholders ─────────────────────────────
 # lower_full_cm, upper_full_cm and fill_below_cm are GUESSES until
 # the probes are mounted and zeroed with two weighed 2 L additions.
-# pulses_per_litre is a start value until calibrated with water.
+# pulses_per_litre and expected_flow_lpm are start values until the
+# restrictor is set and the flow calibrated with water.
 # Until then, leave enable_filling off.
 ########################################################################
  
@@ -119,10 +136,18 @@ substitutions:
   # the real overshoot to a few mL; keep the margin anyway.
   safety_margin_cm: "3.5"
   min_fill_cm: "2.0"            # do not bother with a fill under this
-  max_fill_seconds: "420"       # 7 min: ~1.8x a 7.6 L fill at 2 L/min
   probe_stale_ms: "60000"
   no_flow_grace_ms: "25000"     # MUST exceed valve travel (15 s) + margin
   valve_travel_hold: "20s"      # MUST exceed valve travel. See stop_fill
+
+  # --- Fill timeout (stop 3), sized per fill --------------------------
+  expected_flow_lpm: "2.0"      # restrictor target. Set to the MEASURED
+                                # rate once calibrated
+  timeout_factor: "1.3"         # slack on top of the expected duration
+  valve_travel_s: "20"          # opening travel plus margin
+  max_fill_seconds: "300"       # hard ceiling whatever the sum says:
+                                # 10 L at 2 L/min, still below a full
+                                # upper chamber plus lower headroom
  
   # --- Flow sensor ----------------------------------------------------
   # YF-B1-S, stainless. Start value from the 2 Oct bench test:
@@ -265,6 +290,12 @@ globals:
  
   - id: fill_allowed_ml
     type: float
+    restore_value: no
+    initial_value: "0"
+
+  # Stop 3, computed per fill in try_start_fill.
+  - id: fill_timeout_ms
+    type: uint32_t
     restore_value: no
     initial_value: "0"
  
@@ -577,14 +608,24 @@ script:
  
           id(fill_target_upper_cm) = id(upper_level).state + allowed;
           id(fill_allowed_ml) = allowed * ${ml_per_cm};
+
+          // Stop 3: expected duration for THIS fill, plus slack and
+          // valve travel, never above the hard ceiling.
+          float timeout_s = (id(fill_allowed_ml) / 1000.0f)
+                            / ${expected_flow_lpm} * 60.0f
+                            * ${timeout_factor} + ${valve_travel_s};
+          if (timeout_s > ${max_fill_seconds}) timeout_s = ${max_fill_seconds};
+          id(fill_timeout_ms) = (uint32_t)(timeout_s * 1000.0f);
+
           id(fill_start_pulses) = isnan(id(flow_total).state)
                                     ? 0 : id(flow_total).state;
           id(fill_start_ms) = now;
           id(fill_active) = true;
  
-          ESP_LOGI("fill", "Starting: %.1f cm (%.0f mL), upper %.1f -> %.1f",
+          ESP_LOGI("fill", "Starting: %.1f cm (%.0f mL), upper %.1f -> %.1f, timeout %.0f s",
                    allowed, id(fill_allowed_ml),
-                   id(upper_level).state, id(fill_target_upper_cm));
+                   id(upper_level).state, id(fill_target_upper_cm),
+                   timeout_s);
       - if:
           condition:
             lambda: return id(fill_active);
@@ -670,6 +711,12 @@ interval:
             id(abort_fill)->execute("no flow with valve open");
             return;
           }
+          // Stop 3. Reaching it means the level and volume stops both
+          // failed to fire, so it latches.
+          if (elapsed > id(fill_timeout_ms)) {
+            id(abort_fill)->execute("fill timeout");
+            return;
+          }
  
           // --- Stops: end the fill normally -------------------------
  
@@ -681,10 +728,6 @@ interval:
                      / ${pulses_per_litre} * 1000.0;
           if (ml >= id(fill_allowed_ml)) {
             id(stop_fill)->execute("volume reached");
-            return;
-          }
-          if (elapsed > (${max_fill_seconds} * 1000UL)) {
-            id(stop_fill)->execute("timeout");
             return;
           }
  
