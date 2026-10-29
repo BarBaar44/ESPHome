@@ -12,11 +12,8 @@ captive_portal:
 
 ota:
   - platform: esphome
-    # id lets a device file extend this entry, e.g. to add its old OTA
-    # password for the one migration upload:
-    #   ota:
-    #     - id: !extend ota_esphome
-    #       password: !secret <device>_ota
+    # id lets a device file extend this entry (ota: - id: !extend ota_esphome).
+    # An OTA password can't be added: ESPHome refuses it next to encryption.
     id: ota_esphome
     # Encrypt OTA uploads with the API encryption key (device_key below).
     # No separate secret. Replaces an OTA password, which ESPHome no
