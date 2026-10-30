@@ -52,6 +52,10 @@ esphome:
       - lvgl.dropdown.update:
           id: night_mode_end_dropdown
           selected_index: !lambda 'return id(night_mode_end_hour);'
+      - lvgl.dropdown.update:
+          id: notify_color_dropdown
+          selected_index: !lambda 'return id(notify_color_index);'
+      - script.execute: apply_notify_color
       # Eerste gezondheidscheck en de boot-hersync. De extra vertraging is
       # bewust: op 2s kan de API nog niet klaar zijn met het sturen van de
       # initiele states.
@@ -121,6 +125,62 @@ globals:
     restore_value: no
     initial_value: '21.0'
 
+  # Of de notificatie-overlay op dit moment open staat. Houdt de
+  # backlight aan (update_screen_state) en stuurt notify_flash.
+  - id: notify_active
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+  # Gekozen meldingkleur (index in de dropdown op de instellingenpagina),
+  # blijft bewaard over een reboot.
+  - id: notify_color_index
+    type: int
+    restore_value: yes
+    initial_value: '0'  # rood
+
+  # Afgeleid van notify_color_index door apply_notify_color:
+  #   notify_color      felle fase van het knipperen
+  #   notify_color_dim  donkere fase (20% van de kleur)
+  #   notify_color_fg   tekstkleur in de felle fase (zwart op geel)
+  - id: notify_color
+    type: uint32_t
+    restore_value: no
+    initial_value: '0xD32F2F'
+
+  - id: notify_color_dim
+    type: uint32_t
+    restore_value: no
+    initial_value: '0x2A0909'
+
+  - id: notify_color_fg
+    type: uint32_t
+    restore_value: no
+    initial_value: '0xFFFFFF'
+
+# =========================
+# HOME ASSISTANT ACTIES
+# =========================
+# In HA beschikbaar als:
+#   esphome.tbr_display_notify             (data: message)
+#   esphome.tbr_display_clear_notification
+# Wordt samengevoegd met het api-blok uit generic/wifi.yml.
+api:
+  actions:
+    - action: notify
+      variables:
+        message: string
+      then:
+        - script.execute:
+            id: show_notification
+            message: !lambda 'return message;'
+
+    - action: clear_notification
+      then:
+        - script.execute:
+            id: dismiss_notification
+            by_user: false
+
 # =========================
 # BUTTONS
 # =========================
@@ -137,12 +197,12 @@ script:
   # Backlight aan/uit. Zonder bewegingssensor is de regel simpel: aan
   # zolang de plafondlamp aan is, anders uit. Aanraken wekt het scherm
   # los hiervan via wake_screen, en wake_screen roept dit script aan na
-  # afloop van de timeout.
+  # afloop van de timeout. Een open notificatie houdt het scherm ook aan.
   - id: update_screen_state
     then:
       - if:
           condition:
-            lambda: 'return id(ceiling_light_on).state;'
+            lambda: 'return id(ceiling_light_on).state || id(notify_active);'
           then:
             - light.turn_on:
                 id: back_light
@@ -202,6 +262,146 @@ script:
   - id: return_to_main_page_now
     then:
       - lvgl.page.show: main_page
+
+  # =========================
+  # NOTIFICATIE
+  # =========================
+  # Opent de overlay vanuit HA: scherm vol aan, tekst zetten, overlay
+  # tonen en laten knipperen. mode: restart, dus een tweede melding
+  # terwijl de eerste nog open staat vervangt gewoon de tekst.
+  - id: show_notification
+    mode: restart
+    parameters:
+      message: string
+    then:
+      - globals.set:
+          id: notify_active
+          value: 'true'
+      - light.turn_on:
+          id: back_light
+          brightness: 100%
+          transition_length: 0s
+      - lvgl.label.update:
+          id: notify_text
+          text: !lambda |-
+            return message.empty() ? std::string("Kom even naar beneden") : message;
+      - lvgl.widget.show: notify_overlay
+      - script.execute: notify_flash
+
+  # Wisselt de overlay tussen de felle meldingkleur en een donkere
+  # versie ervan. In de donkere fase is de tekst altijd wit, zodat hij
+  # ook bij geel (zwarte tekst in de felle fase) leesbaar blijft.
+  # Stopt vanzelf zodra notify_active false wordt.
+  - id: notify_flash
+    mode: restart
+    then:
+      - while:
+          condition:
+            lambda: 'return id(notify_active);'
+          then:
+            - lvgl.widget.update:
+                id: notify_overlay
+                bg_color: !lambda 'return lv_color_hex(id(notify_color));'
+            - lvgl.label.update:
+                id: notify_icon
+                text_color: !lambda 'return lv_color_hex(id(notify_color_fg));'
+            - lvgl.label.update:
+                id: notify_text
+                text_color: !lambda 'return lv_color_hex(id(notify_color_fg));'
+            - delay: 700ms
+            - lvgl.widget.update:
+                id: notify_overlay
+                bg_color: !lambda 'return lv_color_hex(id(notify_color_dim));'
+            - lvgl.label.update:
+                id: notify_icon
+                text_color: 0xFFFFFF
+            - lvgl.label.update:
+                id: notify_text
+                text_color: 0xFFFFFF
+            - delay: 700ms
+
+  # Leidt de overlaykleuren af van notify_color_index en zet ze op de
+  # widgets. Draait bij boot en bij elke keuze in de dropdown, ook
+  # terwijl een melding open staat (notify_flash pakt de nieuwe kleur
+  # dan bij de volgende fase op).
+  #
+  # Volgorde MOET gelijk zijn aan de opties van notify_color_dropdown:
+  #   Rood, Oranje, Geel, Groen, Blauw, Paars, Roze
+  - id: apply_notify_color
+    then:
+      - lambda: |-
+          static const uint32_t colors[] = {
+            0xD32F2F,  // Rood
+            0xF57C00,  // Oranje
+            0xFBC02D,  // Geel
+            0x2E7D32,  // Groen
+            0x1565C0,  // Blauw
+            0x7B1FA2,  // Paars
+            0xD81B60,  // Roze
+          };
+          // Lichte kleuren krijgen zwarte tekst in de felle fase.
+          static const bool dark_text[] = {
+            false, false, true, false, false, false, false,
+          };
+          const int n = sizeof(colors) / sizeof(colors[0]);
+          int i = id(notify_color_index);
+          if (i < 0 || i >= n) i = 0;
+          const uint32_t c = colors[i];
+          const uint32_t r = (c >> 16) & 0xFF;
+          const uint32_t g = (c >> 8) & 0xFF;
+          const uint32_t b = c & 0xFF;
+          id(notify_color) = c;
+          id(notify_color_dim) = ((r / 5) << 16) | ((g / 5) << 8) | (b / 5);
+          id(notify_color_fg) = dark_text[i] ? 0x0B0A0A : 0xFFFFFF;
+      - lvgl.widget.update:
+          id: notify_color_swatch
+          bg_color: !lambda 'return lv_color_hex(id(notify_color));'
+      - lvgl.widget.update:
+          id: notify_overlay
+          bg_color: !lambda 'return lv_color_hex(id(notify_color));'
+      - lvgl.label.update:
+          id: notify_icon
+          text_color: !lambda 'return lv_color_hex(id(notify_color_fg));'
+      - lvgl.label.update:
+          id: notify_text
+          text_color: !lambda 'return lv_color_hex(id(notify_color_fg));'
+      # OK-knop: altijd wit, label in de meldingkleur; bij lichte
+      # kleuren zwart, anders is geel op wit onleesbaar.
+      - lvgl.label.update:
+          id: notify_ok_label
+          text_color: !lambda |-
+            return lv_color_hex(id(notify_color_fg) == 0xFFFFFF ? id(notify_color) : 0x0B0A0A);
+
+  # Sluit de overlay. by_user: true = Tim drukte op OK; dan gaat er een
+  # event naar HA (esphome.tim_notification_acknowledged). Daarna de
+  # normale schermcyclus via wake_screen, zodat de backlight na de
+  # timeout weer volgens de gewone regels uit kan.
+  - id: dismiss_notification
+    mode: restart
+    parameters:
+      by_user: bool
+    then:
+      # Alleen iets doen als er echt een melding open staat; een clear
+      # vanuit HA zonder open melding mag het scherm niet aanzetten.
+      - if:
+          condition:
+            lambda: 'return id(notify_active);'
+          then:
+            - globals.set:
+                id: notify_active
+                value: 'false'
+            - script.stop: notify_flash
+            - lvgl.widget.hide: notify_overlay
+            # Terug naar de felle fase, zodat de volgende melding niet
+            # half in de donkere fase opent.
+            - script.execute: apply_notify_color
+            - if:
+                condition:
+                  lambda: 'return by_user;'
+                then:
+                  - homeassistant.event:
+                      event: esphome.tim_notification_acknowledged
+            - script.execute: wake_screen
 
   # Kleurt de ventilatorknoppen. Donkerblauw = actieve stand.
   #   - ventilator uit            -> knop 0
@@ -728,6 +928,14 @@ binary_sensor:
     device_class: problem
     entity_category: "diagnostic"
     lambda: 'return id(helpers_missing_count) > 0;'
+
+  # Staat aan zolang de notificatie open staat. Gaat uit bij OK van Tim
+  # of bij clear_notification vanuit HA.
+  - platform: template
+    name: "${friendly_name} Notificatie actief"
+    id: notify_active_sensor
+    icon: "mdi:bell-ring"
+    lambda: 'return id(notify_active);'
 
   # Plafondlamp (Shelly). Stuurt de schakelaar, het lampicoon en het
   # scherm.
