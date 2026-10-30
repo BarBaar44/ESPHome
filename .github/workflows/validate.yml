@@ -41,6 +41,7 @@ jobs:
           - .ci/generic-sensors.yaml
           - .ci/usb-switch.yaml
           - LVGL/Masterbedroom/ci-harness.yaml
+          - LVGL/Tim Bedroom/ci-harness.yaml
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -55,7 +56,8 @@ jobs:
         run: pip install esphome
 
       - name: Validate ${{ matrix.harness }}
-        run: esphome config ${{ matrix.harness }}
+        # Quoted: "LVGL/Tim Bedroom" contains a space.
+        run: esphome config "${{ matrix.harness }}"
 
   # Compiles the DBE control_fans lambda on the host and runs behaviour
   # scenarios through it. Catches C++ errors and logic regressions that
