@@ -1,0 +1,9 @@
+# Keeps the GitHub Actions in .github/workflows on their latest major
+# version, so CI doesn't drift onto deprecated runtimes again (e.g. the
+# Node.js 20 actions). Opens a PR per update; nothing merges by itself.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
