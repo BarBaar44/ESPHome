@@ -114,6 +114,20 @@ font:
     size: 22
     bpp: 4
 
+  # Notificatie-overlay: grote bel en grote tekst, leesbaar vanaf bed.
+  - file: "fonts/materialdesignicons-webfont.ttf"
+    id: icons_96
+    size: 96
+    bpp: 4
+    glyphs: [
+      "\U000F009E", # bell-ring
+      ]
+
+  - file: "gfonts://Montserrat@700"
+    id: montserrat_40
+    size: 40
+    bpp: 4
+
 # =========================
 # LVGL
 # =========================
@@ -125,6 +139,74 @@ lvgl:
   #
   # Zet dit op 0 als dit paneel niet ondersteboven hangt.
   rotation: 180
+
+  # =========================
+  # NOTIFICATIE-OVERLAY
+  # =========================
+  # Ligt op de top_layer, dus boven elke pagina, en blokkeert met
+  # clickable: true alle aanrakingen naar de UI eronder. Standaard
+  # verborgen. Getoond door show_notification (lvglsensors.yml), het
+  # knipperen doet notify_flash. Alleen de OK-knop sluit hem; een
+  # toevallige tik op de rest van het scherm doet niets. De kleuren
+  # hieronder zijn alleen startwaarden: apply_notify_color zet ze bij
+  # boot en bij elke wijziging van de meldingkleur op de
+  # instellingenpagina.
+  top_layer:
+    widgets:
+      - obj:
+          id: notify_overlay
+          hidden: true
+          clickable: true
+          x: 0
+          y: 0
+          width: 800
+          height: 480
+          bg_color: 0xD32F2F
+          bg_opa: COVER
+          border_width: 0
+          radius: 0
+          pad_all: 24
+          scrollable: false
+          scrollbar_mode: "off"
+          layout:
+            type: FLEX
+            flex_flow: COLUMN
+            flex_align_main: SPACE_EVENLY
+            flex_align_cross: CENTER
+            flex_align_track: CENTER
+          widgets:
+            - label:
+                id: notify_icon
+                text: "\U000F009E"
+                text_font: icons_96
+                text_color: 0xFFFFFF
+            - label:
+                id: notify_text
+                width: 100%
+                long_mode: WRAP
+                text_align: CENTER
+                text_font: montserrat_40
+                text_color: 0xFFFFFF
+                text: "Kom even naar beneden"
+            - button:
+                id: notify_ok_button
+                width: 300
+                height: 90
+                radius: 45
+                bg_color: 0xFFFFFF
+                bg_opa: COVER
+                shadow_width: 0
+                widgets:
+                  - label:
+                      id: notify_ok_label
+                      align: CENTER
+                      text: "OK, ik kom!"
+                      text_font: montserrat_40
+                      text_color: 0xD32F2F
+                on_click:
+                  - script.execute:
+                      id: dismiss_notification
+                      by_user: true
 
   pages:
     - id: main_page
@@ -1747,6 +1829,7 @@ lvgl:
                       - FR(1)     # schermtimeout
                       - FR(1)     # nacht start
                       - FR(1)     # nacht eind
+                      - FR(1)     # meldingkleur
                     grid_columns:
                       - CONTENT
                       - FR(1)
@@ -1893,6 +1976,70 @@ lvgl:
                               id: night_mode_end_hour
                               value: !lambda 'return (int)x;'
                           - script.execute: update_screen_state
+
+                    # Kleur van de notificatie-overlay. De volgorde van de
+                    # opties MOET gelijk blijven aan de kleurentabel in
+                    # apply_notify_color (lvglsensors.yml).
+                    - label:
+                        text: "Meldingkleur:"
+                        text_font: montserrat_16
+                        text_color: 0x0B0A0A
+                        grid_cell_row_pos: 4
+                        grid_cell_column_pos: 0
+                        grid_cell_x_align: START
+                        grid_cell_y_align: CENTER
+
+                    # Dropdown met kleurstaal ernaast. LVGL staat maar een
+                    # widget per gridcel toe, dus beide zitten in een
+                    # transparante flex-rij.
+                    - obj:
+                        id: notify_color_row
+                        bg_opa: TRANSP
+                        border_width: 0
+                        pad_all: 0
+                        height: SIZE_CONTENT
+                        scrollable: false
+                        scrollbar_mode: "off"
+                        grid_cell_row_pos: 4
+                        grid_cell_column_pos: 1
+                        grid_cell_x_align: STRETCH
+                        grid_cell_y_align: CENTER
+                        layout:
+                          type: FLEX
+                          flex_flow: ROW
+                          flex_align_main: START
+                          flex_align_cross: CENTER
+                          flex_align_track: CENTER
+                          pad_column: 12
+                        widgets:
+                          - dropdown:
+                              id: notify_color_dropdown
+                              width: 130
+                              options:
+                                - "Rood"
+                                - "Oranje"
+                                - "Geel"
+                                - "Groen"
+                                - "Blauw"
+                                - "Paars"
+                                - "Roze"
+                              selected_index: 0  # standaard rood
+                              on_value:
+                                - globals.set:
+                                    id: notify_color_index
+                                    value: !lambda 'return (int)x;'
+                                - script.execute: apply_notify_color
+
+                          - obj:
+                              id: notify_color_swatch
+                              width: 36
+                              height: 36
+                              radius: 18
+                              border_width: 0
+                              bg_color: 0xD32F2F
+                              bg_opa: COVER
+                              scrollable: false
+                              clickable: false
 
   # =========================
   # STYLE DEFINITIONS
