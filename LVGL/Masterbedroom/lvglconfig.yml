@@ -1043,11 +1043,14 @@ lvgl:
                                       char buf[16];
                                       snprintf(buf, sizeof(buf), "%.1f", id(climate_setpoint_value));
                                       return buf;
+                                # hvac_mode: heat in the same call: a setpoint
+                                # change also turns the room on when it is off
                                 - delay: 100ms
                                 - homeassistant.action:
                                     action: climate.set_temperature
                                     data:
                                       entity_id: climate.virtual_thermostat_master_bedroom
+                                      hvac_mode: heat
                                       temperature: !lambda 'return id(climate_setpoint_value);'
 
                           # - knop links onder setpoint label (custom -0.5)
@@ -1076,11 +1079,14 @@ lvgl:
                                       char buf[16];
                                       snprintf(buf, sizeof(buf), "%.1f", id(climate_setpoint_value));
                                       return buf;
+                                # hvac_mode: heat in the same call: a setpoint
+                                # change also turns the room on when it is off
                                 - delay: 100ms
                                 - homeassistant.action:
                                     action: climate.set_temperature
                                     data:
                                       entity_id: climate.virtual_thermostat_master_bedroom
+                                      hvac_mode: heat
                                       temperature: !lambda 'return id(climate_setpoint_value);'
 
                           # Mode buttons onderaan - Off / Eco / Warm
@@ -1119,15 +1125,10 @@ lvgl:
                                     text_font: montserrat_14
                               on_click:
                                 - homeassistant.action:
-                                    action: climate.set_hvac_mode
-                                    data:
-                                      entity_id: climate.virtual_thermostat_master_bedroom
-                                      hvac_mode: "heat"
-                                - delay: 200ms
-                                - homeassistant.action:
                                     action: climate.set_temperature
                                     data:
                                       entity_id: climate.virtual_thermostat_master_bedroom
+                                      hvac_mode: heat
                                       temperature: !lambda 'return id(climate_eco_temp);'
 
                           - button:
@@ -1145,15 +1146,10 @@ lvgl:
                                     text_font: montserrat_14
                               on_click:
                                 - homeassistant.action:
-                                    action: climate.set_hvac_mode
-                                    data:
-                                      entity_id: climate.virtual_thermostat_master_bedroom
-                                      hvac_mode: "heat"
-                                - delay: 200ms
-                                - homeassistant.action:
                                     action: climate.set_temperature
                                     data:
                                       entity_id: climate.virtual_thermostat_master_bedroom
+                                      hvac_mode: heat
                                       temperature: !lambda 'return id(climate_warm_temp);'
 
     # =========================
