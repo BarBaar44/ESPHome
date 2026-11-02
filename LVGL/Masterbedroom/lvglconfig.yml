@@ -14,6 +14,7 @@ font:
       "\U000F0141", # chevron-left
       "\U000F0142", # chevron-right
       "\U000F0238", # fire (Climate card heating indicator)
+      "\U000F0210", # fan (Climate card DBE indicator)
       ]
 
   # Light bulb icons voor Main Light switches
@@ -973,6 +974,29 @@ lvgl:
                               y: 4
                               text_font: icons_24
                               text_color: 0xBDBDBD
+
+                          # DBE indicator (mdi:fan), right of the flame, with
+                          # the running booster fans next to it: "L", "R" or
+                          # "L+R". Blue = at least one DBE fan runs, grey and
+                          # no text = both off. Driven by update_dbe_icon (see
+                          # lvglsensors.yml); starts grey/empty.
+                          - label:
+                              id: climate_dbe_icon
+                              text: "\U000F0210"
+                              align: TOP_LEFT
+                              x: 125
+                              y: 4
+                              text_font: icons_24
+                              text_color: 0xBDBDBD
+
+                          - label:
+                              id: climate_dbe_label
+                              text: ""
+                              align: TOP_LEFT
+                              x: 152
+                              y: 9
+                              text_font: montserrat_14
+                              text_color: 0x2196F3
 
                           # Huidige kamertemperatuur - rechterbovenhoek
                           - label:

@@ -696,6 +696,8 @@ script:
       # Read-only display, no guard needed. update_heating_icon is
       # has_state()-aware itself, so it is safe to run unconditionally.
       - script.execute: update_heating_icon
+      # ---- DBE indicator ---- (read-only, same reasoning)
+      - script.execute: update_dbe_icon
 
   # Ambient-light-driven backlight brightness.
   #
@@ -871,6 +873,31 @@ script:
                            id(ha_climate_leading).state == "Master Bedroom";
             if (!heating) return lv_color_hex(0xBDBDBD);
             return lv_color_hex(leading ? 0xF44336 : 0xFF9800);
+
+  # DBE indicator on the Climate card (climate_dbe_icon + climate_dbe_label
+  # in lvglconfig.yml): which radiator booster fans run. A DBE counts as
+  # running when its fan speed is above 0 %. Missing or unknown state
+  # (DBE offline, HA not connected; NaN fails the > 0 test) counts as off.
+  #   blue fan + "L" / "R" / "L+R" = those fans run
+  #   grey fan, no text            = both off
+  # Runs from ha_dbe_left_fan / ha_dbe_right_fan and sync_settings_from_ha.
+  - id: update_dbe_icon
+    then:
+      - lvgl.widget.update:
+          id: climate_dbe_icon
+          text_color: !lambda |-
+            bool l = id(ha_dbe_left_fan).has_state() && id(ha_dbe_left_fan).state > 0.0f;
+            bool r = id(ha_dbe_right_fan).has_state() && id(ha_dbe_right_fan).state > 0.0f;
+            return lv_color_hex((l || r) ? 0x2196F3 : 0xBDBDBD);
+      - lvgl.label.update:
+          id: climate_dbe_label
+          text: !lambda |-
+            bool l = id(ha_dbe_left_fan).has_state() && id(ha_dbe_left_fan).state > 0.0f;
+            bool r = id(ha_dbe_right_fan).has_state() && id(ha_dbe_right_fan).state > 0.0f;
+            if (l && r) return std::string("L+R");
+            if (l) return std::string("L");
+            if (r) return std::string("R");
+            return std::string("");
 
   # Off / Eco / Warm highlight on the Climate card, from HA state (no
   # presets): Off = hvac_mode off; Eco / Warm = heating with the target
@@ -1491,6 +1518,22 @@ sensor:
               snprintf(buf, sizeof(buf), "%.1f", x);
               return buf;
         - script.execute: update_mode_buttons
+
+  # DBE booster fan speeds (0-100 %) of the two Master Bedroom radiators.
+  # Feed update_dbe_icon.
+  - platform: homeassistant
+    id: ha_dbe_left_fan
+    entity_id: sensor.master_bedroom_dbe_master_left_dbemasleft_fan_speed
+    on_value:
+      then:
+        - script.execute: update_dbe_icon
+
+  - platform: homeassistant
+    id: ha_dbe_right_fan
+    entity_id: sensor.master_bedroom_dbe_master_right_dbemasright_fan_speed
+    on_value:
+      then:
+        - script.execute: update_dbe_icon
 
   # Current temperature
   - platform: homeassistant
