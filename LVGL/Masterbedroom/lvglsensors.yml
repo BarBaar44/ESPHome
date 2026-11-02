@@ -110,6 +110,19 @@ esphome:
 # a fresh user action, causing the widget to "fight" with whatever just
 # changed it.
 globals:
+  # Target temperatures the Eco / Warm buttons on the Climate card send
+  # (climate.set_temperature, no presets). Same values as the room's
+  # Eco / Warm temperatures in the thermostat integration.
+  - id: climate_eco_temp
+    type: float
+    restore_value: no
+    initial_value: '18.0'
+
+  - id: climate_warm_temp
+    type: float
+    restore_value: no
+    initial_value: '20.0'
+
   - id: mirroring_light_switches
     type: bool
     restore_value: no
@@ -859,6 +872,36 @@ script:
             if (!heating) return lv_color_hex(0xBDBDBD);
             return lv_color_hex(leading ? 0xF44336 : 0xFF9800);
 
+  # Off / Eco / Warm highlight on the Climate card, from HA state (no
+  # presets): Off = hvac_mode off; Eco / Warm = heating with the target
+  # (effective_target) at climate_eco_temp / climate_warm_temp. Any
+  # other target leaves Eco and Warm unlit.
+  # Runs from ha_climate_hvac_mode and ha_climate_setpoint.
+  - id: update_mode_buttons
+    then:
+      - lvgl.widget.update:
+          id: climate_off_button
+          state:
+            checked: !lambda |-
+              return id(ha_climate_hvac_mode).has_state() &&
+                     id(ha_climate_hvac_mode).state == "off";
+      - lvgl.widget.update:
+          id: climate_eco_button
+          state:
+            checked: !lambda |-
+              return id(ha_climate_hvac_mode).has_state() &&
+                     id(ha_climate_hvac_mode).state == "heat" &&
+                     id(ha_climate_setpoint).has_state() &&
+                     fabsf(id(ha_climate_setpoint).state - id(climate_eco_temp)) < 0.05f;
+      - lvgl.widget.update:
+          id: climate_warm_button
+          state:
+            checked: !lambda |-
+              return id(ha_climate_hvac_mode).has_state() &&
+                     id(ha_climate_hvac_mode).state == "heat" &&
+                     id(ha_climate_setpoint).has_state() &&
+                     fabsf(id(ha_climate_setpoint).state - id(climate_warm_temp)) < 0.05f;
+
 # =========================
 # INTERVALS
 # =========================
@@ -1035,54 +1078,14 @@ text_sensor:
               return 4;  // Default 21:00
         - lambda: 'id(mirroring_cover_settings) = false;'
 
-  # Climate HVAC mode sync
+  # Climate HVAC mode sync. Off / Eco / Warm highlight: see
+  # update_mode_buttons.
   - platform: homeassistant
     id: ha_climate_hvac_mode
     entity_id: climate.virtual_thermostat_master_bedroom
     on_value:
       then:
-        # Reset all mode buttons
-        - lvgl.widget.update:
-            id: climate_off_button
-            state:
-              checked: false
-        - lvgl.widget.update:
-            id: climate_eco_button
-            state:
-              checked: false
-        - lvgl.widget.update:
-            id: climate_warm_button
-            state:
-              checked: false
-        # Highlight Off button if hvac_mode is off
-        - if:
-            condition:
-              lambda: 'return x == "off";'
-            then:
-              - lvgl.widget.update:
-                  id: climate_off_button
-                  state:
-                    checked: true
-
-  # Climate preset mode sync
-  - platform: homeassistant
-    id: ha_climate_preset_mode
-    entity_id: climate.virtual_thermostat_master_bedroom
-    attribute: preset_mode
-    on_value:
-      then:
-        # eco -> Eco button, comfort -> Warm button. Any other preset
-        # (away, none, ...) leaves both unchecked. A plain checked: !lambda
-        # covers every case without a branch per preset, so a button no
-        # longer stays lit for a preset that is no longer active.
-        - lvgl.widget.update:
-            id: climate_eco_button
-            state:
-              checked: !lambda 'return x == "eco";'
-        - lvgl.widget.update:
-            id: climate_warm_button
-            state:
-              checked: !lambda 'return x == "comfort";'
+        - script.execute: update_mode_buttons
 
   # Is the room being heated? Feeds update_heating_icon.
   # hvac_action of the room's virtual thermostat (generic_thermostat):
@@ -1097,11 +1100,11 @@ text_sensor:
         - script.execute: update_heating_icon
 
   # Which room leads the heating? Feeds update_heating_icon (red flame
-  # when heating + leading). The Virtual Heating Area sensor holds the
-  # area name of the room that drives the boiler, or "Off".
+  # when heating + leading). The thermostat integration's Winning room
+  # sensor holds the name of the room that drives the boiler, or "Off".
   - platform: homeassistant
     id: ha_climate_leading
-    entity_id: sensor.virtual_heating_area
+    entity_id: sensor.heating_winning_room
     on_value:
       then:
         - script.execute: update_heating_icon
@@ -1469,10 +1472,13 @@ sensor:
         - lambda: 'id(mirroring_cover_positions) = false;'
 
   # Climate setpoint sync from HA → Display (number only; °C is a separate label)
+  # effective_target, not temperature: the thermostat keeps its last
+  # target in temperature when switched off (e.g. 21), while
+  # effective_target is what the room actually aims for (10 when off).
   - platform: homeassistant
     id: ha_climate_setpoint
     entity_id: climate.virtual_thermostat_master_bedroom
-    attribute: temperature
+    attribute: effective_target
     on_value:
       then:
         - globals.set:
@@ -1484,6 +1490,7 @@ sensor:
               char buf[16];
               snprintf(buf, sizeof(buf), "%.1f", x);
               return buf;
+        - script.execute: update_mode_buttons
 
   # Current temperature
   - platform: homeassistant
