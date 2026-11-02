@@ -212,7 +212,7 @@ This board's switching stage evolved out of a long troubleshooting thread on the
 2. **Second attempt - direct transistor switching (NPN + PNP pair).** Instead of a MOSFET, an NPN transistor (BC337) switched the fan's ground return, driven by a small base resistor straight off the ESP GPIO. This alone wasn't enough: some fans (mine included) use the PWM signal wire as an alternate ground return path, so cutting only the main ground didn't fully stop the fan. The fix was a second stage - a PNP transistor (BC327) also gating the PWM/12V side - so both paths were switched together. This worked for small numbers of fans.
 3. **The problem that forced a redesign: current at scale.** Once this board needed to drive up to 15 fans on a single unit (~2.5A combined load), the small BC327 transistor stage couldn't handle it - it overheated and the board started smelling during testing. Direct transistor switching was fine for a couple of fans, but not for a bank of them.
 4. **Final, current design - relay-switched.** The BC337 NPN stage (fed from the ESP GPIO through a ~1K base resistor) no longer switches the fan directly - it switches the **coil of a 12V relay** instead, and the relay does the actual high-current switching of the fan's 12V line:
-   - Relay: 12V coil, rated for several amps above the expected load for margin (the specific part used, and its exact footprint, is in the [EasyEDA](https://github.com/BarBaar44/EasyEDA) project files).
+   - Relay: 12V coil, rated for several amps above the expected load for margin (the specific part used, and its exact footprint, is in the [v2 design files](https://github.com/BarBaar44/Custom-DBE/tree/main/hardware/v2)).
    - Relay coil wiring: 12V+ tied directly to one coil pin, the other coil pin switched to ground through the BC337.
    - A flyback/snubber diode across the relay coil (protecting the BC337 from the coil's inductive kickback when it switches off).
    - A separate flyback diode across the fan's own 12V leads (protecting against the fan motor's own inductive kickback).
@@ -230,11 +230,14 @@ Electronics isn't my primary background, so a few details from this design are w
 
 ## Hardware design files
 
-The physical board (relay-switched fan driver, described above) is designed in EasyEDA and lives in a separate repo:
+The physical board is designed in EasyEDA and lives in its own repo:
 
-➡️ **[BarBaar44/EasyEDA](https://github.com/BarBaar44/EasyEDA)** - schematic/PCB source project, Gerber manufacturing files, and a rendered PCB preview image. This is the authoritative source for the exact component values, footprints, and routing - more reliable than reconstructing it from memory or from the forum thread's inline work-in-progress screenshots.
+➡️ **[BarBaar44/Custom-DBE](https://github.com/BarBaar44/Custom-DBE)**
 
-That repo's README also has a pointer to the enclosure design (FreeCAD) for this same board.
+* **v2** (the relay-switched board described above, in use): EasyEDA Pro project, Gerbers and PCB render in [`hardware/v2/`](https://github.com/BarBaar44/Custom-DBE/tree/main/hardware/v2), with netlist, pinouts, BOM and known issues in [`docs/v2-as-built.md`](https://github.com/BarBaar44/Custom-DBE/blob/main/docs/v2-as-built.md). This is the authoritative source for component values, footprints and routing.
+* **v3** (redesign, not yet built): P-FET instead of the relay, on-board 5 V buck, input protection, all logic at 3.3 V, three fan headers, two OneWire buses. Spec in [`docs/schematic-v3.md`](https://github.com/BarBaar44/Custom-DBE/blob/main/docs/schematic-v3.md). **v3 needs firmware changes** (fan switch on D2, inverted PWM, OneWire on D1 and D7); `DBEmain.yml` here still targets v2.
+
+The v2 files previously lived in [BarBaar44/EasyEDA](https://github.com/BarBaar44/EasyEDA), which is now archived.
 
 ## Related
 
