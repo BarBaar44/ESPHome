@@ -1125,10 +1125,10 @@ lvgl:
                                       hvac_mode: "heat"
                                 - delay: 200ms
                                 - homeassistant.action:
-                                    action: climate.set_preset_mode
+                                    action: climate.set_temperature
                                     data:
                                       entity_id: climate.virtual_thermostat_master_bedroom
-                                      preset_mode: "eco"
+                                      temperature: !lambda 'return id(climate_eco_temp);'
 
                           - button:
                               id: climate_warm_button
@@ -1151,10 +1151,10 @@ lvgl:
                                       hvac_mode: "heat"
                                 - delay: 200ms
                                 - homeassistant.action:
-                                    action: climate.set_preset_mode
+                                    action: climate.set_temperature
                                     data:
                                       entity_id: climate.virtual_thermostat_master_bedroom
-                                      preset_mode: "comfort"
+                                      temperature: !lambda 'return id(climate_warm_temp);'
 
     # =========================
     # SECOND PAGE - LIVING ROOM
