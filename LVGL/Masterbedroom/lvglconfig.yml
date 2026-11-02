@@ -976,10 +976,14 @@ lvgl:
                               text_color: 0xBDBDBD
 
                           # DBE indicator (mdi:fan), right of the flame, with
-                          # the running booster fans next to it: "L", "R" or
-                          # "L+R". Blue = at least one DBE fan runs, grey and
-                          # no text = both off. Driven by update_dbe_icon (see
-                          # lvglsensors.yml); starts grey/empty.
+                          # a label per booster fan next to it:
+                          #   "L" / "R" blue  = that fan runs
+                          #   "L?" / "R?" amber = that DBE is offline/unknown
+                          #   empty           = that fan is off
+                          # Fan icon: amber if any DBE is offline/unknown, else
+                          # blue if any runs, else grey. Driven by
+                          # update_dbe_icon (see lvglsensors.yml); starts
+                          # grey/empty.
                           - label:
                               id: climate_dbe_icon
                               text: "\U000F0210"
@@ -990,10 +994,19 @@ lvgl:
                               text_color: 0xBDBDBD
 
                           - label:
-                              id: climate_dbe_label
+                              id: climate_dbe_left_label
                               text: ""
                               align: TOP_LEFT
                               x: 152
+                              y: 9
+                              text_font: montserrat_14
+                              text_color: 0x2196F3
+
+                          - label:
+                              id: climate_dbe_right_label
+                              text: ""
+                              align: TOP_LEFT
+                              x: 172
                               y: 9
                               text_font: montserrat_14
                               text_color: 0x2196F3
