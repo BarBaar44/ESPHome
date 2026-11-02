@@ -672,12 +672,7 @@ script:
             - globals.set:
                 id: climate_setpoint_value
                 value: !lambda 'return id(ha_climate_setpoint).state;'
-            - lvgl.label.update:
-                id: climate_setpoint_label
-                text: !lambda |-
-                  char buf[16];
-                  snprintf(buf, sizeof(buf), "%.1f", id(ha_climate_setpoint).state);
-                  return buf;
+      - script.execute: update_setpoint_display
 
       # ---- Heating indicator ----
       # Read-only display, no guard needed. update_heating_icon is
@@ -858,6 +853,57 @@ script:
                            id(ha_climate_leading).state == "Master Bedroom";
             if (!heating) return lv_color_hex(0xBDBDBD);
             return lv_color_hex(leading ? 0xF44336 : 0xFF9800);
+
+  # Setpoint box on the Climate card. While the room is off it reads
+  # "Off" (no °C) and +/- are disabled: the thermostat keeps its last
+  # target in the temperature attribute when switched off, so showing
+  # that number made the room look like it was still set to e.g. 21.
+  # Eco / Warm turn the room on again. Otherwise the box shows
+  # climate_setpoint_value. Missing hvac_mode (HA not connected yet)
+  # counts as on, so the number shows as before.
+  # Runs from ha_climate_hvac_mode, ha_climate_setpoint and
+  # sync_settings_from_ha. The +/- buttons update the label themselves
+  # (they can only be pressed while the room is on).
+  - id: update_setpoint_display
+    then:
+      - if:
+          condition:
+            lambda: |-
+              return id(ha_climate_hvac_mode).has_state() &&
+                     id(ha_climate_hvac_mode).state == "off";
+          then:
+            - lvgl.label.update:
+                id: climate_setpoint_label
+                text: "Off"
+            - lvgl.widget.update:
+                id: climate_setpoint_unit
+                hidden: true
+            - lvgl.widget.update:
+                id: climate_temp_increase
+                state:
+                  disabled: true
+            - lvgl.widget.update:
+                id: climate_temp_decrease
+                state:
+                  disabled: true
+          else:
+            - lvgl.label.update:
+                id: climate_setpoint_label
+                text: !lambda |-
+                  char buf[16];
+                  snprintf(buf, sizeof(buf), "%.1f", id(climate_setpoint_value));
+                  return buf;
+            - lvgl.widget.update:
+                id: climate_setpoint_unit
+                hidden: false
+            - lvgl.widget.update:
+                id: climate_temp_increase
+                state:
+                  disabled: false
+            - lvgl.widget.update:
+                id: climate_temp_decrease
+                state:
+                  disabled: false
 
 # =========================
 # INTERVALS
@@ -1063,6 +1109,8 @@ text_sensor:
                   id: climate_off_button
                   state:
                     checked: true
+        # "Off" in the setpoint box + disabled +/- while off
+        - script.execute: update_setpoint_display
 
   # Climate preset mode sync
   - platform: homeassistant
@@ -1478,12 +1526,7 @@ sensor:
         - globals.set:
             id: climate_setpoint_value
             value: !lambda 'return x;'
-        - lvgl.label.update:
-            id: climate_setpoint_label
-            text: !lambda |-
-              char buf[16];
-              snprintf(buf, sizeof(buf), "%.1f", x);
-              return buf;
+        - script.execute: update_setpoint_display
 
   # Current temperature
   - platform: homeassistant
