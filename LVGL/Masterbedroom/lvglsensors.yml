@@ -696,6 +696,8 @@ script:
       # Read-only display, no guard needed. update_heating_icon is
       # has_state()-aware itself, so it is safe to run unconditionally.
       - script.execute: update_heating_icon
+      # ---- DBE indicator ---- (read-only, same reasoning)
+      - script.execute: update_dbe_icon
 
   # Ambient-light-driven backlight brightness.
   #
@@ -871,6 +873,46 @@ script:
                            id(ha_climate_leading).state == "Master Bedroom";
             if (!heating) return lv_color_hex(0xBDBDBD);
             return lv_color_hex(leading ? 0xF44336 : 0xFF9800);
+
+  # DBE indicator on the Climate card (climate_dbe_icon and
+  # climate_dbe_left_label / climate_dbe_right_label in lvglconfig.yml).
+  # Per DBE: running = fan speed above 0 %; offline = no state or NaN
+  # (DBE offline, entity unknown/unavailable, HA not connected); else off.
+  #   label  "L"/"R" blue = runs, "L?"/"R?" amber = offline, empty = off
+  #   icon   amber if any DBE offline, else blue if any runs, else grey
+  # Runs from ha_dbe_left_fan / ha_dbe_right_fan and sync_settings_from_ha.
+  - id: update_dbe_icon
+    then:
+      - lvgl.widget.update:
+          id: climate_dbe_icon
+          text_color: !lambda |-
+            auto offline = [](float v, bool has) { return !has || std::isnan(v); };
+            bool lo = offline(id(ha_dbe_left_fan).state, id(ha_dbe_left_fan).has_state());
+            bool ro = offline(id(ha_dbe_right_fan).state, id(ha_dbe_right_fan).has_state());
+            bool run = (!lo && id(ha_dbe_left_fan).state > 0.0f) ||
+                       (!ro && id(ha_dbe_right_fan).state > 0.0f);
+            if (lo || ro) return lv_color_hex(0xFF9800);
+            return lv_color_hex(run ? 0x2196F3 : 0xBDBDBD);
+      - lvgl.label.update:
+          id: climate_dbe_left_label
+          text: !lambda |-
+            float v = id(ha_dbe_left_fan).state;
+            if (!id(ha_dbe_left_fan).has_state() || std::isnan(v)) return std::string("L?");
+            return std::string(v > 0.0f ? "L" : "");
+          text_color: !lambda |-
+            float v = id(ha_dbe_left_fan).state;
+            bool offline = !id(ha_dbe_left_fan).has_state() || std::isnan(v);
+            return lv_color_hex(offline ? 0xFF9800 : 0x2196F3);
+      - lvgl.label.update:
+          id: climate_dbe_right_label
+          text: !lambda |-
+            float v = id(ha_dbe_right_fan).state;
+            if (!id(ha_dbe_right_fan).has_state() || std::isnan(v)) return std::string("R?");
+            return std::string(v > 0.0f ? "R" : "");
+          text_color: !lambda |-
+            float v = id(ha_dbe_right_fan).state;
+            bool offline = !id(ha_dbe_right_fan).has_state() || std::isnan(v);
+            return lv_color_hex(offline ? 0xFF9800 : 0x2196F3);
 
   # Off / Eco / Warm highlight on the Climate card, from HA state (no
   # presets): Off = hvac_mode off; Eco / Warm = heating with the target
@@ -1491,6 +1533,22 @@ sensor:
               snprintf(buf, sizeof(buf), "%.1f", x);
               return buf;
         - script.execute: update_mode_buttons
+
+  # DBE booster fan speeds (0-100 %) of the two Master Bedroom radiators.
+  # Feed update_dbe_icon.
+  - platform: homeassistant
+    id: ha_dbe_left_fan
+    entity_id: sensor.master_bedroom_dbe_master_left_dbemasleft_fan_speed
+    on_value:
+      then:
+        - script.execute: update_dbe_icon
+
+  - platform: homeassistant
+    id: ha_dbe_right_fan
+    entity_id: sensor.master_bedroom_dbe_master_right_dbemasright_fan_speed
+    on_value:
+      then:
+        - script.execute: update_dbe_icon
 
   # Current temperature
   - platform: homeassistant
