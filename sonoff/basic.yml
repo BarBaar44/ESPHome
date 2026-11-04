@@ -11,6 +11,8 @@ logger:
 
 web_server:
   port: 80
+  # Only the fallback hotspot accepts uploads on /update; normal updates use encrypted OTA.
+  ota: false
 
 binary_sensor:
   - platform: gpio
