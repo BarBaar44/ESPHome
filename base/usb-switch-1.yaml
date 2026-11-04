@@ -1,10 +1,3 @@
-# Read by the Fleet for ESPHome add-on. Do not remove.
-# esphome-fleet:
-#   schedule: 0 10 */7 * *
-#   schedule_enabled: true
-#   schedule_tz: Europe/Amsterdam
-#   schedule_last_run: '2026-11-01T09:00:01.342210+00:00'
-
 substitutions:
   friendly_name: "USB Switch 1"
   device_description: USB Switch 1
