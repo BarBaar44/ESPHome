@@ -11,12 +11,6 @@ logger:
 # Enable Home Assistant API
 api:
 
-# Enable Web server (optional).
-web_server:
-  port: 80
-  # Only the fallback hotspot accepts uploads on /update; normal updates use encrypted OTA.
-  ota: false
-
 # Shelly 1 detached switch config with multi click options and fallback in case of wifi or api fail
 
 switch:

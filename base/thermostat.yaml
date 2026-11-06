@@ -38,11 +38,6 @@ packages:
     files: [generic/generic_sensors.yml, generic/wifi.yml, generic/restartbutton.yml]
     refresh: 1min
 
-# Enable simple web server to remotelly control the device using web interface
-web_server:
-  # Only the fallback hotspot accepts uploads on /update; normal updates use encrypted OTA.
-  ota: false
-
 opentherm:
   in_pin: 21
   out_pin: 22
