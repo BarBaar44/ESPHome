@@ -31,5 +31,5 @@ logger:
 packages:
   Generic_config:
     url: https://github.com/BarBaar44/ESPHome
-    files: [generic/wifi.yml, generic/generic_sensors.yml, DBE/DBEmain.yml]
+    files: [generic/wifi.yml, generic/generic_sensors.yml, generic/restartbutton.yml, DBE/DBEmain.yml]
     refresh: 1min
