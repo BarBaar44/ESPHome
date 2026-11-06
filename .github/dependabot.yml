@@ -1,9 +1,17 @@
-# Keeps the GitHub Actions in .github/workflows on their latest major
-# version, so CI doesn't drift onto deprecated runtimes again (e.g. the
-# Node.js 20 actions). Opens a PR per update; nothing merges by itself.
+# github-actions: keeps the actions in .github/workflows on their latest
+# major version, so CI doesn't drift onto deprecated runtimes again (e.g.
+# the Node.js 20 actions). These PRs wait for a manual merge.
+#
+# pip: bumps the ESPHome version CI validates with (requirements.txt).
+# These PRs merge themselves once validation passes, see
+# .github/workflows/auto-merge.yml.
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: daily

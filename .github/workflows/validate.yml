@@ -12,6 +12,8 @@ on:
       - '.ci/**'
       - 'LVGL/**'
       - 'USB-Switch/**'
+      - 'base/*.yaml'
+      - 'requirements.txt'
       - '.github/workflows/validate.yml'
   pull_request:
     paths:
@@ -23,6 +25,8 @@ on:
       - '.ci/**'
       - 'LVGL/**'
       - 'USB-Switch/**'
+      - 'base/*.yaml'
+      - 'requirements.txt'
       - '.github/workflows/validate.yml'
 
 jobs:
@@ -53,11 +57,50 @@ jobs:
           cache: 'pip'
 
       - name: Install ESPHome
-        run: pip install esphome
+        # Pinned in requirements.txt; Dependabot bumps it (auto-merge.yml)
+        run: pip install -r requirements.txt
 
       - name: Validate ${{ matrix.harness }}
         # Quoted: "LVGL/Tim Bedroom" contains a space.
         run: esphome config "${{ matrix.harness }}"
+
+  # The real device configs in base/, one job per device. Packages are
+  # read from this checkout and secrets are stubbed, see
+  # .ci/validate-base.sh.
+  list-base:
+    runs-on: ubuntu-latest
+    outputs:
+      devices: ${{ steps.list.outputs.devices }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: List base/ configs
+        id: list
+        run: echo "devices=$(ls base/*.yaml | jq -R . | jq -cs .)" >> "$GITHUB_OUTPUT"
+
+  validate-base:
+    needs: list-base
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        device: ${{ fromJSON(needs.list-base.outputs.devices) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+
+      - name: Install ESPHome
+        run: pip install -r requirements.txt
+
+      - name: Validate ${{ matrix.device }}
+        run: .ci/validate-base.sh "${{ matrix.device }}"
 
   # Compiles the DBE control_fans lambda on the host and runs behaviour
   # scenarios through it. Catches C++ errors and logic regressions that
