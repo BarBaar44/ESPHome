@@ -3,6 +3,7 @@ substitutions:
   device_name: "sonoff-basic-ci"
   friendly_name: "Sonoff Basic CI"
   device_description: "CI validation harness"
+  area: "CI"
   WIFI_passwd: "ci-dummy-password"
   fallback_passwd: "ci-dummy-password"
   device_key: "ZGADVtIpvtmMT0gQEAIiwsZjP8q/s6AuQFxiZI4mxj4="  # CI-only dummy; real devices set device_key via !secret

@@ -11,6 +11,7 @@ substitutions:
   device_name: "ifan03-ci"
   friendly_name: "iFan03 CI"
   device_description: "CI validation harness"
+  area: "CI"
   on_boot_light: "RESTORE_DEFAULT_OFF"
   spare_button_light_entity: "light.ci_test_light"
   WIFI_passwd: "ci-dummy-password"

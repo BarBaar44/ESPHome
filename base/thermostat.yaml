@@ -16,6 +16,7 @@ substitutions:
 
 esphome:
   name: thermostat
+  area: '${area}'
   friendly_name: '${friendly_name}'
   on_boot:
     priority: -100

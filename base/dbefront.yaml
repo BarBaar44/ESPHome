@@ -18,6 +18,7 @@ substitutions:
 
 esphome:
   name: '${device_name}'
+  area: '${area}'
   friendly_name: '${friendly_name}'
   comment: '${device_description}'
 

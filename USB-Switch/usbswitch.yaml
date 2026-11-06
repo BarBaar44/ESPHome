@@ -21,6 +21,11 @@ switch:
     id: relay
     name: "${friendly_name}"
     icon: mdi:usb-port
+    # Restore the port state after a reboot (default_state is set per
+    # device, e.g. RESTORE_DEFAULT_OFF). Set on this template switch, not
+    # on switch_relay, so the turn_on/off actions below also bring the
+    # green LED back in step with the relay.
+    restore_mode: ${default_state}
     lambda: |-
       if (id(switch_relay).state) {
         return true;

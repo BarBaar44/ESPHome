@@ -8,10 +8,11 @@
 substitutions:
   device_name: bluetooth-proxy-attic
   device_description: Bluetooth Proxy Attic
-  area: Hallway
+  area: Attic
   device_key: !secret bluetooth-proxy-attic_key
 esphome:
   name: bluetooth-proxy-attic
+  area: '${area}'
   comment: ${device_description}
   friendly_name: bluetooth-proxy-attic
   on_boot:
