@@ -8,3 +8,10 @@
 **/src/
 **/platformio.ini
 /secrets.yaml
+
+# Dashboard and registry state, not configs: device MAC addresses and an
+# HA entity registry dump. Kept on the HA box, not in the repo.
+/reg.json
+/.device-builder.json
+/.device-builder.json.lock
+/.device-builder-preferences.json
