@@ -60,6 +60,7 @@ proof.
 ## ESPHome version
 
 CI installs the version pinned in `/requirements.txt`. Dependabot opens
-a PR when a new ESPHome release is out, and `auto-merge.yml` merges it
-once all checks pass. This only sets the version CI validates with; the
+a PR when a new ESPHome release is out, and `auto-merge.yml` approves
+and merges it once all checks pass (this needs "Allow GitHub Actions to
+create and approve pull requests" enabled in the repo's Actions settings). This only sets the version CI validates with; the
 ESPHome version that builds firmware is the one on the HA dashboard.

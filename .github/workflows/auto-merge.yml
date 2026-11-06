@@ -2,6 +2,11 @@
 # workflow has passed on it. Only pip bumps from Dependabot qualify;
 # GitHub Actions bumps and everything else still wait for a manual merge.
 #
+# The main ruleset requires one approval, so the workflow approves the PR
+# before merging. That needs Settings > Actions > General > "Allow GitHub
+# Actions to create and approve pull requests". The conditions below keep
+# it to Dependabot pip PRs that passed validation.
+#
 # --match-head-commit makes sure the commit that passed is the one that
 # gets merged: if the branch moved in the meantime, the merge is refused
 # and the next validation run decides again.
@@ -25,7 +30,7 @@ jobs:
       startsWith(github.event.workflow_run.head_branch, 'dependabot/pip/')
     runs-on: ubuntu-latest
     steps:
-      - name: Merge the Dependabot PR
+      - name: Approve and merge the Dependabot PR
         env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ github.event.workflow_run.head_branch }}
@@ -36,4 +41,5 @@ jobs:
             echo "No open PR for $BRANCH"
             exit 0
           fi
+          gh pr review "$pr" --repo "$GITHUB_REPOSITORY" --approve --body "ESPHome bump passed validation on $SHA."
           gh pr merge "$pr" --repo "$GITHUB_REPOSITORY" --squash --delete-branch --match-head-commit "$SHA"
