@@ -153,6 +153,8 @@ It sets the curve from the day of the year (odd days Falling, even days Rising),
 
 Existing entities keep their names, so dashboards and history keep working: `Dallas 1`, `Dallas 2`, `Fan RPM`, `Fan Mode`, `Manual Fan Speed`.
 
+Every DBE also has a `<name> restart` button (from `generic/restartbutton.yml`) to reboot it from HA. There is no web server on the DBEs: settings and diagnostics are only available through HA.
+
 New entities:
 
 | Entity | What it tells you |
@@ -189,10 +191,11 @@ Keep `supply_off` below `supply_on`. After changing a constant, run the test (ne
 
 ## Testing
 
-Two checks run in GitHub Actions on every change to `DBE/`:
+Three checks run in GitHub Actions on every change to `DBE/`:
 
 1. **Schema check** (`.ci/dbe.yaml`): `esphome config`, catches YAML and component errors.
-2. **Logic test** (`.ci/dbe-logic/`): copies the `control_fans` lambda out of `DBEmain.yml`, compiles it on the build machine against small stand-ins for ESPHome, and runs scenarios: the gate (cold pipes, summer, sensor offset, mild day), both curves, swapped sensors, residual heat, the speed cap, sensor faults and modes. This catches C++ mistakes in the lambda and changes in behaviour, neither of which the schema check sees.
+2. **Device configs** (`.ci/validate-base.sh`): `esphome config` on each real `base/dbe-*.yaml`, with this PR's `DBEmain.yml`, so device level substitutions (sensor addresses, area) are checked too.
+3. **Logic test** (`.ci/dbe-logic/`): copies the `control_fans` lambda out of `DBEmain.yml`, compiles it on the build machine against small stand-ins for ESPHome, and runs scenarios: the gate (cold pipes, summer, sensor offset, mild day), both curves, swapped sensors, residual heat, the speed cap, sensor faults and modes. This catches C++ mistakes in the lambda and changes in behaviour, neither of which the schema check sees.
 
 Run the logic test locally with `.ci/dbe-logic/run.sh` (needs `g++` and `python3` with PyYAML).
 
