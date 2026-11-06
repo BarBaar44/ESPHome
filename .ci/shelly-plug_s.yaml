@@ -3,6 +3,7 @@ substitutions:
   device_name: "shelly-plug-ci"
   friendly_name: "Shelly Plug CI"
   device_description: "CI validation harness"
+  area: "CI"
   channel_1: "Plug"
   max_temp: "60"
   max_current: "10"

@@ -22,7 +22,7 @@ esphome:
   name: '${device_name}'
   comment: '${device_description}'
   friendly_name: '${friendly_name}'
-  area: "Livingroom"
+  area: '${area}'
 
 packages:
   Generic_config:

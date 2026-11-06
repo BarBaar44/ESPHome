@@ -14,12 +14,13 @@ substitutions:
   device_description: "Led Closet Livingroom"
   WIFI_passwd: !secret wifi_password
   fallback_passwd: !secret wifi_bck
-  friendly_name: "DBE Hallway"
+  friendly_name: "Led Closet Livingroom"
   device_key: !secret ledcloset_key
-  area: "Livingroom"
+  area: "Living Room"
 
 esphome:
   name: "${device_name}"
+  area: '${area}'
   friendly_name: '${device_description}'
   comment: '${device_description}'
   name_add_mac_suffix: false

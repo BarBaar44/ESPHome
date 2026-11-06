@@ -157,6 +157,7 @@ substitutions:
  
 esphome:
   name: waterfilter-controller
+  area: '${area}'
   friendly_name: '${device_description}'
   comment: '${device_description}'
   on_boot:

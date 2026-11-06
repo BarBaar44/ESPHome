@@ -18,6 +18,7 @@ substitutions:
 
 esphome:
   name: dbe-room-tim
+  area: '${area}'
   friendly_name: '${device_description}'
 
 esp8266:

@@ -18,6 +18,7 @@ substitutions:
 
 esphome:
   name: dbe-hallway
+  area: '${area}'
   friendly_name: '${device_description}'
   comment: '${device_description}'
 
