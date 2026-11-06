@@ -1,17 +1,19 @@
+# Uptime and Wi-Fi signal, plus the Home Assistant time source they and
+# other packages (Plug S daily energy, LVGL panels) use as time_homeassistant.
+
+time:
+  - platform: homeassistant
+    id: time_homeassistant
+
 sensor:
-  - platform: template
+  # Boot time as a timestamp. The native uptime timestamp sensor replaces
+  # the old template lambda, which could latch NaN for good when the first
+  # time sync came before the uptime sensor had a value.
+  - platform: uptime
+    type: timestamp
     id: sensor_uptime_timestamp
     name: "${friendly_name} Uptime"
-    device_class: "timestamp"
-    accuracy_decimals: 0
-    update_interval: never
-    lambda: |-
-      static float timestamp = (
-        id(time_homeassistant).utcnow().timestamp - id(sensor_uptime).state
-      );
-      return timestamp;
-  - platform: uptime
-    id: sensor_uptime
+    time_id: time_homeassistant
   - platform: wifi_signal # Reports the WiFi signal strength/RSSI in dB
     name: "WiFi Signal dB"
     id: wifi_signal_db

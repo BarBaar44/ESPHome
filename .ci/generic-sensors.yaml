@@ -1,7 +1,6 @@
 # CI validation harness for the generic/ package suite — see .ci/README.md
-# Bundles wifi.yml + mqtt.yml + restartbutton.yml + generic_sensors.yml
-# together since generic_sensors.yml's uptime sensor depends on the
-# time_homeassistant id that wifi.yml declares.
+# Bundles wifi.yml + api_ota.yml + mqtt.yml + restartbutton.yml +
+# generic_sensors.yml, the generic/ suite as a device would include it.
 substitutions:
   device_name: "generic-ci"
   friendly_name: "Generic CI"
@@ -20,6 +19,7 @@ api:
 
 packages:
   wifi: !include ../generic/wifi.yml
+  api_ota: !include ../generic/api_ota.yml
   mqtt: !include ../generic/mqtt.yml
   restart_button: !include ../generic/restartbutton.yml
   generic_sensors: !include ../generic/generic_sensors.yml

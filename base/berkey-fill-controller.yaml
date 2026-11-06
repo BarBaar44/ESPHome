@@ -180,9 +180,8 @@ esp32:
 packages:
   Generic_config:
     url: https://github.com/BarBaar44/ESPHome
-    files: [generic/wifi.yml, generic/generic_sensors.yml]
-    refresh: 1min
- 
+    files: [generic/wifi.yml, generic/api_ota.yml, generic/generic_sensors.yml]
+    refresh: 0d
 # --- Logging ----------------------------------------------------------
 # INFO for day-to-day use.
 #

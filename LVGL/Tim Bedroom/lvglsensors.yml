@@ -164,7 +164,7 @@ globals:
 # In HA beschikbaar als:
 #   esphome.tbr_display_notify             (data: message)
 #   esphome.tbr_display_clear_notification
-# Wordt samengevoegd met het api-blok uit generic/wifi.yml.
+# Wordt samengevoegd met het api-blok uit generic/api_ota.yml.
 api:
   actions:
     - action: notify

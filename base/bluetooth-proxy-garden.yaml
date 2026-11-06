@@ -40,4 +40,4 @@ packages:
   Generic_config:
     url: https://github.com/BarBaar44/ESPHome
     files: [bluetooth-proxy/proxy.yml, generic/api_ota.yml]
-    refresh: 1min
+    refresh: 0d

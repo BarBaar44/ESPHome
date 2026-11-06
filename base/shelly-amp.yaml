@@ -30,6 +30,5 @@ substitutions:
 packages:
   Generic_config:
     url: https://github.com/BarBaar44/ESPHome
-    files: [generic/generic_sensors.yml, generic/wifi.yml, shelly/plug_s.yml]
-    refresh: 1min
-    
+    files: [generic/generic_sensors.yml, generic/wifi.yml, generic/api_ota.yml, shelly/plug_s.yml]
+    refresh: 0d

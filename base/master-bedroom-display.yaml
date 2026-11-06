@@ -63,9 +63,10 @@ packages:
     url: https://github.com/BarBaar44/ESPHome
     files: [
       generic/wifi.yml,
+      generic/api_ota.yml,
       generic/generic_sensors.yml,
       LVGL/displayconfig5inch.yml,
       LVGL/Masterbedroom/lvglconfig.yml,
       LVGL/Masterbedroom/lvglsensors.yml
     ]
-    refresh: 1min
+    refresh: 0d

@@ -18,12 +18,15 @@ binary_sensor:
         pullup: true
       inverted: true
     id: button_1
+    # Ignore spikes shorter than a real press
+    filters:
+      - delayed_on: 50ms
     on_press:
       then:
         - switch.toggle: light_1
 
   - platform: status
-    name: "My LS Status"
+    name: "${device_name} status"
 
 output:
   - platform: gpio

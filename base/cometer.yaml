@@ -11,6 +11,7 @@ substitutions:
   device_description: Co2 meter Livingroom
   WIFI_passwd: !secret wifi_password
   fallback_passwd: !secret wifi_bck
+  device_key: !secret airqualitymeter_key
   area: "Living Room"
   
 esp32:
@@ -27,12 +28,10 @@ esphome:
 packages:
   Generic_config:
     url: https://github.com/BarBaar44/ESPHome
-    files: [generic/wifi.yml, generic/generic_sensors.yml, generic/restartbutton.yml]
+    files: [generic/wifi.yml, generic/api_ota.yml, generic/generic_sensors.yml, generic/restartbutton.yml]
     refresh: 0d
 
 api:
-  encryption:
-    key: !secret airqualitymeter_key
   actions:
     - action: mhz19_calibrate_zero
       then:
