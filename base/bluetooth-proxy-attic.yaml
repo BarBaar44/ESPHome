@@ -36,4 +36,4 @@ packages:
     files:
     - bluetooth-proxy/proxy.yml
     - generic/api_ota.yml
-    refresh: 1min
+    refresh: 0d

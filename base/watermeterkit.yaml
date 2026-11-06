@@ -38,9 +38,8 @@ dashboard_import:
 packages:
   Generic_config:
     url: https://github.com/BarBaar44/ESPHome
-    files: [generic/generic_sensors.yml, generic/wifi.yml]
-    refresh: 1min
-
+    files: [generic/generic_sensors.yml, generic/wifi.yml, generic/api_ota.yml]
+    refresh: 0d
 # Status LED of ESP
 status_led:
   pin: GPIO12

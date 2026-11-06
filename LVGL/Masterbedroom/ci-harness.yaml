@@ -46,11 +46,10 @@ globals:
     initial_value: '21.0'
 
 packages:
-  # Provides wifi.connected (used by update_connectivity_icons) and
-  # time_homeassistant (used by update_screen_state). Its own
-  # on_time_sync trigger references sensor_uptime_timestamp, which
-  # only exists once generic_sensors.yml is also included below.
+  # wifi.yml provides wifi.connected (used by update_connectivity_icons);
+  # generic_sensors.yml provides time_homeassistant (update_screen_state).
   wifi: !include ../../generic/wifi.yml
+  api_ota: !include ../../generic/api_ota.yml
   generic_sensors: !include ../../generic/generic_sensors.yml
   display: !include ../displayconfig5inch.yml
   panel: !include lvglconfig.yml

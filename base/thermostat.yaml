@@ -36,9 +36,8 @@ logger:
 packages:
   Generic_config:
     url: https://github.com/BarBaar44/ESPHome
-    files: [generic/generic_sensors.yml, generic/wifi.yml, generic/restartbutton.yml]
-    refresh: 1min
-
+    files: [generic/generic_sensors.yml, generic/wifi.yml, generic/api_ota.yml, generic/restartbutton.yml]
+    refresh: 0d
 opentherm:
   in_pin: 21
   out_pin: 22

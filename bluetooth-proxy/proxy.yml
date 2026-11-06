@@ -29,15 +29,9 @@ binary_sensor:
       number: GPIO33
       inverted: true
     name: "Restart Button"
-    on_press: 
+    on_press:
       then:
-        - switch.turn_on: restart_switch
-
-switch:
-  - platform: restart
-    name: '${device_name}  Restart'
-    internal: True
-    id: restart_switch
+        - button.press: restart_button
 
 status_led:
   pin: GPIO32

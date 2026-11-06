@@ -1,6 +1,5 @@
-# API and OTA encryption for devices that cannot use wifi.yml, such as the
-# Ethernet Bluetooth proxies. Same blocks as in wifi.yml: keep the two in
-# step. Needs the ${device_key} substitution (the API encryption key).
+# API and OTA encryption for every device, Wi-Fi (with generic/wifi.yml)
+# or Ethernet. Needs the ${device_key} substitution (the API encryption key).
 
 ota:
   - platform: esphome
@@ -8,6 +7,9 @@ ota:
     # An OTA password can't be added: ESPHome refuses it next to encryption.
     id: ota_esphome
     # Encrypt OTA uploads with the API encryption key (device_key below).
+    # No separate secret. Replaces an OTA password, which ESPHome no
+    # longer recommends; without this block uploads are plaintext and
+    # unauthenticated.
     # Plaintext uploads are refused: a device whose firmware can't decrypt
     # yet needs a serial (USB) flash.
     encryption: {}

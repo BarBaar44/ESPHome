@@ -167,7 +167,8 @@ sensor:
             - globals.set:
                 id: power_alert_sent
                 value: 'false'
-    update_interval: 10s
+    # Also sets how fast the current and power cutoffs above react
+    update_interval: 2s
 
   - platform: total_daily_energy
     name: "${channel_1} daily energy"
