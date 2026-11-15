@@ -74,6 +74,14 @@ output:
             float limit = id(max_flow).state;
             if (isnan(limit)) limit = 40;
             return state * limit / 100.0;
+      # The flow asked for, in degC, so Home Assistant can check it stays at
+      # the limit (Cloudless Multiroom Thermostat: Requested flow temperature)
+      - sensor.template.publish:
+          id: flow_request
+          state: !lambda |-
+            float limit = id(max_flow).state;
+            if (isnan(limit)) limit = 40;
+            return state * limit;
 
 script:
   - id: apply_pid_params
@@ -183,6 +191,22 @@ sensor:
       name: "Domestic hot water temperature setpoint"
     max_t_set:
       name: "Maximum allowable CH water setpoint"
+
+  # Flow temperature the PID asks the boiler for (published by ch_flow_request)
+  - platform: template
+    name: "Central heating requested flow temperature"
+    id: flow_request
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: never
+    filters:
+      # The PID writes every second: send a change of 0.5 degC at once,
+      # otherwise once a minute
+      - or:
+          - delta: 0.5
+          - heartbeat: 60s
 
   # Internal terms of main_climate
   - platform: pid
