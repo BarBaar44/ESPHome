@@ -191,6 +191,30 @@ sensor:
       name: "Domestic hot water temperature setpoint"
     max_t_set:
       name: "Maximum allowable CH water setpoint"
+    # What the boiler says about itself, read once at boot (OpenTherm IDs 3,
+    # 15 and 127). Not every boiler answers; unanswered ones stay unknown.
+    # Cloudless Multiroom Thermostat: Boiler member ID, Boiler maximum
+    # capacity and Boiler minimum modulation
+    device_id:
+      name: "Boiler member ID"
+      disabled_by_default: false
+      entity_category: diagnostic
+    max_capacity:
+      name: "Boiler maximum capacity"
+      disabled_by_default: false
+      entity_category: diagnostic
+    min_mod_level:
+      name: "Boiler minimum modulation"
+      disabled_by_default: false
+      entity_category: diagnostic
+    device_type:
+      name: "Boiler product type"
+      disabled_by_default: false
+      entity_category: diagnostic
+    device_version:
+      name: "Boiler product version"
+      disabled_by_default: false
+      entity_category: diagnostic
 
   # Flow temperature the PID asks the boiler for (published by ch_flow_request)
   - platform: template
