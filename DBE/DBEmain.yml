@@ -9,7 +9,8 @@
 # Signal: deltaT = supply minus return, from the two Dallas sensors.
 # The Speed Curve setting picks how speed follows deltaT:
 #   - Rising (default, the original behaviour): faster as deltaT grows.
-#     25 % at deltaT 2 C up to Max Fan Speed at 20 C.
+#     25 % at deltaT 2 C up to Max Fan Speed at the Full Speed Delta T
+#     setting (default 20 C).
 #   - Falling: faster as deltaT shrinks, aiming for a colder return.
 #     Max Fan Speed at deltaT 2 C down to 25 % at the 10 C target.
 # Both are kept so they can be compared on the same radiator by
@@ -251,6 +252,21 @@ number:
     restore_value: true
     initial_value: 80
 
+  # Rising curve: the deltaT at which the fan reaches Max Fan Speed.
+  # Lower it when the supply is limited (e.g. a 40 C flow cap keeps deltaT
+  # around 10 C, so the default 20 never gets near Max Fan Speed).
+  - platform: template
+    name: "${device_name} Full Speed Delta T"
+    id: rise_full
+    min_value: 6
+    max_value: 30
+    step: 0.5
+    unit_of_measurement: "°C"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: 20
+
 ######################################################
 # Interval trigger
 ######################################################
@@ -280,7 +296,8 @@ script:
           const float supply_off    = 24.0f;  // stop below this supply temperature
           // Rising curve: faster as deltaT grows (original behaviour).
           const float rise_low      =  2.0f;  // at or below: minimum speed
-          const float rise_high     = 20.0f;  // at or above: Max Fan Speed
+          // rise_high (at or above: Max Fan Speed) is the Full Speed
+          // Delta T setting, read below. Default 20.
           // Falling curve: faster as deltaT shrinks.
           const float fall_target   = 10.0f;  // at or above: minimum speed
           const float fall_full     =  2.0f;  // at or below: Max Fan Speed
@@ -359,6 +376,10 @@ script:
                 float cap = id(max_fanspeed).state;
                 if (!isfinite(cap)) cap = 80.0f;
                 cap = fmaxf(speed_min, fminf(100.0f, cap));
+
+                float rise_high = id(rise_full).state;
+                if (!isfinite(rise_high)) rise_high = 20.0f;
+                rise_high = fmaxf(rise_low + 4.0f, fminf(30.0f, rise_high));
 
                 // x: 0 = minimum speed, 1 = Max Fan Speed
                 bool falling = (std::string(id(speed_curve).current_option()) == "Falling");
