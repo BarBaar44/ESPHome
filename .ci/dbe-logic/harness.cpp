@@ -32,7 +32,7 @@ struct Globals {
   bool heat_ok = false;
   float calc_supply = NAN, calc_return = NAN, calc_delta = NAN;
   string last_reason;
-  Val temp_1, temp_2, manual_fanspeed, max_fanspeed;
+  Val temp_1, temp_2, manual_fanspeed, max_fanspeed, rise_full;
   Sel fan_mode;
   Sel speed_curve;
   Txt fan_reason;
@@ -67,6 +67,7 @@ static void step(const char *name, float t1, float t2, bool expect_on, const cha
 
 int main() {
   G.max_fanspeed.state = 80;
+  G.rise_full.state = 20;
   G.speed_curve.option = "Rising";
 
   // --- Gate ---
@@ -116,6 +117,27 @@ int main() {
   G.max_fanspeed.state = 40;
   step("Max Fan Speed 40 at dT 20", 42, 22, true, "rising curve");
   if (G.fanspeed > 40.01f) { failures++; printf("FAIL cap not applied (%.1f)\n", G.fanspeed); }
+  G.max_fanspeed.state = 80;
+
+  // --- Full Speed Delta T (Rising) ---
+  G.max_fanspeed.state = 100;
+  step("Full Speed dT 20 (default), dT 10", 38, 28, true, "rising curve");
+  float fs20 = G.fanspeed;
+  G.rise_full.state = 12;
+  step("Full Speed dT 12, dT 10: faster", 38, 28, true, "rising curve");
+  float fs12 = G.fanspeed;
+  step("Full Speed dT 12, dT 12: Max Fan Speed", 40, 28, true, "rising curve");
+  float fs12_full = G.fanspeed;
+  bool fs_ok = fs12 > fs20 + 20.0f && fabsf(fs12_full - 100.0f) < 0.01f;
+  if (!fs_ok) failures++;
+  printf("%s %-50s %.1f%% -> %.1f%%, full %.1f%%\n", fs_ok ? "PASS" : "FAIL", "Full Speed Delta T lowers the full-speed point", fs20, fs12, fs12_full);
+  G.rise_full.state = NAN;
+  step("Full Speed dT unset (NaN) behaves as 20", 38, 28, true, "rising curve");
+  if (fabsf(G.fanspeed - fs20) > 0.01f) { failures++; printf("FAIL NaN full speed dT not 20\n"); }
+  G.rise_full.state = 1;
+  step("Full Speed dT below range is clamped (no div by 0)", 38, 28, true, "rising curve");
+  if (!isfinite(G.fanspeed) || G.fanspeed > 100.01f) { failures++; printf("FAIL clamp\n"); }
+  G.rise_full.state = 20;
   G.max_fanspeed.state = 80;
 
   // --- Sensor faults ---

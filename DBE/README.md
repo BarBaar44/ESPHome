@@ -36,7 +36,7 @@ The board works entirely on its own. Home Assistant only shows what it is doing 
 
 ## The two speed curves
 
-**Rising** is how the board has always worked: a large delta T means the radiator is busy shedding heat (typically right after hot water reaches a cold radiator), so the fan helps most then. Speed goes from 25 % at a delta T of 2 °C up to **Max Fan Speed** (80 % by default) at 20 °C.
+**Rising** is how the board has always worked: a large delta T means the radiator is busy shedding heat (typically right after hot water reaches a cold radiator), so the fan helps most then. Speed goes from 25 % at a delta T of 2 °C up to **Max Fan Speed** (80 % by default) at **Full Speed Delta T** (20 °C by default).
 
 **Falling** follows a different idea: the boiler (Atag, max supply 45 °C, modulated by the [thermostat](https://github.com/BarBaar44/thermostat) PID) is most efficient with a cold return, and the design target is a delta T of at least 10 °C. At these low supply temperatures radiators give off only a fraction of their rated output (rated at 75/65 °C), so water can come back almost as warm as it left. A small delta T then means the radiator isn't taking enough heat out of the water, so the fan speeds up: Max Fan Speed at a delta T of 2 °C or less, down to 25 % at 10 °C or more. The fan's own effect (a colder return, so a larger delta T) slows it again, so the loop settles by itself.
 
@@ -86,7 +86,7 @@ The start threshold sits 1 °C above the stop threshold so that two sensors read
 | 15 °C | 64 % | 25 % |
 | 20 °C or more | Max Fan Speed (80 %) | 25 % |
 
-Both curves rise gradually between their end points (slight curve, exponent 1.1). Values above assume Max Fan Speed at 80 %. The PWM output is additionally limited to 90 % duty in hardware config (`max_power: 90%`), as before.
+Both curves rise gradually between their end points (slight curve, exponent 1.1). Values above assume Max Fan Speed at 80 % and Full Speed Delta T at 20 °C. The PWM output is additionally limited to 90 % duty in hardware config (`max_power: 90%`), as before.
 
 ### Safety
 
@@ -161,6 +161,7 @@ New entities:
 |---|---|
 | `Speed Curve` (select) | `Rising` (default) or `Falling`. Stored on the device. |
 | `Max Fan Speed` (number) | Upper limit in AUTO mode, 25 to 100, default 80. Stored on the device. |
+| `Full Speed Delta T` (number, config) | Rising curve only: the delta T at which the fan reaches Max Fan Speed, 6 to 30 °C, default 20. Stored on the device. |
 | `Fan Speed` | The commanded speed in %. |
 | `Fan Reason` (diagnostic) | Why the fan is on or off right now, e.g. `Running (falling curve)`. |
 | `Supply Temperature` (diagnostic) | The warmer pipe sensor: water going into the radiator. |
@@ -180,12 +181,23 @@ All thresholds are constants at the top of the `control_fans` script in `DBEmain
 | `supply_on` | 25 °C | start only on warmer water | start sooner when the PID runs a very low supply |
 | `delta_on` | 1.5 °C | demand clearer evidence of water moving before starting | start on smaller signs of warm water |
 | `supply_off` | 24 °C | stop earlier (less residual run time, less noise) | squeeze out more residual heat |
-| `rise_low` / `rise_high` | 2 / 20 °C | Rising: need a larger delta T for the same speed | Rising: reach high speed sooner |
+| `rise_low` | 2 °C | Rising: need a larger delta T before the fan speeds up | Rising: speed up on smaller delta T |
 | `fall_target` | 10 °C | Falling: aim for a colder return (fan faster for longer) | Falling: accept a warmer return (quieter) |
 | `fall_full` | 2 °C | Falling: reach full speed sooner | Falling: reach full speed only at a very small delta T |
 | `speed_min` | 25 % | if fans stall at low speed | if 25 % is audible |
 
 Keep `supply_off` below `supply_on`. After changing a constant, run the test (next section) and update its expectations if behaviour changed on purpose.
+
+**Full Speed Delta T** (the Rising curve's upper end, a setting in HA rather than a constant): with a capped supply temperature delta T rarely gets near 20 °C. At a 40 °C flow limit a radiator typically sees 9 to 10 °C, so on the default the fan peaks around 55 % even with Max Fan Speed at 100. Lowering it makes the fan work harder at the same delta T:
+
+| Full Speed Delta T | Fan at delta T 10 °C (Max Fan Speed 100) |
+|---|---|
+| 20 °C (default) | 56 % |
+| 15 °C | 69 % |
+| 12 °C | 84 % |
+| 10 °C | 100 % |
+
+A faster fan cools the return further, which raises delta T and the speed again, so the loop settles somewhat higher than the table shows.
 
 **Residual run time:** after the boiler stops, delta T is small. On Rising the fan then runs at its minimum, on Falling at Max Fan Speed, until the supply drops below 24 °C. If that is too long or too loud, raise `supply_off` or lower Max Fan Speed.
 
