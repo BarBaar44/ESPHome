@@ -1,0 +1,27 @@
+substitutions:
+  device_name: dbe-kitchen
+  device_description: DBE Kitchen
+  WIFI_passwd: !secret 'wifi_password'
+  fallback_passwd: !secret 'wifi_bck'
+  device_key: !secret 'dbekitchen_key'
+  friendly_name: DBE Kitchen
+  area: Kitchen
+esphome:
+  name: ${device_name}
+  area: ${area}
+  friendly_name: ${friendly_name}
+  comment: ${device_description}
+esp8266:
+  board: d1_mini
+logger:
+  level: DEBUG
+packages:
+  Generic_config:
+    url: https://github.com/BarBaar44/ESPHome
+    files:
+    - generic/wifi.yml
+    - generic/api_ota.yml
+    - generic/generic_sensors.yml
+    - generic/restartbutton.yml
+    - DBE/DBEmainV3.yml
+    refresh: 0d
