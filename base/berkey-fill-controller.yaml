@@ -14,6 +14,10 @@
 # fill (see "Three independent stops"). The breadboard version is
 # superseded; do not flash this file onto the breadboard build.
 #
+# STATE (23 Nov 2026): plumbed and wet. Level numbers set from
+# measurements (see substitutions). Backup solenoid (2W-160-15) found
+# defective and is being replaced by a JP Fluid Control ST-SA.
+#
 #   Modbus address 1 = UPPER chamber
 #   Modbus address 2 = LOWER chamber
 #
@@ -40,8 +44,12 @@
 #
 #   allowed_cm = (lower_full - lower_now) - upper_now - safety_margin
 #
-# Both chambers are 21.6 cm across, so 1 cm = 366 mL in either one,
-# which is why this can be done entirely in centimetres.
+# Both chambers are 21.6 cm across, so 1 cm = 366 mL in an EMPTY
+# chamber. The filter elements stand in the upper chamber and take up
+# space (2 elements now, 3 later), so 1 upper cm holds LESS than
+# 366 mL. Working in centimetres therefore overestimates the water in
+# the upper chamber and underfills slightly: the safe direction. To be
+# replaced by separate upper/lower mL per cm once measured.
 #
 # ── Three independent stops ─────────────────────────────────────────
 #   1. Upper level reaches target        (needs the upper probe)
@@ -70,6 +78,7 @@
 # When water lifts the float, both coils lose power whatever GPIO25/26
 # do, K1 falls to NC and the valve's close wire is energised. No GPIO,
 # no code. GPIO33 only lets the firmware SEE the trip.
+# Proven wet on 23 Nov 2026: the float ended a fill at upper 17.6 cm.
 #
 # CONSEQUENCE: with nothing in J5 the relays can never energise and
 # GPIO33 reads "tripped" (R9 pulls FLOAT_SENSE low). For the relay
@@ -88,10 +97,10 @@
 #   valve_travel_s      - added to the fill timeout
 # RE-TIME THE ACTUAL CLOSE once under water pressure.
 #
-# ── Water path (16 Oct 2026) ────────────────────────────────────────
-#   shutoff -> restrictor (90°) -> FLOW SENSOR -> ball valve
-#           -> backup solenoid -> lid inlet
-# The flow sensor sits upstream of the valve, so it is always full of
+# ── Water path (8 Nov 2026) ─────────────────────────────────────────
+#   shutoff -> FLOW SENSOR -> ball valve -> backup solenoid
+#           -> restrictor (90°, turns down) -> lid inlet
+# The flow sensor sits upstream of the valves, so it is always full of
 # water at mains pressure:
 #   - It reads from the first second of a fill (no dry turbine).
 #   - Any flow with the valves closed means a valve is passing.
@@ -101,15 +110,19 @@
 # drops, while the ball valve closes dry behind it. With both valves in
 # series the leak check only catches BOTH passing; once a year, lift
 # the solenoid's ferrule and run a fill to test the ball valve alone.
+# The restrictor sits AFTER the solenoid, so there is almost no
+# pressure drop across the solenoid while filling: it MUST be a 0 bar
+# (semi-direct or direct) type. Indirect/pilot types will not stay open.
 #
-# ── Numbers that are still placeholders ─────────────────────────────
-# lower_full_cm, upper_full_cm and fill_below_cm are GUESSES until
-# the probes are mounted and zeroed with two weighed 2 L additions.
-# pulses_per_litre and expected_flow_lpm are start values until the
-# restrictor is set and the flow calibrated with water.
-# Until then, leave enable_filling off.
+# ── Numbers that are measured, and those still placeholders ────────
+# Measured 23 Nov 2026 (2 filter elements):
+#   upper float trips at 17.6 cm, lower overflows at 19.0 cm,
+#   lower empty reads -0.4 cm.
+# Still start values: pulses_per_litre and expected_flow_lpm, until
+# the restrictor is set and the flow calibrated with water.
+# Leave enable_filling off until those are done too.
 ########################################################################
- 
+
 substitutions:
   device_name: berkey-fill       # max 15 chars: the package builds the
                                 # AP SSID '<device_name> Fallback Hotspot',
@@ -122,17 +135,25 @@ substitutions:
   area: "Kitchen"
 
   # --- Chamber geometry, measured -----------------------------------
-  ml_per_cm: "366"              # 21.6 cm diameter, both chambers
- 
-  # --- PLACEHOLDERS: set after probe mounting and zero calibration ---
-  lower_full_cm: "20.0"         # depth you are willing to call full
-  upper_full_cm: "20.0"         # upper chamber, mostly a fault check
-  fill_below_cm: "5.0"          # start a fill when lower is under this
- 
+  ml_per_cm: "366"              # 21.6 cm diameter, EMPTY chamber. True
+                                # for the lower; the upper holds less
+                                # per cm because of the elements (see
+                                # header). Conservative for now.
+
+  # --- Levels, measured 23 Nov 2026 ---------------------------------
+  lower_full_cm: "18.0"         # overflow at 19.0. With safety_margin
+                                # the lower ends near 14.5 after a
+                                # normal fill, about 16 at worst
+  upper_full_cm: "17.0"         # float trips at 17.6. Normal stop near
+                                # 13.5 (17.0 minus safety_margin)
+  fill_below_cm: "3.0"          # start a fill when lower is under this.
+                                # Empty reads -0.4
+
   # --- Safety ---------------------------------------------------------
   # 15 s travel at the 2 L/min target = ~500 mL = ~1.4 cm of overshoot.
   # 3.5 cm leaves real margin on top of that. The backup solenoid cuts
-  # the real overshoot to a few mL; keep the margin anyway.
+  # the real overshoot to a few mL; keep the margin anyway. Can drop to
+  # about 2.0 once the replacement solenoid has proven itself.
   safety_margin_cm: "3.5"
   min_fill_cm: "2.0"            # do not bother with a fill under this
   probe_stale_ms: "60000"
@@ -147,19 +168,19 @@ substitutions:
   max_fill_seconds: "300"       # hard ceiling whatever the sum says:
                                 # 10 L at 2 L/min, still below a full
                                 # upper chamber plus lower headroom
- 
+
   # --- Flow sensor ----------------------------------------------------
   # YF-B1-S, stainless. Start value from the 2 Oct bench test:
   # 1080 - 180/Q gives about 990 at 2 L/min. CALIBRATE installed, at
   # the real restricted rate: 1 to 2 L into a jug on a scale, three
   # runs, average.
   pulses_per_litre: "990"
- 
+
 esphome:
   name: waterfilter-controller
-  area: '${area}'
   friendly_name: '${device_description}'
   comment: '${device_description}'
+  area: '${area}'
   on_boot:
     priority: -100
     then:
@@ -170,14 +191,14 @@ esphome:
       - switch.turn_off: valve_power
       - lambda: |-
           id(fill_active) = false;
- 
+
 esp32:
   board: esp32dev
   framework:
     type: esp-idf   # ESPHome default since 2026.1, matches the other devices
- 
+
 # --- Networking -------------------------------------------------------
- 
+
 packages:
   Generic_config:
     url: https://github.com/BarBaar44/ESPHome
@@ -194,7 +215,7 @@ packages:
 # First boot on the PCB: run VERBOSE once and confirm the received
 # frames do NOT start with an echo of the outgoing request. With RE
 # tied high the THVD1406 should not echo; if it does, RE is not high.
- 
+
 logger:
   level: INFO
   # level: VERBOSE
@@ -210,11 +231,11 @@ logger:
   #   scheduler: INFO
   #   modbus: VERBOSE
   #   modbus_controller: DEBUG
- 
+
 # --- Modbus bus -------------------------------------------------------
 # TX2/RX2 on the ESP32 (U4.9 / U4.10), straight to the THVD1406 at
 # 3V3. Probe wiring in J2/J3: red 24V, green GND, blue A, yellow B.
- 
+
 uart:
   id: modbus_uart
   tx_pin: GPIO17
@@ -231,7 +252,7 @@ uart:
   # Do not add a debug: block here. It is not a passive observer; it
   # competes for the same incoming bytes. Use the logger logs: block
   # above instead.
- 
+
 modbus:
   id: modbus_bus
   uart_id: modbus_uart
@@ -243,7 +264,7 @@ modbus:
   # the old 200 ms throttle also worked with these probes. Two requests
   # every 5 s leaves plenty of room either way.
   turnaround_time: 600ms
- 
+
 modbus_controller:
   - id: probe_upper
     address: 0x01
@@ -252,41 +273,41 @@ modbus_controller:
     update_interval: 5s
     # Both probes share one bus. Request spacing is turnaround_time on
     # the modbus: block above.
- 
+
   - id: probe_lower
     address: 0x02
     modbus_id: modbus_bus
     setup_priority: -10
     update_interval: 5s
- 
+
 # --- State ------------------------------------------------------------
- 
+
 globals:
   - id: fill_active
     type: bool
     restore_value: no
     initial_value: "false"
- 
+
   - id: abort_latched
     type: bool
     restore_value: no
     initial_value: "false"
- 
+
   - id: fill_start_ms
     type: uint32_t
     restore_value: no
     initial_value: "0"
- 
+
   - id: fill_start_pulses
     type: float
     restore_value: no
     initial_value: "0"
- 
+
   - id: fill_target_upper_cm
     type: float
     restore_value: no
     initial_value: "0"
- 
+
   - id: fill_allowed_ml
     type: float
     restore_value: no
@@ -297,7 +318,7 @@ globals:
     type: uint32_t
     restore_value: no
     initial_value: "0"
- 
+
   # Freshness watchdogs. A probe that stops answering must not leave
   # the logic acting on its last known value. A stale reading is worse
   # than no reading, because it looks plausible.
@@ -305,14 +326,14 @@ globals:
     type: uint32_t
     restore_value: no
     initial_value: "0"
- 
+
   - id: lower_last_ms
     type: uint32_t
     restore_value: no
     initial_value: "0"
- 
+
 # --- Inputs from Home Assistant ---------------------------------------
- 
+
 binary_sensor:
   # Permission to fill. Unknown, unavailable, HA restarting and API
   # disconnected must ALL read as "do not fill", which is what the
@@ -322,7 +343,7 @@ binary_sensor:
     id: fill_permitted
     entity_id: input_boolean.waterfilter_fill_permitted
     internal: true
- 
+
   # Float switch. SOFTWARE view of a HARDWARE interlock.
   # GPIO33 reads FLOAT_SENSE through the R8/R9 divider: about 3.3 V
   # when the float is closed (dry), pulled low through R9 when it
@@ -345,9 +366,9 @@ binary_sensor:
         - script.execute:
             id: abort_fill
             reason: "float switch tripped"
- 
+
 # --- Sensors ----------------------------------------------------------
- 
+
 sensor:
   # reuse_previous_range: false is MANDATORY on every sensor here,
   # including the diagnostics below if they are re-enabled. These probes
@@ -375,7 +396,7 @@ sensor:
     on_value:
       then:
         - lambda: id(upper_last_ms) = millis();
- 
+
   - platform: modbus_controller
     modbus_controller_id: probe_lower
     name: "Lower chamber level"
@@ -391,7 +412,7 @@ sensor:
     on_value:
       then:
         - lambda: id(lower_last_ms) = millis();
- 
+
   # YF-B1-S on J4, 5 V via SB2 (cap on 1 to 2). It has its own internal
   # pull-up and drives the line; R6/R7 (10k/20k) on the board bring it
   # to 3.3 V. R10 stays empty. No ESP32 pull-up here.
@@ -412,7 +433,7 @@ sensor:
       id: flow_total
       unit_of_measurement: "pulses"
       accuracy_decimals: 0
- 
+
   # How much may be added right now. Negative or small means no fill.
   # This is the invariant from the header, expressed once.
   - platform: template
@@ -431,7 +452,7 @@ sensor:
                          - ${safety_margin_cm};
       if (allowed > upper_room) allowed = upper_room;
       return allowed < 0 ? 0.0 : allowed;
- 
+
   - platform: template
     name: "Fill volume so far"
     id: fill_volume
@@ -443,7 +464,7 @@ sensor:
       if (isnan(id(flow_total).state)) return 0.0;
       return (id(flow_total).state - id(fill_start_pulses))
              / ${pulses_per_litre};
- 
+
   # --- Diagnostics, off by default ----------------------------------
   # Unit code and decimal count for each probe. Both confirmed as 17
   # (cm) and 1. Kept here so a probe swap is a two-minute check.
@@ -483,9 +504,9 @@ sensor:
   #   value_type: S_WORD
   #   reuse_previous_range: false
   #   entity_category: diagnostic
- 
+
 # --- Outputs ----------------------------------------------------------
- 
+
 switch:
   # K1, via R11 and Q1 (AO3400A, low side). Pin HIGH = coil on.
   # OFF is the resting state: K1 on NC drives the valve's CLOSE wire.
@@ -497,7 +518,7 @@ switch:
     pin:
       number: GPIO25
     restore_mode: ALWAYS_OFF
- 
+
   # K2, via R12 and Q2. In series with the open wire (K1 NO -> K2 COM
   # -> K2 NO -> J9 OPEN). Off at rest, so a welded K1 contact cannot
   # drive the valve open while idle. Opening needs both GPIOs high.
@@ -507,15 +528,15 @@ switch:
     pin:
       number: GPIO26
     restore_mode: ALWAYS_OFF
- 
+
   - platform: template
     name: "Enable filling"
     id: enable_filling
     optimistic: true
     restore_mode: RESTORE_DEFAULT_OFF
-    # Leave OFF until the probes are mounted and zeroed. Every level
-    # number in substitutions: is a guess until then.
- 
+    # Leave OFF until the flow is calibrated (pulses_per_litre,
+    # expected_flow_lpm) and the replacement solenoid is fitted.
+
 button:
   - platform: template
     name: "Fill now"
@@ -524,7 +545,7 @@ button:
         - script.execute:
             id: try_start_fill
             manual: true
- 
+
   - platform: template
     name: "Stop fill"
     on_press:
@@ -532,7 +553,7 @@ button:
         - script.execute:
             id: abort_fill
             reason: "manual stop"
- 
+
   - platform: template
     name: "Clear abort latch"
     on_press:
@@ -540,7 +561,7 @@ button:
         - lambda: |-
             id(abort_latched) = false;
             ESP_LOGI("fill", "Abort latch cleared by hand");
- 
+
 text_sensor:
   - platform: template
     name: "Fill status"
@@ -552,9 +573,9 @@ text_sensor:
       if (!id(enable_filling).state) return {"disabled"};
       if (!id(fill_permitted).state) return {"waiting - nobody home"};
       return {"idle"};
- 
+
 # --- Logic ------------------------------------------------------------
- 
+
 script:
   - id: try_start_fill
     parameters:
@@ -562,13 +583,13 @@ script:
     then:
       - lambda: |-
           if (id(fill_active)) return;
- 
+
           if (id(abort_latched)) {
             ESP_LOGW("fill", "Refusing: abort latched, clear it by hand");
             return;
           }
           if (!id(enable_filling).state) return;
- 
+
           // Permission. Anything other than an explicit true is a no.
           if (!id(fill_permitted).state) {
             if (manual) ESP_LOGW("fill", "Refusing: nobody home");
@@ -578,13 +599,13 @@ script:
             ESP_LOGW("fill", "Refusing: no API connection");
             return;
           }
- 
+
           // The float must not already be sitting in water.
           if (id(float_tripped).state) {
             ESP_LOGW("fill", "Refusing: float switch is tripped");
             return;
           }
- 
+
           // Both probes must be answering.
           uint32_t now = millis();
           if (isnan(id(upper_level).state) || isnan(id(lower_level).state)
@@ -593,18 +614,18 @@ script:
             ESP_LOGW("fill", "Refusing: probe data stale");
             return;
           }
- 
+
           // Automatic fills wait for the lower chamber to run down.
           // A manual press skips that but not any safety check.
           if (!manual && id(lower_level).state > ${fill_below_cm}) return;
- 
+
           float allowed = id(allowed_cm).state;
           if (isnan(allowed) || allowed < ${min_fill_cm}) {
             if (manual) ESP_LOGW("fill", "Refusing: only %.1f cm allowed",
                                  allowed);
             return;
           }
- 
+
           id(fill_target_upper_cm) = id(upper_level).state + allowed;
           id(fill_allowed_ml) = allowed * ${ml_per_cm};
 
@@ -620,7 +641,7 @@ script:
                                     ? 0 : id(flow_total).state;
           id(fill_start_ms) = now;
           id(fill_active) = true;
- 
+
           ESP_LOGI("fill", "Starting: %.1f cm (%.0f mL), upper %.1f -> %.1f, timeout %.0f s",
                    allowed, id(fill_allowed_ml),
                    id(upper_level).state, id(fill_target_upper_cm),
@@ -633,7 +654,7 @@ script:
             - switch.turn_on: valve_power
             - delay: 200ms
             - switch.turn_on: valve_open_cmd
- 
+
   - id: stop_fill
     parameters:
       reason: string
@@ -657,7 +678,7 @@ script:
       # valve is still travelling closed and water may still flow.
       - delay: ${valve_travel_hold}
       - switch.turn_off: valve_power
- 
+
   - id: abort_fill
     parameters:
       reason: string
@@ -668,16 +689,16 @@ script:
       - script.execute:
           id: stop_fill
           reason: !lambda return reason;
- 
+
 interval:
   - interval: 1s
     then:
       - lambda: |-
           if (!id(fill_active)) return;
           uint32_t elapsed = millis() - id(fill_start_ms);
- 
+
           // --- Aborts: end the fill AND refuse to restart ------------
- 
+
           if (!id(fill_permitted).state) {
             id(abort_fill)->execute("permission withdrawn");
             return;
@@ -716,9 +737,9 @@ interval:
             id(abort_fill)->execute("fill timeout");
             return;
           }
- 
+
           // --- Stops: end the fill normally -------------------------
- 
+
           if (id(upper_level).state >= id(fill_target_upper_cm)) {
             id(stop_fill)->execute("upper target reached");
             return;
@@ -729,7 +750,7 @@ interval:
             id(stop_fill)->execute("volume reached");
             return;
           }
- 
+
   # Automatic trigger. Deliberately slow: nothing here is urgent, and a
   # 30 s poll means a transient sensor glitch cannot start a fill.
   - interval: 30s
@@ -737,7 +758,7 @@ interval:
       - script.execute:
           id: try_start_fill
           manual: false
- 
+
   # Leak check. Water moving with the valves closed means a valve is
   # passing, jammed, or a relay contact has welded. Latch it and shout.
   #
