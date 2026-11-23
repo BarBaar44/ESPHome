@@ -17,6 +17,8 @@
 # STATE (23 Nov 2026): plumbed and wet. Level numbers set from
 # measurements (see substitutions). Backup solenoid (2W-160-15) found
 # defective and is being replaced by a JP Fluid Control ST-SA.
+# Calibration mode added (see "Calibration mode" below) for setting
+# the restrictor and measuring pulses_per_litre with a bucket.
 #
 #   Modbus address 1 = UPPER chamber
 #   Modbus address 2 = LOWER chamber
@@ -86,7 +88,7 @@
 #
 # ── VALVE TRAVEL IS 15 SECONDS ──────────────────────────────────────
 # From the label. 11 s measured both ways on 29 Oct 2026, dry, with
-# the solenoid on J9. Four numbers below depend on it:
+# the solenoid on J9. Five numbers below depend on it:
 #   safety_margin_cm    - overshoot after the stop decision
 #   no_flow_grace_ms    - must exceed travel, or the abort fires
 #                         before the valve has finished opening
@@ -95,6 +97,7 @@
 #                         part way. The leak check also waits this
 #                         long after a stop (see below)
 #   valve_travel_s      - added to the fill timeout
+#   cal_settle          - calibration skips this much before timing
 # RE-TIME THE ACTUAL CLOSE once under water pressure.
 #
 # ── Water path (8 Nov 2026) ─────────────────────────────────────────
@@ -113,6 +116,31 @@
 # The restrictor sits AFTER the solenoid, so there is almost no
 # pressure drop across the solenoid while filling: it MUST be a 0 bar
 # (semi-direct or direct) type. Indirect/pilot types will not stay open.
+#
+# ── Calibration mode (23 Nov 2026) ──────────────────────────────────
+# Outlet pipe in a bucket on a TARED kitchen scale. Works with
+# enable_filling OFF and without the probes.
+#   1. Set "Calibration run time" (default 30 s). Mind the bucket:
+#      at full bore (~7.5 L/min) 30 s plus travel is about 6 L.
+#   2. Press "Calibration run". Sequence: open, cal_settle (15 s) for
+#      the valve travel, the timed window, close, valve_travel_hold.
+#   3. When "Calibration active" goes off, weigh ALL the water and type
+#      the grams into "Calibration water weight" (1 g = 1 mL).
+#   4. Read:
+#        "Calibration pulses per litre": every pulse of the run against
+#          the whole bucket. This is K.
+#        "Calibration steady flow": L/min during the window only, so
+#          the valve travel does not drag it down. Use it to set the
+#          restrictor and expected_flow_lpm.
+#      The steady flow needs the weight of the SAME run, because it is
+#      computed with that run's K.
+# Order: one run fully open (unrestricted rate), close the restrictor
+# step by step until steady flow is ~2.0 L/min, then three runs of
+# 60 s and average K. Copy K into pulses_per_litre and the steady
+# flow into expected_flow_lpm, then reflash.
+# Refuses like a fill does on float, abort latch, API and a valve that
+# is still closing. "Stop fill", a float trip and API loss end a run
+# as a latched abort.
 #
 # ── Numbers that are measured, and those still placeholders ────────
 # Measured 23 Nov 2026 (2 filter elements):
@@ -172,9 +200,12 @@ substitutions:
   # --- Flow sensor ----------------------------------------------------
   # YF-B1-S, stainless. Start value from the 2 Oct bench test:
   # 1080 - 180/Q gives about 990 at 2 L/min. CALIBRATE installed, at
-  # the real restricted rate: 1 to 2 L into a jug on a scale, three
-  # runs, average.
+  # the real restricted rate with calibration mode (see header).
   pulses_per_litre: "990"
+
+  # --- Calibration ----------------------------------------------------
+  cal_settle: "15s"             # valve travel skipped before the timed
+                                # window. Must cover the opening travel
 
 esphome:
   name: waterfilter-controller
@@ -191,6 +222,7 @@ esphome:
       - switch.turn_off: valve_power
       - lambda: |-
           id(fill_active) = false;
+          id(cal_active) = false;
 
 esp32:
   board: esp32dev
@@ -332,6 +364,27 @@ globals:
     restore_value: no
     initial_value: "0"
 
+  # Calibration run state. See "Calibration mode" in the header.
+  - id: cal_active
+    type: bool
+    restore_value: no
+    initial_value: "false"
+
+  - id: cal_start_pulses
+    type: float
+    restore_value: no
+    initial_value: "0"
+
+  - id: cal_window_pulses
+    type: float
+    restore_value: no
+    initial_value: "0"
+
+  - id: cal_window_ms
+    type: uint32_t
+    restore_value: no
+    initial_value: "0"
+
 # --- Inputs from Home Assistant ---------------------------------------
 
 binary_sensor:
@@ -366,6 +419,13 @@ binary_sensor:
         - script.execute:
             id: abort_fill
             reason: "float switch tripped"
+
+  # On from the press until the valve has finished closing. Weigh the
+  # bucket only after this goes off.
+  - platform: template
+    name: "Calibration active"
+    id: cal_active_sensor
+    lambda: return id(cal_active);
 
 # --- Sensors ----------------------------------------------------------
 
@@ -416,6 +476,10 @@ sensor:
   # YF-B1-S on J4, 5 V via SB2 (cap on 1 to 2). It has its own internal
   # pull-up and drives the line; R6/R7 (10k/20k) on the board bring it
   # to 3.3 V. R10 stays empty. No ESP32 pull-up here.
+  #
+  # update_interval 1s (was 2s): the total only moves on each update, so
+  # this sets the timing resolution of the calibration window. 1 s on a
+  # 60 s window is under 2 %.
   - platform: pulse_counter
     pin:
       number: GPIO27
@@ -425,7 +489,7 @@ sensor:
     id: flow_rate
     unit_of_measurement: "L/min"
     accuracy_decimals: 2
-    update_interval: 2s
+    update_interval: 1s
     filters:
       - lambda: return x / ${pulses_per_litre};
     total:
@@ -464,6 +528,47 @@ sensor:
       if (isnan(id(flow_total).state)) return 0.0;
       return (id(flow_total).state - id(fill_start_pulses))
              / ${pulses_per_litre};
+
+  # --- Calibration results ------------------------------------------
+  # Published by cal_run at the end of a run. NaN until the first run.
+  - platform: template
+    name: "Calibration total pulses"
+    id: cal_total_pulses
+    unit_of_measurement: "pulses"
+    accuracy_decimals: 0
+    update_interval: never
+
+  - platform: template
+    name: "Calibration steady pulses per minute"
+    id: cal_window_ppm
+    unit_of_measurement: "pulses/min"
+    accuracy_decimals: 0
+    update_interval: never
+
+  # K from this run: all pulses against all the water in the bucket.
+  - platform: template
+    name: "Calibration pulses per litre"
+    id: cal_k
+    accuracy_decimals: 0
+    update_interval: 2s
+    lambda: |-
+      float g = id(cal_weight).state;
+      float p = id(cal_total_pulses).state;
+      if (id(cal_active) || isnan(p) || isnan(g) || g < 50) return NAN;
+      return p / (g / 1000.0f);
+
+  # Flow during the timed window only, using this run's K.
+  - platform: template
+    name: "Calibration steady flow"
+    id: cal_lpm
+    unit_of_measurement: "L/min"
+    accuracy_decimals: 2
+    update_interval: 2s
+    lambda: |-
+      float k = id(cal_k).state;
+      float ppm = id(cal_window_ppm).state;
+      if (isnan(k) || isnan(ppm) || k <= 0) return NAN;
+      return ppm / k;
 
   # --- Diagnostics, off by default ----------------------------------
   # Unit code and decimal count for each probe. Both confirmed as 17
@@ -504,6 +609,36 @@ sensor:
   #   value_type: S_WORD
   #   reuse_previous_range: false
   #   entity_category: diagnostic
+
+# --- Calibration inputs -----------------------------------------------
+
+number:
+  - platform: template
+    name: "Calibration run time"
+    id: cal_run_time
+    optimistic: true
+    min_value: 10
+    max_value: 90
+    step: 5
+    initial_value: 30
+    restore_value: true
+    unit_of_measurement: "s"
+    entity_category: config
+
+  # Net grams in the bucket (tare the scale with the empty bucket).
+  # Reset to 0 at the start of every run so an old weight is never
+  # paired with new pulses.
+  - platform: template
+    name: "Calibration water weight"
+    id: cal_weight
+    optimistic: true
+    min_value: 0
+    max_value: 20000
+    step: 1
+    initial_value: 0
+    mode: box
+    unit_of_measurement: "g"
+    entity_category: config
 
 # --- Outputs ----------------------------------------------------------
 
@@ -562,6 +697,13 @@ button:
             id(abort_latched) = false;
             ESP_LOGI("fill", "Abort latch cleared by hand");
 
+  - platform: template
+    name: "Calibration run"
+    entity_category: config
+    on_press:
+      then:
+        - script.execute: cal_run
+
 text_sensor:
   - platform: template
     name: "Fill status"
@@ -569,6 +711,7 @@ text_sensor:
     update_interval: 5s
     lambda: |-
       if (id(abort_latched)) return {"aborted - needs clearing"};
+      if (id(cal_active)) return {"calibrating"};
       if (id(fill_active)) return {"filling"};
       if (!id(enable_filling).state) return {"disabled"};
       if (!id(fill_permitted).state) return {"waiting - nobody home"};
@@ -584,6 +727,10 @@ script:
       - lambda: |-
           if (id(fill_active)) return;
 
+          if (id(cal_active)) {
+            if (manual) ESP_LOGW("fill", "Refusing: calibration running");
+            return;
+          }
           if (id(abort_latched)) {
             ESP_LOGW("fill", "Refusing: abort latched, clear it by hand");
             return;
@@ -686,14 +833,95 @@ script:
       - lambda: |-
           ESP_LOGE("fill", "ABORT: %s", reason.c_str());
           id(abort_latched) = true;
+          if (id(cal_active)) {
+            ESP_LOGE("cal", "Calibration run aborted, discard this run");
+            id(cal_active) = false;
+          }
+      # Kill a running calibration so it cannot reopen or drop K2 early.
+      # stop_fill then closes the valve with the normal travel hold.
+      - script.stop: cal_run
       - script.execute:
           id: stop_fill
           reason: !lambda return reason;
+
+  # Calibration run. See "Calibration mode" in the header.
+  - id: cal_run
+    mode: single
+    then:
+      - lambda: |-
+          if (id(fill_active) || id(cal_active)) {
+            ESP_LOGW("cal", "Refusing: fill or calibration already running");
+            return;
+          }
+          if (id(abort_latched)) {
+            ESP_LOGW("cal", "Refusing: abort latched, clear it by hand");
+            return;
+          }
+          if (id(valve_power).state) {
+            ESP_LOGW("cal", "Refusing: valve still closing from the last run");
+            return;
+          }
+          if (id(float_tripped).state) {
+            ESP_LOGW("cal", "Refusing: float switch is tripped");
+            return;
+          }
+          if (!api_is_connected()) {
+            ESP_LOGW("cal", "Refusing: no API connection");
+            return;
+          }
+          id(cal_start_pulses) = isnan(id(flow_total).state)
+                                   ? 0 : id(flow_total).state;
+          id(cal_total_pulses).publish_state(NAN);
+          id(cal_window_ppm).publish_state(NAN);
+          auto call = id(cal_weight).make_call();
+          call.set_value(0);
+          call.perform();
+          id(cal_active) = true;
+          ESP_LOGI("cal", "Calibration run: %.0f s window after %s settle",
+                   id(cal_run_time).state, "${cal_settle}");
+      - if:
+          condition:
+            lambda: return id(cal_active);
+          then:
+            - switch.turn_on: valve_power
+            - delay: 200ms
+            - switch.turn_on: valve_open_cmd
+            - delay: ${cal_settle}
+            - lambda: |-
+                id(cal_window_pulses) = id(flow_total).state;
+                id(cal_window_ms) = millis();
+            - delay: !lambda return (uint32_t)(id(cal_run_time).state * 1000.0f);
+            - lambda: |-
+                float dp = id(flow_total).state - id(cal_window_pulses);
+                float dt_min = (millis() - id(cal_window_ms)) / 60000.0f;
+                float ppm = dt_min > 0 ? dp / dt_min : NAN;
+                id(cal_window_ppm).publish_state(ppm);
+                ESP_LOGI("cal", "Window: %.0f pulses in %.1f s = %.0f pulses/min",
+                         dp, dt_min * 60.0f, ppm);
+            - switch.turn_off: valve_open_cmd
+            # Same hold as stop_fill. The bucket also catches the water
+            # that passes while the valve closes, so the pulse total
+            # runs until the hold is over.
+            - delay: ${valve_travel_hold}
+            - switch.turn_off: valve_power
+            - lambda: |-
+                float total = id(flow_total).state - id(cal_start_pulses);
+                id(cal_total_pulses).publish_state(total);
+                id(cal_active) = false;
+                ESP_LOGI("cal", "Done: %.0f pulses in total. Weigh the bucket and enter grams",
+                         total);
 
 interval:
   - interval: 1s
     then:
       - lambda: |-
+          // A calibration run needs a live API too: it is driven from
+          // HA and nobody should run water into a bucket blind.
+          if (id(cal_active) && !api_is_connected()) {
+            id(abort_fill)->execute("API connection lost during calibration");
+            return;
+          }
+
           if (!id(fill_active)) return;
           uint32_t elapsed = millis() - id(fill_start_ms);
 
@@ -764,7 +992,8 @@ interval:
   #
   # Skipped while valve_power is still on: that is the valve_travel_hold
   # window after a stop, when the valve is still travelling closed and
-  # water legitimately keeps flowing.
+  # water legitimately keeps flowing. A calibration run keeps
+  # valve_power on throughout, so it is skipped then too.
   #
   # The flow sensor sits upstream of the valves and never drains, so a
   # reading here after the hold is real flow through closed valves.
