@@ -1,0 +1,470 @@
+######################################################
+# DBE radiator booster fan controller (fully standalone)
+#
+# *** HARDWARE v3 ONLY *** (Custom-DBE docs/schematic-v3.md)
+# v2 boards (relay) use DBEmain.yml. Flashing this file on a v2 board,
+# or DBEmain.yml on a v3 board, drives the wrong pins.
+# v3 differences, hardware only; the control logic is the same as
+# DBEmain.yml and must be kept in step with it:
+#   - fan power: D2 (GPIO4) via Q2/Q4 P-FET, on/off only, never PWM
+#   - PWM: D6 via 2N7002 open drain, so the output is inverted
+#   - OneWire: two buses, D1 and D7, one sensor each (index 0), so no
+#     sensor addresses in the device config
+#   - status LED on D4 (D1 mini onboard LED)
+#
+# Goal: get as much heat as possible out of the water before it goes back
+# to the boiler. A colder return makes the condensing boiler more
+# efficient, and at the low supply temperatures this system runs (max
+# 45 C) a radiator gives off little heat by natural convection alone.
+#
+# Signal: deltaT = supply minus return, from the two Dallas sensors.
+# The Speed Curve setting picks how speed follows deltaT:
+#   - Rising (default, the original behaviour): faster as deltaT grows.
+#     25 % at deltaT 2 C up to Max Fan Speed at the Full Speed Delta T
+#     setting (default 20 C).
+#   - Falling: faster as deltaT shrinks, aiming for a colder return.
+#     Max Fan Speed at deltaT 2 C down to 25 % at the 10 C target.
+# Both are kept so they can be compared on the same radiator by
+# switching the setting (e.g. on alternate days). See README.md.
+#
+# Gate: the fan only runs while the supply pipe is warm. It starts when
+# warm water arrives (supply >= 25 C and a measurable deltaT) and keeps
+# running until the supply pipe drops below 24 C, so residual heat after
+# the boiler stops is still blown into the room.
+#
+# No Home Assistant inputs: the unit works the same with or without HA.
+# HA only shows status and offers the mode and speed settings.
+# Full explanation: DBE/README.md
+######################################################
+
+substitutions:
+  # Fan PWM frequency. 25 kHz is the Intel fan spec (inaudible). If the
+  # ESP8266 software PWM is unstable at 25 kHz (speed jumps, fan
+  # ticking), override it in the device config, e.g. 1000 Hz as on v2.
+  fan_pwm_frequency: 25000 Hz
+  # Tach pulses per revolution is 2 for standard fans (Arctic PST too).
+  # RPM = pulses/min * this factor.
+  fan_rpm_multiply: '0.5'
+
+globals:
+  - id: fanspeed
+    type: float
+    restore_value: false
+    initial_value: '0'
+
+  # millis() timestamp of the last GOOD reading from each Dallas sensor.
+  # filter_out: nan means a dropped reading is never published, so .state
+  # stays pinned to the last value. These let control_fans notice a
+  # sensor that has silently stopped reporting.
+  - id: temp_1_last_update
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+  - id: temp_2_last_update
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+
+  # Gate state, remembered between control cycles (hysteresis).
+  - id: heat_ok
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+
+  # Values computed by control_fans, published by the diagnostic
+  # sensors below every 30s (not every 5s, to keep HA history light).
+  - id: calc_supply
+    type: float
+    restore_value: false
+    initial_value: 'NAN'
+  - id: calc_return
+    type: float
+    restore_value: false
+    initial_value: 'NAN'
+  - id: calc_delta
+    type: float
+    restore_value: false
+    initial_value: 'NAN'
+
+  # Last state we logged/published, so the 5s loop only reports changes.
+  - id: last_log_speed
+    type: float
+    restore_value: false
+    initial_value: '-1'
+  - id: last_reason
+    type: std::string
+    restore_value: false
+    initial_value: '""'
+
+logger:
+  # INFO by default. NOTE: each base/dbe-*.yaml wrapper currently sets
+  # `logger: level: DEBUG`, which overrides this. Drop those to INFO too
+  # for a quiet production device.
+  level: INFO
+
+######################################################
+# OneWire: one bus per sensor (J4 on D1, J5 on D7)
+######################################################
+one_wire:
+  - platform: gpio
+    pin: D1
+    id: ow_1
+  - platform: gpio
+    pin: D7
+    id: ow_2
+
+######################################################
+# Status LED (D1 mini onboard LED on D4, active low)
+######################################################
+status_led:
+  pin:
+    number: D4
+    inverted: true
+
+######################################################
+# Sensors
+######################################################
+sensor:
+  # One sensor on the supply pipe, one on the return pipe. Which is
+  # which does not matter: the control logic takes the warmer one as
+  # supply.
+  - platform: dallas_temp
+    one_wire_id: ow_1
+    index: 0
+    name: '${device_name} Dallas 1'
+    id: temp_1
+    update_interval: 30s
+    accuracy_decimals: 1
+    filters:
+      - filter_out: nan
+    on_value:
+      - lambda: 'id(temp_1_last_update) = millis();'
+
+  - platform: dallas_temp
+    one_wire_id: ow_2
+    index: 0
+    name: '${device_name} Dallas 2'
+    id: temp_2
+    update_interval: 30s
+    accuracy_decimals: 1
+    filters:
+      - filter_out: nan
+    on_value:
+      - lambda: 'id(temp_2_last_update) = millis();'
+
+  - platform: pulse_counter
+    pin: D5
+    name: '${device_name} Fan RPM'
+    unit_of_measurement: 'RPM'
+    update_interval: 5s
+    filters:
+      - multiply: ${fan_rpm_multiply}
+
+  # --- Diagnostics: what the control loop is working with ---
+  - platform: template
+    name: '${device_name} Supply Temperature'
+    unit_of_measurement: '°C'
+    device_class: temperature
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    update_interval: 30s
+    lambda: 'return id(calc_supply);'
+
+  - platform: template
+    name: '${device_name} Return Temperature'
+    unit_of_measurement: '°C'
+    device_class: temperature
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    update_interval: 30s
+    lambda: 'return id(calc_return);'
+
+  - platform: template
+    name: '${device_name} Delta T'
+    unit_of_measurement: '°C'
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    update_interval: 30s
+    lambda: 'return id(calc_delta);'
+
+  - platform: template
+    name: '${device_name} Fan Speed'
+    unit_of_measurement: '%'
+    accuracy_decimals: 0
+    update_interval: 30s
+    lambda: 'return id(fanspeed);'
+
+text_sensor:
+  # Why the fan is doing what it is doing, in plain words.
+  - platform: template
+    name: '${device_name} Fan Reason'
+    id: fan_reason
+    entity_category: diagnostic
+    update_interval: never
+
+######################################################
+# Fan power switch (HARD OFF): D2 -> Q2 -> Q4 high side P-FET.
+# On/off only. Never PWM this pin.
+######################################################
+switch:
+  - platform: gpio
+    pin: D2
+    id: powerswitch
+    internal: true
+    restore_mode: ALWAYS_OFF
+
+######################################################
+# PWM output + Fan
+######################################################
+output:
+  # Q3 (2N7002) pulls the fan PWM wire low when D6 is high, so the
+  # output is inverted. At boot R7 keeps Q3 off (PWM line high = 100 %),
+  # but Q4 is off then too, so the fans have no power.
+  - platform: esp8266_pwm
+    pin: D6
+    inverted: true
+    frequency: ${fan_pwm_frequency}
+    max_power: 90%
+    id: pwm_output
+
+fan:
+  - platform: speed
+    id: fancontrol
+    name: "${device_name} Fan"
+    internal: true
+    output: pwm_output
+    speed_count: 100
+    on_turn_on:
+      - switch.turn_on: powerswitch
+      - logger.log: "Fan turned ON"
+    on_turn_off:
+      - switch.turn_off: powerswitch
+      - logger.log: "Fan turned OFF"
+
+######################################################
+# Settings (shown in Home Assistant, stored on the device)
+######################################################
+select:
+  - platform: template
+    name: "${device_name} Fan Mode"
+    id: fan_mode
+    optimistic: true
+    options:
+      - AUTO
+      - MANUAL
+      - "OFF"
+    initial_option: AUTO
+    restore_value: true
+
+  # How AUTO speed follows deltaT. Rising = original behaviour.
+  - platform: template
+    name: "${device_name} Speed Curve"
+    id: speed_curve
+    optimistic: true
+    options:
+      - Rising
+      - Falling
+    initial_option: Rising
+    restore_value: true
+
+number:
+  - platform: template
+    name: "${device_name} Manual Fan Speed"
+    id: manual_fanspeed
+    min_value: 0
+    max_value: 100
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 0
+
+  # Upper limit for AUTO mode. Lower it for a quieter fan, e.g. at night
+  # in bedrooms. Does not affect MANUAL.
+  - platform: template
+    name: "${device_name} Max Fan Speed"
+    id: max_fanspeed
+    min_value: 25
+    max_value: 100
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 80
+
+  # Rising curve: the deltaT at which the fan reaches Max Fan Speed.
+  # Lower it when the supply is limited (e.g. a 40 C flow cap keeps deltaT
+  # around 10 C, so the default 20 never gets near Max Fan Speed).
+  - platform: template
+    name: "${device_name} Full Speed Delta T"
+    id: rise_full
+    min_value: 6
+    max_value: 30
+    step: 0.5
+    unit_of_measurement: "°C"
+    entity_category: config
+    optimistic: true
+    restore_value: true
+    initial_value: 20
+
+######################################################
+# Interval trigger
+######################################################
+interval:
+  - interval: 5s
+    then:
+      - script.execute: control_fans
+
+######################################################
+# Fan control logic
+######################################################
+script:
+  - id: control_fans
+    mode: restart
+    then:
+      - lambda: |-
+          // ==============================
+          // Tuning constants (degrees C or percent)
+          // ==============================
+          // Gate: start when warm water arrives, stop when the supply
+          // pipe has cooled off (residual heat is used until then).
+          // supply_on sits above supply_off so that two sensors reading
+          // slightly differently (DS18B20: +/-0.5 C) on a cold pipe can't
+          // fake a deltaT and start the fan.
+          const float supply_on     = 25.0f;  // supply must reach this to start
+          const float delta_on      =  1.5f;  // ...with at least this deltaT (water moving)
+          const float supply_off    = 24.0f;  // stop below this supply temperature
+          // Rising curve: faster as deltaT grows (original behaviour).
+          const float rise_low      =  2.0f;  // at or below: minimum speed
+          // rise_high (at or above: Max Fan Speed) is the Full Speed
+          // Delta T setting, read below. Default 20.
+          // Falling curve: faster as deltaT shrinks.
+          const float fall_target   = 10.0f;  // at or above: minimum speed
+          const float fall_full     =  2.0f;  // at or below: Max Fan Speed
+          const float speed_min     = 25.0f;
+          const float exponent      =  1.1f;
+
+          std::string reason;
+
+          // ==============================
+          // OFF / MANUAL MODES
+          // ==============================
+          std::string mode = id(fan_mode).current_option();
+          if (mode == "OFF") {
+            id(fanspeed) = 0.0f;
+            reason = "Off (mode OFF)";
+          } else if (mode == "MANUAL") {
+            float manual = id(manual_fanspeed).state;
+            id(fanspeed) = (!isfinite(manual) || manual < 1.0f) ? 0.0f : manual;
+            reason = "Manual";
+          } else {
+            // ==============================
+            // AUTOMATIC MODE
+            // ==============================
+            float t1 = id(temp_1).state;
+            float t2 = id(temp_2).state;
+
+            // --- Sensor sanity ---
+            // Reject non-finite readings, the DS18B20 power-on-reset
+            // sentinel (85.0), bus-error values (-127), and anything
+            // outside a plausible radiator-pipe range.
+            bool t1_ok = isfinite(t1) && t1 > 0.0f && t1 < 95.0f && t1 != 85.0f;
+            bool t2_ok = isfinite(t2) && t2 > 0.0f && t2 < 95.0f && t2 != 85.0f;
+
+            // --- Staleness ---
+            // Fail if a sensor has not produced a fresh value in 3x its
+            // 30s update interval. (millis() wraps after ~49 days; the
+            // unsigned subtraction stays correct across a single wrap.)
+            const uint32_t max_age_ms = 90000;
+            uint32_t now = millis();
+            if (t1_ok && (now - id(temp_1_last_update)) > max_age_ms) t1_ok = false;
+            if (t2_ok && (now - id(temp_2_last_update)) > max_age_ms) t2_ok = false;
+
+            if (!t1_ok || !t2_ok) {
+              id(fanspeed) = 0.0f;
+              id(heat_ok) = false;
+              id(calc_supply) = NAN;
+              id(calc_return) = NAN;
+              id(calc_delta) = NAN;
+              reason = "Off (pipe sensor fault)";
+            } else {
+              // --- Supply / return ---
+              // The warmer pipe is the supply. No per-device mapping needed.
+              float t_supply = fmaxf(t1, t2);
+              float t_ret    = fminf(t1, t2);
+              float delta    = t_supply - t_ret;
+              id(calc_supply) = t_supply;
+              id(calc_return) = t_ret;
+              id(calc_delta)  = delta;
+
+              // --- Gate (hysteresis) ---
+              // Starting needs warm water actually arriving (deltaT), so
+              // a pipe that is merely warm from a hot room in summer does
+              // not start the fan. Once running, only the supply
+              // temperature decides when to stop.
+              if (!id(heat_ok) && t_supply >= supply_on && delta >= delta_on) {
+                id(heat_ok) = true;
+              } else if (id(heat_ok) && t_supply < supply_off) {
+                id(heat_ok) = false;
+              }
+
+              if (!id(heat_ok)) {
+                id(fanspeed) = 0.0f;
+                reason = "Off (supply pipe not warm)";
+              } else {
+                // --- Speed from deltaT, per the selected curve ---
+                float cap = id(max_fanspeed).state;
+                if (!isfinite(cap)) cap = 80.0f;
+                cap = fmaxf(speed_min, fminf(100.0f, cap));
+
+                float rise_high = id(rise_full).state;
+                if (!isfinite(rise_high)) rise_high = 20.0f;
+                rise_high = fmaxf(rise_low + 4.0f, fminf(30.0f, rise_high));
+
+                // x: 0 = minimum speed, 1 = Max Fan Speed
+                bool falling = (std::string(id(speed_curve).current_option()) == "Falling");
+                float x = falling ? (fall_target - delta) / (fall_target - fall_full)
+                                  : (delta - rise_low) / (rise_high - rise_low);
+                x = fmaxf(0.0f, fminf(1.0f, x));
+                id(fanspeed) = speed_min + powf(x, exponent) * (cap - speed_min);
+                reason = falling ? "Running (falling curve)" : "Running (rising curve)";
+              }
+            }
+          }
+
+          id(fanspeed) = fmaxf(0.0f, fminf(100.0f, id(fanspeed)));
+
+          if (reason != id(last_reason)) {
+            id(last_reason) = reason;
+            id(fan_reason).publish_state(reason);
+          }
+
+      # ==============================
+      # APPLY FAN STATE
+      # ==============================
+      - if:
+          condition:
+            lambda: 'return id(fanspeed) > 0;'
+          then:
+            - fan.turn_on:
+                id: fancontrol
+                speed: !lambda 'return (int) roundf(id(fanspeed));'
+          else:
+            - fan.turn_off: fancontrol
+
+      # ==============================
+      # LOGGING: only when the commanded speed actually changed.
+      # ==============================
+      - if:
+          condition:
+            lambda: 'return fabsf(id(fanspeed) - id(last_log_speed)) >= 1.0f;'
+          then:
+            - logger.log:
+                format: "Mode=%s Curve=%s Supply=%.1f Return=%.1f DeltaT=%.1f Fanspeed=%.1f (%s)"
+                args:
+                  - 'id(fan_mode).current_option().c_str()'
+                  - 'id(speed_curve).current_option().c_str()'
+                  - 'id(calc_supply)'
+                  - 'id(calc_return)'
+                  - 'id(calc_delta)'
+                  - 'id(fanspeed)'
+                  - 'id(last_reason).c_str()'
+            - lambda: 'id(last_log_speed) = id(fanspeed);'

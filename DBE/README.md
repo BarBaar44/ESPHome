@@ -250,7 +250,7 @@ The physical board is designed in EasyEDA and lives in its own repo:
 ➡️ **[BarBaar44/Custom-DBE](https://github.com/BarBaar44/Custom-DBE)**
 
 * **v2** (the relay-switched board described above, in use): EasyEDA Pro project, Gerbers and PCB render in [`hardware/v2/`](https://github.com/BarBaar44/Custom-DBE/tree/main/hardware/v2), with netlist, pinouts, BOM and known issues in [`docs/v2-as-built.md`](https://github.com/BarBaar44/Custom-DBE/blob/main/docs/v2-as-built.md). This is the authoritative source for component values, footprints and routing.
-* **v3** (redesign, not yet built): P-FET instead of the relay, on-board 5 V buck, input protection, all logic at 3.3 V, three fan headers, two OneWire buses. Spec in [`docs/schematic-v3.md`](https://github.com/BarBaar44/Custom-DBE/blob/main/docs/schematic-v3.md). **v3 needs firmware changes** (fan switch on D2, inverted PWM, OneWire on D1 and D7); `DBEmain.yml` here still targets v2.
+* **v3** (redesign, not yet built): P-FET instead of the relay, on-board 5 V buck, input protection, all logic at 3.3 V, three fan headers, two OneWire buses. Spec in [`docs/schematic-v3.md`](https://github.com/BarBaar44/Custom-DBE/blob/main/docs/schematic-v3.md). **v3 needs firmware changes** (fan switch on D2, inverted PWM, OneWire on D1 and D7); `DBEmain.yml` targets v2; v3 boards use `DBEmainV3.yml` (same control logic, v3 pins, no sensor addresses: each sensor has its own bus, so `dallas_1_ID`/`dallas_2_ID` are not needed). Optional per device overrides: `fan_pwm_frequency` (default 25 kHz; use `1000 Hz` if the ESP8266 PWM is unstable) and `fan_rpm_multiply` (default 0.5, two pulses per revolution).
 
 The v2 files previously lived in [BarBaar44/EasyEDA](https://github.com/BarBaar44/EasyEDA), which is now archived.
 

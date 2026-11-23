@@ -8,7 +8,12 @@ root="$(cd "$here/../.." && pwd)"
 build="$(mktemp -d)"
 trap 'rm -rf "$build"' EXIT
 
-python3 "$here/extract.py" "$root/DBE/DBEmain.yml" "$build/body.inc"
+# Both firmware variants (v2 relay board, v3 P-FET board) carry the same
+# control_fans lambda; test each so they cannot drift apart unnoticed.
 cp "$here/harness.cpp" "$build/"
-g++ -std=c++17 -Wall -Werror -o "$build/dbe_logic" "$build/harness.cpp"
-"$build/dbe_logic"
+for fw in DBEmain.yml DBEmainV3.yml; do
+  echo "== $fw"
+  python3 "$here/extract.py" "$root/DBE/$fw" "$build/body.inc"
+  g++ -std=c++17 -Wall -Werror -o "$build/dbe_logic" "$build/harness.cpp"
+  "$build/dbe_logic"
+done

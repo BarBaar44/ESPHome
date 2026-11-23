@@ -37,6 +37,7 @@ jobs:
       matrix:
         harness:
           - .ci/dbe.yaml
+          - .ci/dbe-v3.yaml
           - .ci/bluetooth-proxy.yaml
           - .ci/shelly-one.yaml
           - .ci/shelly-plug_s.yaml

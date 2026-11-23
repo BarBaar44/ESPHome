@@ -1,0 +1,24 @@
+# CI validation harness for DBE/DBEmainV3.yml (hardware v3) — see .ci/README.md
+substitutions:
+  device_name: "dbe-v3-ci"
+  friendly_name: "DBE CI"
+  device_description: "CI validation harness"
+  WIFI_passwd: "ci-dummy-password"
+  fallback_passwd: "ci-dummy-password"
+  device_key: "ZGADVtIpvtmMT0gQEAIiwsZjP8q/s6AuQFxiZI4mxj4="  # CI-only dummy; real devices set device_key via !secret
+
+esphome:
+  name: ${device_name}
+  comment: '${device_description}'
+
+esp8266:
+  board: d1_mini
+
+api:
+
+packages:
+  wifi: !include ../generic/wifi.yml
+  api_ota: !include ../generic/api_ota.yml
+  generic_sensors: !include ../generic/generic_sensors.yml
+  restart: !include ../generic/restartbutton.yml
+  device: !include ../DBE/DBEmainV3.yml
