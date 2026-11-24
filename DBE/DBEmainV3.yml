@@ -372,7 +372,7 @@ script:
             reason = "Off (mode OFF)";
           } else if (mode == "MANUAL") {
             float manual = id(manual_fanspeed).state;
-            id(fanspeed) = (!isfinite(manual) || manual < 1.0f) ? 0.0f : manual;
+            id(fanspeed) = (!std::isfinite(manual) || manual < 1.0f) ? 0.0f : manual;
             reason = "Manual";
           } else {
             // ==============================
@@ -385,8 +385,8 @@ script:
             // Reject non-finite readings, the DS18B20 power-on-reset
             // sentinel (85.0), bus-error values (-127), and anything
             // outside a plausible radiator-pipe range.
-            bool t1_ok = isfinite(t1) && t1 > 0.0f && t1 < 95.0f && t1 != 85.0f;
-            bool t2_ok = isfinite(t2) && t2 > 0.0f && t2 < 95.0f && t2 != 85.0f;
+            bool t1_ok = std::isfinite(t1) && t1 > 0.0f && t1 < 95.0f && t1 != 85.0f;
+            bool t2_ok = std::isfinite(t2) && t2 > 0.0f && t2 < 95.0f && t2 != 85.0f;
 
             // --- Staleness ---
             // Fail if a sensor has not produced a fresh value in 3x its
@@ -431,11 +431,11 @@ script:
               } else {
                 // --- Speed from deltaT, per the selected curve ---
                 float cap = id(max_fanspeed).state;
-                if (!isfinite(cap)) cap = 80.0f;
+                if (!std::isfinite(cap)) cap = 80.0f;
                 cap = fmaxf(speed_min, fminf(100.0f, cap));
 
                 float rise_high = id(rise_full).state;
-                if (!isfinite(rise_high)) rise_high = 20.0f;
+                if (!std::isfinite(rise_high)) rise_high = 20.0f;
                 rise_high = fmaxf(rise_low + 4.0f, fminf(30.0f, rise_high));
 
                 // x: 0 = minimum speed, 1 = Max Fan Speed
