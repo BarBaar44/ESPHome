@@ -12,6 +12,10 @@
 #     sensor addresses in the device config
 #   - status LED on D4 (D1 mini onboard LED)
 #
+# MCU: Wemos D1 mini by default. A LOLIN S2 mini (ESP32-S2, headers on
+# the outer rows only) fits the same sockets; its device config then
+# overrides the pin and PWM substitutions below (see base/dbekitchen.yaml).
+#
 # Goal: get as much heat as possible out of the water before it goes back
 # to the boiler. A colder return makes the condensing boiler more
 # efficient, and at the low supply temperatures this system runs (max
@@ -45,6 +49,20 @@ substitutions:
   # Tach pulses per revolution is 2 for standard fans (Arctic PST too).
   # RPM = pulses/min * this factor.
   fan_rpm_multiply: '0.5'
+
+  # Pins per M1 socket position. Defaults are the D1 mini names. For a
+  # LOLIN S2 mini override them in the device config with:
+  #   pin_onewire_1: GPIO35  pin_onewire_2: GPIO11  pin_fan_switch: GPIO33
+  #   pin_fan_pwm: GPIO9     pin_fan_tach: GPIO7    pin_status_led: GPIO15
+  #   status_led_inverted: 'false'                  pwm_platform: ledc
+  pin_onewire_1: D1        # J4, PIPE SENSOR 1
+  pin_onewire_2: D7        # J5, PIPE SENSOR 2
+  pin_fan_switch: D2       # Q2 -> Q4 fan power
+  pin_fan_pwm: D6          # Q3 -> fan PWM wire
+  pin_fan_tach: D5         # J2 tach
+  pin_status_led: D4       # onboard LED
+  status_led_inverted: 'true'
+  pwm_platform: esp8266_pwm
 
 globals:
   - id: fanspeed
@@ -107,19 +125,20 @@ logger:
 ######################################################
 one_wire:
   - platform: gpio
-    pin: D1
+    pin: ${pin_onewire_1}
     id: ow_1
   - platform: gpio
-    pin: D7
+    pin: ${pin_onewire_2}
     id: ow_2
 
 ######################################################
-# Status LED (D1 mini onboard LED on D4, active low)
+# Status LED (D1 mini onboard LED on D4, active low;
+# S2 mini LED on GPIO15, active high)
 ######################################################
 status_led:
   pin:
-    number: D4
-    inverted: true
+    number: ${pin_status_led}
+    inverted: ${status_led_inverted}
 
 ######################################################
 # Sensors
@@ -153,7 +172,7 @@ sensor:
       - lambda: 'id(temp_2_last_update) = millis();'
 
   - platform: pulse_counter
-    pin: D5
+    pin: ${pin_fan_tach}
     name: '${device_name} Fan RPM'
     unit_of_measurement: 'RPM'
     update_interval: 5s
@@ -208,7 +227,7 @@ text_sensor:
 ######################################################
 switch:
   - platform: gpio
-    pin: D2
+    pin: ${pin_fan_switch}
     id: powerswitch
     internal: true
     restore_mode: ALWAYS_OFF
@@ -220,8 +239,8 @@ output:
   # Q3 (2N7002) pulls the fan PWM wire low when D6 is high, so the
   # output is inverted. At boot R7 keeps Q3 off (PWM line high = 100 %),
   # but Q4 is off then too, so the fans have no power.
-  - platform: esp8266_pwm
-    pin: D6
+  - platform: ${pwm_platform}
+    pin: ${pin_fan_pwm}
     inverted: true
     frequency: ${fan_pwm_frequency}
     max_power: 90%

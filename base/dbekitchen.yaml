@@ -6,13 +6,25 @@ substitutions:
   device_key: !secret 'dbekitchen_key'
   friendly_name: DBE Kitchen
   area: Kitchen
+  # LOLIN S2 mini instead of a D1 mini (pins per M1 socket position)
+  pin_onewire_1: GPIO35
+  pin_onewire_2: GPIO11
+  pin_fan_switch: GPIO33
+  pin_fan_pwm: GPIO9
+  pin_fan_tach: GPIO7
+  pin_status_led: GPIO15
+  status_led_inverted: 'false'
+  pwm_platform: ledc
 esphome:
   name: ${device_name}
   area: ${area}
   friendly_name: ${friendly_name}
   comment: ${device_description}
-esp8266:
-  board: d1_mini
+esp32:
+  board: lolin_s2_mini
+  variant: esp32s2
+  framework:
+    type: esp-idf
 logger:
   level: DEBUG
 packages:

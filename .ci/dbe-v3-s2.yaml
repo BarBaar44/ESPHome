@@ -1,0 +1,35 @@
+# CI validation harness for DBE/DBEmainV3.yml on a LOLIN S2 mini — see .ci/README.md
+substitutions:
+  device_name: "dbe-v3-s2-ci"
+  friendly_name: "DBE S2 CI"
+  device_description: "CI validation harness"
+  WIFI_passwd: "ci-dummy-password"
+  fallback_passwd: "ci-dummy-password"
+  device_key: "ZGADVtIpvtmMT0gQEAIiwsZjP8q/s6AuQFxiZI4mxj4="  # CI-only dummy; real devices set device_key via !secret
+  pin_onewire_1: GPIO35
+  pin_onewire_2: GPIO11
+  pin_fan_switch: GPIO33
+  pin_fan_pwm: GPIO9
+  pin_fan_tach: GPIO7
+  pin_status_led: GPIO15
+  status_led_inverted: 'false'
+  pwm_platform: ledc
+
+esphome:
+  name: ${device_name}
+  comment: '${device_description}'
+
+esp32:
+  board: lolin_s2_mini
+  variant: esp32s2
+  framework:
+    type: esp-idf
+
+api:
+
+packages:
+  wifi: !include ../generic/wifi.yml
+  api_ota: !include ../generic/api_ota.yml
+  generic_sensors: !include ../generic/generic_sensors.yml
+  restart: !include ../generic/restartbutton.yml
+  device: !include ../DBE/DBEmainV3.yml
