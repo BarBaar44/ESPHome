@@ -21,7 +21,7 @@ trap 'rm -rf "$work"' EXIT
 cp -r "$root/base" "$work/base"
 
 key="$(python3 -c 'import base64; print(base64.b64encode(b"0" * 32).decode())')"
-grep -rhoE '!secret [A-Za-z0-9_-]+' "$root"/base/*.yaml | sort -u |
+grep -rhoE "!secret ['\"]?[A-Za-z0-9_-]+" "$root"/base/*.yaml | tr -d "'\"" | sort -u |
   awk -v k="$key" '{ v = ($2 ~ /_key$/) ? k : "ci-dummy-password"; print $2 ": \"" v "\"" }' \
   > "$work/base/secrets.yaml"
 
