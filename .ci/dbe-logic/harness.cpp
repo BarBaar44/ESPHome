@@ -32,7 +32,7 @@ struct Globals {
   bool heat_ok = false;
   float calc_supply = NAN, calc_return = NAN, calc_delta = NAN;
   string last_reason;
-  Val temp_1, temp_2, manual_fanspeed, max_fanspeed, rise_full;
+  Val temp_1, temp_2, manual_fanspeed, min_fanspeed, max_fanspeed, rise_full;
   Sel fan_mode;
   Sel speed_curve;
   Txt fan_reason;
@@ -66,6 +66,7 @@ static void step(const char *name, float t1, float t2, bool expect_on, const cha
 }
 
 int main() {
+  G.min_fanspeed.state = 25;
   G.max_fanspeed.state = 80;
   G.rise_full.state = 20;
   G.speed_curve.option = "Rising";
@@ -118,6 +119,24 @@ int main() {
   step("Max Fan Speed 40 at dT 20", 42, 22, true, "rising curve");
   if (G.fanspeed > 40.01f) { failures++; printf("FAIL cap not applied (%.1f)\n", G.fanspeed); }
   G.max_fanspeed.state = 80;
+
+  // --- Min Fan Speed ---
+  G.min_fanspeed.state = 40;
+  step("Min Fan Speed 40, Rising dT 2: runs at 40", 40, 38, true, "rising curve");
+  if (fabsf(G.fanspeed - 40.0f) > 0.01f) { failures++; printf("FAIL min not applied (%.1f)\n", G.fanspeed); }
+  step("Min Fan Speed 40, Rising dT 20: still Max Fan Speed", 42, 22, true, "rising curve");
+  if (fabsf(G.fanspeed - 80.0f) > 0.01f) { failures++; printf("FAIL max with min 40 (%.1f)\n", G.fanspeed); }
+  G.max_fanspeed.state = 30;
+  step("Min 40 above Max 30: Min wins, no inversion", 42, 22, true, "rising curve");
+  if (fabsf(G.fanspeed - 40.0f) > 0.01f) { failures++; printf("FAIL min above max (%.1f)\n", G.fanspeed); }
+  G.max_fanspeed.state = 80;
+  G.min_fanspeed.state = NAN;
+  step("Min Fan Speed unset (NaN) behaves as 25", 40, 38, true, "rising curve");
+  if (fabsf(G.fanspeed - 25.0f) > 0.01f) { failures++; printf("FAIL NaN min not 25 (%.1f)\n", G.fanspeed); }
+  G.min_fanspeed.state = 5;
+  step("Min Fan Speed below range is clamped to 10", 40, 38, true, "rising curve");
+  if (fabsf(G.fanspeed - 10.0f) > 0.01f) { failures++; printf("FAIL min clamp (%.1f)\n", G.fanspeed); }
+  G.min_fanspeed.state = 25;
 
   // --- Full Speed Delta T (Rising) ---
   G.max_fanspeed.state = 100;

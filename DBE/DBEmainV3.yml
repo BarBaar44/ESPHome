@@ -24,10 +24,10 @@
 # Signal: deltaT = supply minus return, from the two Dallas sensors.
 # The Speed Curve setting picks how speed follows deltaT:
 #   - Rising (default, the original behaviour): faster as deltaT grows.
-#     25 % at deltaT 2 C up to Max Fan Speed at the Full Speed Delta T
+#     Min Fan Speed (default 25 %) at deltaT 2 C up to Max Fan Speed at the Full Speed Delta T
 #     setting (default 20 C).
 #   - Falling: faster as deltaT shrinks, aiming for a colder return.
-#     Max Fan Speed at deltaT 2 C down to 25 % at the 10 C target.
+#     Max Fan Speed at deltaT 2 C down to Min Fan Speed at the 10 C target.
 # Both are kept so they can be compared on the same radiator by
 # switching the setting (e.g. on alternate days). See README.md.
 #
@@ -299,6 +299,20 @@ number:
     restore_value: true
     initial_value: 0
 
+  # Lower limit for AUTO mode while running: the speed at the slow end
+  # of either curve. Raise it if the fans give too little heat or stall at
+  # low speed (e.g. top fans blowing down against the stack effect); lower
+  # it for a quieter fan. 10 to 60, default 25. Does not affect MANUAL.
+  - platform: template
+    name: "${device_name} Min Fan Speed"
+    id: min_fanspeed
+    min_value: 10
+    max_value: 60
+    step: 1
+    optimistic: true
+    restore_value: true
+    initial_value: 25
+
   # Upper limit for AUTO mode. Lower it for a quieter fan, e.g. at night
   # in bedrooms. Does not affect MANUAL.
   - platform: template
@@ -360,7 +374,8 @@ script:
           // Falling curve: faster as deltaT shrinks.
           const float fall_target   = 10.0f;  // at or above: minimum speed
           const float fall_full     =  2.0f;  // at or below: Max Fan Speed
-          const float speed_min     = 25.0f;
+          // speed_min (the slow end of either curve) is the Min Fan
+          // Speed setting, read below. Default 25.
           const float exponent      =  1.1f;
 
           std::string reason;
@@ -432,6 +447,10 @@ script:
                 reason = "Off (supply pipe not warm)";
               } else {
                 // --- Speed from deltaT, per the selected curve ---
+                float speed_min = id(min_fanspeed).state;
+                if (!std::isfinite(speed_min)) speed_min = 25.0f;
+                speed_min = fmaxf(10.0f, fminf(60.0f, speed_min));
+
                 float cap = id(max_fanspeed).state;
                 if (!std::isfinite(cap)) cap = 80.0f;
                 cap = fmaxf(speed_min, fminf(100.0f, cap));
