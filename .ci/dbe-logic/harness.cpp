@@ -120,7 +120,8 @@ int main() {
   if (G.fanspeed > 40.01f) { failures++; printf("FAIL cap not applied (%.1f)\n", G.fanspeed); }
   G.max_fanspeed.state = 80;
 
-  // --- Min Fan Speed ---
+  // --- Min Fan Speed (v3 only: DBEmainV3.yml, run.sh sets HAS_MIN_FANSPEED) ---
+#ifdef HAS_MIN_FANSPEED
   G.min_fanspeed.state = 40;
   step("Min Fan Speed 40, Rising dT 2: runs at 40", 40, 38, true, "rising curve");
   if (fabsf(G.fanspeed - 40.0f) > 0.01f) { failures++; printf("FAIL min not applied (%.1f)\n", G.fanspeed); }
@@ -137,6 +138,7 @@ int main() {
   step("Min Fan Speed below range is clamped to 10", 40, 38, true, "rising curve");
   if (fabsf(G.fanspeed - 10.0f) > 0.01f) { failures++; printf("FAIL min clamp (%.1f)\n", G.fanspeed); }
   G.min_fanspeed.state = 25;
+#endif
 
   // --- Full Speed Delta T (Rising) ---
   G.max_fanspeed.state = 100;

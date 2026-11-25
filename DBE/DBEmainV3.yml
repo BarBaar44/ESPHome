@@ -4,8 +4,10 @@
 # *** HARDWARE v3 ONLY *** (Custom-DBE docs/schematic-v3.md)
 # v2 boards (relay) use DBEmain.yml. Flashing this file on a v2 board,
 # or DBEmain.yml on a v3 board, drives the wrong pins.
-# v3 differences, hardware only; the control logic is the same as
-# DBEmain.yml and must be kept in step with it:
+# v3 differences. Control logic is the same as DBEmain.yml and must be
+# kept in step with it, except one v3 only setting:
+#   - Min Fan Speed (HA number, default 25) replaces the fixed speed_min
+# Hardware:
 #   - fan power: D2 (GPIO4) via Q2/Q4 P-FET, on/off only, never PWM
 #   - PWM: D6 via 2N7002 open drain, so the output is inverted
 #   - OneWire: two buses, D1 and D7, one sensor each (index 0), so no
