@@ -239,11 +239,13 @@ output:
   # Q3 (2N7002) pulls the fan PWM wire low when D6 is high, so the
   # output is inverted. At boot R7 keeps Q3 off (PWM line high = 100 %),
   # but Q4 is off then too, so the fans have no power.
+  # No max_power cap on v3: fan power goes through Q4 on/off only and
+  # speed over the fan PWM wire, so 100 % duty is safe. Limit speed with
+  # the Max Fan Speed setting instead. (DBEmain.yml for v2 keeps 90 %.)
   - platform: ${pwm_platform}
     pin: ${pin_fan_pwm}
     inverted: true
     frequency: ${fan_pwm_frequency}
-    max_power: 90%
     id: pwm_output
 
 fan:

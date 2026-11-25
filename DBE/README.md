@@ -86,7 +86,7 @@ The start threshold sits 1 °C above the stop threshold so that two sensors read
 | 15 °C | 64 % | 25 % |
 | 20 °C or more | Max Fan Speed (80 %) | 25 % |
 
-Both curves rise gradually between their end points (slight curve, exponent 1.1). Values above assume Max Fan Speed at 80 % and Full Speed Delta T at 20 °C. The PWM output is additionally limited to 90 % duty in hardware config (`max_power: 90%`), as before.
+Both curves rise gradually between their end points (slight curve, exponent 1.1). Values above assume Max Fan Speed at 80 % and Full Speed Delta T at 20 °C. On v2 (`DBEmain.yml`) the PWM output is additionally limited to 90 % duty in hardware config (`max_power: 90%`). v3 (`DBEmainV3.yml`) has no such cap: 100 % is full fan speed, and Max Fan Speed is the only limit.
 
 ### Safety
 
