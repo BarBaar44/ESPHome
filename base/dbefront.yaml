@@ -27,7 +27,7 @@ esp8266:
 
 # Enable logging
 logger:
-  level: DEBUG
+  level: INFO
 
 packages:
   Generic_config:
